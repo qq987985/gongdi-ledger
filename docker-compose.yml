@@ -1,0 +1,19 @@
+services:
+  attendance:
+    image: ghcr.1ms.run/qq987985/gongdi-ledger:latest
+    container_name: attendance-app
+    restart: unless-stopped
+    ports:
+      - "8501:8080"
+    volumes:
+      - /vol1/1000/docker/attendance/data:/data
+    environment:
+      DATA_DIR: /data
+      PHOTO_DIR: /data/photos
+      PHOTO_ID_DIR: /data/photos/id
+      PHOTO_BANK_DIR: /data/photos/bank
+      PHOTO_IC_DIR: /data/photos/ic
+      NITRO_HOST: 0.0.0.0
+      NITRO_PORT: "8080"
+      HOST: 0.0.0.0
+      PORT: "8080"

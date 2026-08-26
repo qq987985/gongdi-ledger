@@ -1,0 +1,22 @@
+# 不拉 GitHub 镜像、在 NAS 本地构建时用：
+# docker compose -f docker-compose.build.yml up -d --build
+services:
+  attendance:
+    build: .
+    image: gongdi-ledger:1.0.1
+    container_name: attendance-app
+    restart: unless-stopped
+    ports:
+      - "8501:8080"
+    volumes:
+      - /vol1/1000/docker/attendance/data:/data
+    environment:
+      DATA_DIR: /data
+      PHOTO_DIR: /data/photos
+      PHOTO_ID_DIR: /data/photos/id
+      PHOTO_BANK_DIR: /data/photos/bank
+      PHOTO_IC_DIR: /data/photos/ic
+      NITRO_HOST: 0.0.0.0
+      NITRO_PORT: "8080"
+      HOST: 0.0.0.0
+      PORT: "8080"

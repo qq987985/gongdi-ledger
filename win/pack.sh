@@ -1,0 +1,39 @@
+#!/bin/sh
+set -e
+cd "$(dirname "$0")/.."
+ROOT=$(pwd)
+OUT=$ROOT/gongdi-windows.zip
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT
+
+if [ ! -f app/server/index.mjs ]; then
+  echo "缺少 app/server/index.mjs" >&2
+  exit 1
+fi
+
+mkdir -p "$STAGE/node"
+cp -a app "$STAGE/app"
+rm -rf "$STAGE/app/public/__grok" 2>/dev/null || true
+cp win/启动.bat win/停止.bat "$STAGE/"
+cp VERSION.txt "$STAGE/" 2>/dev/null || true
+curl -fsSL -o /tmp/node-win.zip "https://nodejs.org/dist/v22.18.0/node-v22.18.0-win-x64.zip"
+python3 - <<PY
+import zipfile, shutil
+from pathlib import Path
+z=zipfile.ZipFile("/tmp/node-win.zip")
+z.extractall("/tmp/nodewin-ci")
+src=next(Path("/tmp/nodewin-ci").glob("*/node.exe"))
+shutil.copy2(src, Path("$STAGE")/"node"/"node.exe")
+PY
+
+python3 - <<PY
+import zipfile
+from pathlib import Path
+root=Path("$STAGE")
+out=Path("$OUT")
+with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as z:
+    for p in root.rglob("*"):
+        if p.is_file():
+            z.write(p, p.relative_to(root).as_posix())
+print("wrote", out, out.stat().st_size)
+PY
