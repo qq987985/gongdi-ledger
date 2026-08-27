@@ -1,2 +1,2 @@
-import { G as perms_exports } from "../_ssr/router-D_p-605U2.mjs";
-export { perms_exports as l };
+import { C as excel_exports } from "../_ssr/router-BQbQbUY2.mjs";
+export { excel_exports as a };

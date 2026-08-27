@@ -1,0 +1,257 @@
+import { o as __toESM } from "../_runtime.mjs";
+import { B as require_react, x as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
+import { S as Copy, l as Pencil, o as Trash2, x as Download, y as Eye } from "../_libs/lucide-react.mjs";
+import { n as toast } from "../_libs/sonner.mjs";
+import { l as nasEnabled, ut as copyText } from "./router-BQbQbUY2.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/doc-actions-DRSkq_XQ.js
+var import_react = /* @__PURE__ */ __toESM(require_react());
+var import_jsx_runtime = require_jsx_runtime();
+var DB_NAME = "gongdi-docs";
+var STORE = "docs";
+var DOC_KIND_LABEL = {
+	report: "报量单",
+	invoice: "电子发票",
+	receipt: "收款回单",
+	attendance: "考勤影像"
+};
+function openDb() {
+	return new Promise((resolve, reject) => {
+		const req = indexedDB.open(DB_NAME, 1);
+		req.onupgradeneeded = () => {
+			const db = req.result;
+			if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+		};
+		req.onsuccess = () => resolve(req.result);
+		req.onerror = () => reject(req.error);
+	});
+}
+function key(id, kind) {
+	return `${kind}::${id}`;
+}
+async function idbGet(id, kind) {
+	const db = await openDb();
+	return new Promise((resolve, reject) => {
+		const req = db.transaction(STORE, "readonly").objectStore(STORE).get(key(id, kind));
+		req.onsuccess = () => resolve(req.result || null);
+		req.onerror = () => reject(req.error);
+	});
+}
+async function idbSet(id, kind, blob, fileName) {
+	const db = await openDb();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(STORE, "readwrite");
+		tx.objectStore(STORE).put({
+			blob,
+			fileName
+		}, key(id, kind));
+		tx.oncomplete = () => resolve();
+		tx.onerror = () => reject(tx.error);
+	});
+}
+async function idbDel(id, kind) {
+	const db = await openDb();
+	return new Promise((resolve, reject) => {
+		const tx = db.transaction(STORE, "readwrite");
+		tx.objectStore(STORE).delete(key(id, kind));
+		tx.oncomplete = () => resolve();
+		tx.onerror = () => reject(tx.error);
+	});
+}
+async function setDoc(id, kind, file) {
+	await idbSet(id, kind, file, file.name);
+	if (!nasEnabled()) return;
+	const body = new FormData();
+	body.set("id", id);
+	body.set("kind", kind);
+	body.set("file", file, file.name);
+	await fetch("/api/doc", {
+		method: "PUT",
+		credentials: "include",
+		body
+	});
+}
+async function removeDoc(id, kind) {
+	await idbDel(id, kind);
+	if (!nasEnabled()) return;
+	await fetch(`/api/doc?id=${encodeURIComponent(id)}&kind=${kind}`, {
+		method: "DELETE",
+		credentials: "include"
+	});
+}
+async function getDocBlob(id, kind, fileName) {
+	if (nasEnabled()) try {
+		const r = await fetch(`/api/doc?id=${encodeURIComponent(id)}&kind=${kind}`, { credentials: "include" });
+		if (r.ok) return {
+			blob: await r.blob(),
+			fileName: fileName || decodeURIComponent(/filename="?([^";]+)"?/.exec(r.headers.get("content-disposition") || "")?.[1] || "") || "file"
+		};
+	} catch {}
+	return idbGet(id, kind);
+}
+function triggerDownload(blob, fileName) {
+	const href = URL.createObjectURL(blob);
+	const a = document.createElement("a");
+	a.href = href;
+	a.download = fileName || "file";
+	a.click();
+	window.setTimeout(() => URL.revokeObjectURL(href), 3e4);
+}
+async function downloadDoc(id, kind, fileName) {
+	const hit = await getDocBlob(id, kind, fileName);
+	if (!hit) return false;
+	triggerDownload(hit.blob, hit.fileName || fileName || "file");
+	return true;
+}
+async function openDoc(id, kind, fileName) {
+	const hit = await getDocBlob(id, kind, fileName);
+	if (!hit) return false;
+	const href = URL.createObjectURL(hit.blob);
+	window.open(href, "_blank", "noopener,noreferrer");
+	window.setTimeout(() => URL.revokeObjectURL(href), 6e4);
+	return true;
+}
+async function copyDoc(id, kind, fileName) {
+	const hit = await getDocBlob(id, kind, fileName);
+	if (!hit) return false;
+	const name = hit.fileName || fileName || "file";
+	const type = hit.blob.type || "";
+	if (type.startsWith("image/") && navigator.clipboard && "ClipboardItem" in window) try {
+		await navigator.clipboard.write([new ClipboardItem({ [type]: hit.blob })]);
+		return "image";
+	} catch {}
+	copyText(name);
+	triggerDownload(hit.blob, name);
+	return "name";
+}
+function fileExt(name) {
+	const n = name || "";
+	const i = n.lastIndexOf(".");
+	return i >= 0 ? n.slice(i) : "";
+}
+function monthLabel(dateOrYear, month) {
+	if (typeof dateOrYear === "number") return `${dateOrYear}年${month || 1}月`;
+	const d = String(dateOrYear || "");
+	const y = d.slice(0, 4);
+	const m = Number(d.slice(5, 7));
+	if (/^\d{4}$/.test(y) && m >= 1 && m <= 12) return `${y}年${m}月`;
+	return "未填月份";
+}
+function amountTag(n) {
+	const x = Number(n) || 0;
+	if (Number.isInteger(x)) return String(x);
+	return String(Math.round(x * 100) / 100);
+}
+function safeBase(s) {
+	return (s || "未命名").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "").trim() || "未命名";
+}
+function uniqueBase(base, taken) {
+	const stems = taken.map((t) => t.replace(/\.[^.]+$/, ""));
+	if (!stems.includes(base)) return base;
+	let i = 2;
+	while (stems.includes(`${base}-${i}`)) i += 1;
+	return `${base}-${i}`;
+}
+function renameFile(file, base) {
+	const name = `${base}${fileExt(file.name) || ""}`;
+	return new File([file], name, {
+		type: file.type,
+		lastModified: file.lastModified
+	});
+}
+/** 合同名-开票月份-金额 */
+function invoiceBase(contractName, date, amount) {
+	return `${safeBase(contractName)}-${monthLabel(date)}-${amountTag(amount)}`;
+}
+/** 项目名称报量-月份-金额 */
+function reportBase(projectName, date, amount) {
+	return `${safeBase(projectName)}报量-${monthLabel(date)}-${amountTag(amount)}`;
+}
+/** 考勤-考勤月份 */
+function attendanceBase(year, month) {
+	return `考勤-${monthLabel(year, month)}`;
+}
+/** 项目名称-月份（到分包） */
+function receiptSubBase(projectName, date) {
+	return `${safeBase(projectName)}-${monthLabel(date)}`;
+}
+/** 项目名称-月份-代付农民工 */
+function receiptWorkerBase(projectName, date) {
+	return `${safeBase(projectName)}-${monthLabel(date)}-代付农民工`;
+}
+function DocActions({ id, kind, fileName, suggest, taken = [], onDeleted, onReplaced }) {
+	const ref = (0, import_react.useRef)(null);
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "flex flex-wrap gap-1",
+		onClick: (e) => e.stopPropagation(),
+		children: [
+			fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					className: "rounded-sm border border-line px-2 py-1 text-[11px] hover:border-accent",
+					onClick: async () => {
+						if (!await openDoc(id, kind, fileName)) toast.error("文件不在，可能还没上传成功");
+					},
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Eye, { className: "mr-1 inline size-3" }), "查看"]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					className: "rounded-sm border border-line px-2 py-1 text-[11px] hover:border-accent",
+					onClick: async () => {
+						if (await downloadDoc(id, kind, fileName)) toast.success(`已下载 ${fileName}`);
+						else toast.error("下载失败");
+					},
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "mr-1 inline size-3" }), "下载"]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					className: "rounded-sm border border-line px-2 py-1 text-[11px] hover:border-accent",
+					onClick: async () => {
+						const r = await copyDoc(id, kind, fileName);
+						if (r === "image") toast.success("图片已复制，可粘贴到微信/QQ");
+						else if (r === "name") toast.success(`文件名已复制，并开始下载：${fileName}`);
+						else toast.error("复制失败");
+					},
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Copy, { className: "mr-1 inline size-3" }), "复制"]
+				})
+			] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+				className: "self-center text-[11px] text-subtle",
+				children: "未上传"
+			}),
+			onReplaced ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+				ref,
+				type: "file",
+				accept: ".pdf,.ofd,.xml,.jpg,.jpeg,.png,.webp,.xlsx,.xls",
+				className: "sr-only",
+				onChange: async (e) => {
+					const f = e.target.files?.[0];
+					e.target.value = "";
+					if (!f) return;
+					const tip = fileName ? `用「${f.name}」替换影像资料「${fileName}」？` : `上传影像资料「${f.name}」？`;
+					if (!confirm(tip)) return;
+					const named = suggest ? renameFile(f, uniqueBase(suggest, taken.filter((n) => n !== fileName))) : f;
+					await setDoc(id, kind, named);
+					onReplaced(named.name);
+					toast.success(fileName ? `已替换为 ${named.name}` : `已上传 ${named.name}`);
+				}
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+				type: "button",
+				className: "rounded-sm border border-line px-2 py-1 text-[11px] hover:border-accent",
+				onClick: () => ref.current?.click(),
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pencil, { className: "mr-1 inline size-3" }), fileName ? "替换" : "上传"]
+			})] }) : null,
+			onDeleted && fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+				type: "button",
+				className: "rounded-sm border border-line px-2 py-1 text-[11px] text-muted hover:text-danger",
+				onClick: async () => {
+					if (!confirm(`确认删除影像资料「${fileName}」？删除后无法从这里找回。`)) return;
+					await removeDoc(id, kind);
+					onDeleted();
+					toast.success("已删除影像资料");
+				},
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "mr-1 inline size-3" }), "删除"]
+			}) : null
+		]
+	});
+}
+//#endregion
+export { receiptSubBase as a, renameFile as c, uniqueBase as d, invoiceBase as i, reportBase as l, DocActions as n, receiptWorkerBase as o, attendanceBase as r, removeDoc as s, DOC_KIND_LABEL as t, setDoc as u };

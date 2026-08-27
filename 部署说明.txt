@@ -1,21 +1,46 @@
-完整包 1.0.1
+================================================
+工地台账  纯净安装包 v56
+================================================
 
-一、传到 GitHub（网页一次最多 100 个文件）
-1. 仓库文件删光后，先拖 app 文件夹，Commit
-2. 再拖其余文件（Dockerfile、win、VERSION.txt、README.md、docker-compose.yml 等）
-3. .github 是隐藏文件夹。网页新建文件，名字填：
-   .github/workflows/docker.yml
-   内容用本包里的 docker-workflow.yml 整份粘贴
-4. 等 Actions 里 image 变绿
+这个包只有软件，没有 data。
+你现在已经有 data，解压到 data 的上一级即可接上。
 
-二、NAS
-data 不要删。compose 用本包 docker-compose.yml：
-  image: ghcr.1ms.run/qq987985/gongdi-ledger:latest
-然后：
-  cd /vol1/1000/docker/attendance
-  docker compose pull
-  docker compose up -d
 
-拉不到镜像时，把本包 app、Dockerfile 拷到 NAS 目录，执行 ./一键部署.sh
+一、目录应该长这样
 
-三、不要把 VERSION.txt 单独挂进容器，只挂 data 目录。
+/vol1/1000/docker/attendance/
+  data/                 ← 你现有的，不要动、不要删、不要解压进去覆盖
+  app/
+  Dockerfile
+  docker-compose.yml
+  一键部署.sh
+  VERSION.txt
+  部署说明.txt
+
+
+二、部署
+
+把压缩包解压到：/vol1/1000/docker/attendance/
+确认 data 还在，然后：
+
+cd /vol1/1000/docker/attendance
+chmod +x 一键部署.sh
+./一键部署.sh
+
+打开：http://NAS的IP:8501
+用原来的账号登录。左下角应显示 VERSION 56。
+
+
+三、data 里有什么（不要删）
+
+accounts/     账号密码
+books/        各台账数字
+photos/       身份证、银行卡、IC卡、报量单、发票、收款回单、考勤影像
+backups/      Excel 备份
+templates/    导入模板
+
+
+四、以后升级
+
+只覆盖软件文件（app、Dockerfile、docker-compose.yml、一键部署.sh、VERSION.txt）
+永远不要删 data
