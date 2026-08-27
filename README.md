@@ -1,91 +1,43 @@
-# 🏗️ 工地台账管理系统 (Gongdi Ledger)
+# 工地台账
 
-一款专为建筑工地设计的台账与考勤管理系统。为了满足不同场景的使用需求，本项目提供 **Windows 便携版** 与 **Docker 容器版** 两个版本。
+人员、考勤、发放、合同。网页操作。
 
-## 📦 发行版目录结构
+版本 **1.0.2**。
 
-下载双版本压缩包解压后，你将看到以下目录结构：
+## 镜像
 
-```text
-工地台账-1.0.2/
-├── 📄 说明.txt
-├── 📄 使用说明.md
-├── 📄 目录结构.txt
-├── 📁 Windows解压即用/    <-- 适合办公室电脑，双击即用
-└── 📁 Docker-NAS/         <-- 适合部署在 NAS（如飞牛 OS）或 Linux 服务器
-```
+- `ghcr.io/qq987985/gongdi-ledger:latest`
+- 国内：`ghcr.1ms.run/qq987985/gongdi-ledger:latest`
 
-> ⚠️ **重要提示**：Windows 版本与 Docker 版本的数据（`data` 目录）**互不相通，请勿混用**，以免造成数据损坏或路径解析错误。
+个人数据只在 NAS / Windows 的 `data` 目录，不要提交到本仓库。
 
----
+## 飞牛 NAS
 
-## 🚀 部署与使用指南
+目录：`/vol1/1000/docker/attendance/`  
+`data` 不要删。
 
-### 方案一：Windows 办公室端（开箱即用）
-
-适合在普通办公电脑上单机运行，无需安装任何依赖环境。
-
-1. 进入 `Windows解压即用/` 文件夹。
-2. 双击运行 `启动.bat`。
-3. 根据弹出的命令行提示在浏览器中打开对应地址即可使用。
-
-### 方案二：Docker / NAS 服务端部署（以飞牛 OS 为例）
-
-适合部署在具有公网或局域网全天候访问需求的 NAS 或 Linux 服务器上。以下以飞牛 OS 为例，默认路径为 `/vol1/1000/docker/attendance/`。
-
-**1. 初始化目录与本地构建（开发/测试环境）**
-
-将 `Docker-NAS/` 目录下的文件上传至服务器对应的路径后，执行以下命令：
+本机构建（推荐）：
 
 ```bash
-cd /vol1/1000/docker/attendance
-
-# 赋予脚本执行权限
-chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
-
-# （可选）初始化空数据目录。该脚本仅创建目录，不会清空或覆盖已有文件
-./初始化目录.sh
-
-# 运行本地构建部署 (等效于 docker compose up -d --build)
+chmod +x 一键部署.sh
 ./一键部署.sh
 ```
-*注：本地部署仅挂载 `data` 目录，不挂载 `VERSION.txt`。*
 
-**2. 使用 GitHub 官方镜像一键部署（生产环境）**
-
-当 GitHub Actions 镜像发布成功后，可以通过拉取官方镜像直接启动（镜像地址：`ghcr.io/qq987985/gongdi-ledger:latest` 或加速地址 `ghcr.1ms.run/...`）：
+拉镜像：
 
 ```bash
-cd /vol1/1000/docker/attendance
-
-# 直接拉取远端镜像并启动
 ./一键拉取.sh
 ```
-*该脚本等效于执行 `docker compose -f docker-compose.github.yml pull` 及 `up -d`。*
 
----
+打开 `http://NAS的IP:8501`。compose **只挂 data**，不要挂 `VERSION.txt`。
 
-## 📁 数据目录 (`data/`) 结构说明
+## Windows
 
-系统运行后，会在根目录自动生成 `data/` 文件夹。请确保对该目录做好定期备份。具体结构如下：
+Releases 里下载 `gongdi-windows.zip`，双击 `启动.bat`，打开 http://127.0.0.1:8501
 
-```text
-data/
-├── 📁 accounts/          # 账号与权限配置文件
-├── 📁 books/             # 各本台账数据（软件自动创建子文件夹）
-├── 📁 backups/           # Excel 自动备份
-├── 📁 templates/         # 导入模板存放区
-└── 📁 photos/            # 影像资料库
-    ├── 📁 id/            # 身份证照片
-    ├── 📁 bank/          # 银行卡照片
-    ├── 📁 ic/            # IC卡照片
-    ├── 📁 报量单/         # 报量单扫描件
-    ├── 📁 发票/          # 发票影像
-    ├── 📁 收款回单/       # 财务收款回单
-    └── 📁 考勤影像/       # 考勤打卡记录照片
-```
+## 发布
 
-### 🛑 核心注意事项
-1. **请勿**将 `VERSION.txt` 文件放入 `data/` 目录中。
-2. **请勿**将整个软件程序直接解压到 `data/` 目录内，`data/` 仅用于存放系统生成的业务数据和配置。
-3. 跨版本升级时，通常只需覆盖程序主体或更新镜像，无需对 `data/` 目录做任何改动（请提前备份）。
+推到 `main` 后 Actions 自动打 Docker 镜像和 Windows 包。  
+覆盖完整 `app/`，改 `VERSION.txt` 第一行即可。网页一次最多传 100 个文件。
+
+完整目录和说明见 `使用说明.md`、`目录结构.txt`。
