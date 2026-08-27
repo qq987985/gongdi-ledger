@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   packages: write
 
 jobs:
@@ -36,23 +36,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  windows:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: version
-        id: ver
-        run: |
-          VER=$(head -n1 VERSION.txt | tr -d '[:space:]')
-          [ -n "$VER" ] || VER=latest
-          echo "ver=$VER" >> "$GITHUB_OUTPUT"
-      - name: pack
-        run: bash win/pack.sh
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.ver.outputs.ver }}
-          name: 工地台账 ${{ steps.ver.outputs.ver }} Windows
-          body_path: VERSION.txt
-          files: gongdi-windows.zip
-          make_latest: true
