@@ -1,9 +1,9 @@
-# 不拉 GitHub 镜像、在 NAS 本地构建时用：
-# docker compose -f docker-compose.build.yml up -d --build
+# 仓库里这份和 docker-compose.yml 相同，给「一键部署.sh」识别用。
+# 用法：docker compose -f docker-compose.build.yml up -d --build
 services:
   attendance:
     build: .
-    image: gongdi-ledger:1.0.1
+    image: gongdi-ledger:1.0.2
     container_name: attendance-app
     restart: unless-stopped
     ports:

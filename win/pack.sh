@@ -16,8 +16,15 @@ cp -a app "$STAGE/app"
 rm -rf "$STAGE/app/public/__grok" 2>/dev/null || true
 cp win/启动.bat win/停止.bat "$STAGE/"
 cp VERSION.txt "$STAGE/" 2>/dev/null || true
-curl -fsSL -o /tmp/node-win.zip "https://nodejs.org/dist/v22.18.0/node-v22.18.0-win-x64.zip"
-python3 - <<PY
+cp 使用说明.md "$STAGE/" 2>/dev/null || true
+cp 目录结构.txt "$STAGE/" 2>/dev/null || true
+printf '%s\n' '工地台账 Windows 解压即用' '双击 启动.bat' 'http://127.0.0.1:8501' '数据在 data，不要删。' > "$STAGE/说明.txt"
+
+if [ -f /tmp/node-win/node.exe ]; then
+  cp /tmp/node-win/node.exe "$STAGE/node/node.exe"
+else
+  curl -fsSL -o /tmp/node-win.zip "https://nodejs.org/dist/v22.18.0/node-v22.18.0-win-x64.zip"
+  python3 - <<PY
 import zipfile, shutil
 from pathlib import Path
 z=zipfile.ZipFile("/tmp/node-win.zip")
@@ -25,6 +32,7 @@ z.extractall("/tmp/nodewin-ci")
 src=next(Path("/tmp/nodewin-ci").glob("*/node.exe"))
 shutil.copy2(src, Path("$STAGE")/"node"/"node.exe")
 PY
+fi
 
 python3 - <<PY
 import zipfile
