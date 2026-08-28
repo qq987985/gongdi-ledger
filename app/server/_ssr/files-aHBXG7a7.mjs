@@ -58,8 +58,8 @@ function FilesPage() {
 				kind: "contract",
 				fileName: c.scanFileName,
 				belong: `${c.year} ${c.name}`,
-				extra: c.hasPaper === false ? c.noContractReason || "无合同" : "合同扫描件",
-				suggest: `${(c.name || "未命名").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "") || "未命名"}-合同扫描件`,
+				extra: "合同扫描件",
+				suggest: `${(c.name || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "") || "未命名"}-合同电子版`,
 				source: "scan"
 			});
 		}

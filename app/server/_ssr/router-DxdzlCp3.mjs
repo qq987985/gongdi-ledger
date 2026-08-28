@@ -1583,9 +1583,7 @@ function contractTemplateWb() {
 		"项目进度",
 		"初审金额",
 		"结算应收金额",
-		"备注",
-		"有无合同",
-		"无合同原因"
+		"备注"
 	], [
 		1,
 		2026,
@@ -1605,9 +1603,7 @@ function contractTemplateWb() {
 		"在建",
 		0,
 		0,
-		"示例，导入前请改",
-		"有扫描件",
-		""
+		"示例，导入前请改"
 	]]), "合同管理表");
 	utils.book_append_sheet(wb, utils.aoa_to_sheet([
 		[
@@ -1690,7 +1686,7 @@ function contractTemplateWb() {
 		"报量含税列填「含税」或「不含税」。每个合同可以不同。开票、收款仍按实际金额。",
 		"两条线：① 应收 = 含税报量 × 付款比例；合同未付 = 应收 − 已付。② 剩余款 = 开票含税 − 已付。已付 = 代付农民工 + 到分包公司。",
 		"收款请拆成两笔：去向填「到分包公司」或「总包代付农民工」，日期可以不同。",
-		"有无合同：填「有扫描件」或「无合同」。无合同时在「无合同原因」说明。合同扫描件在软件里上传，存到 data/photos/合同扫描件。"
+		"合同扫描件在软件里上传，文件名是「项目名称-合同电子版」，存到 data/photos/合同扫描件。有文件即有合同，没传即无合同；原因写在备注。"
 	]), "填写说明");
 	return wb;
 }
@@ -1727,9 +1723,7 @@ function buildContractWorkbook(args) {
 		"项目进度",
 		"初审金额",
 		"结算应收金额",
-		"备注",
-		"有无合同",
-		"无合同原因"
+		"备注"
 	]];
 	contracts.forEach((c, i) => {
 		const r = contractRollup(c, entries);
@@ -1763,9 +1757,7 @@ function buildContractWorkbook(args) {
 			c.status,
 			c.prelimAmount || "",
 			c.settleReceivable || "",
-			c.remark,
-			c.hasPaper === false ? "无合同" : (c.scanFileName ? "有扫描件" : "有合同"),
-			c.hasPaper === false ? (c.noContractReason || "") : ""
+			c.remark
 		]);
 	});
 	utils.book_append_sheet(wb, sheetFromAoa(aoa), "合同管理表");

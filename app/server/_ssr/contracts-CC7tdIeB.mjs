@@ -348,6 +348,14 @@ function ContractsPage() {
 		contracts,
 		contractEntries
 	]);
+	(0, import_react.useEffect)(() => {
+		if (!editing) return;
+		const t = window.setTimeout(() => document.getElementById("contract-editor")?.scrollIntoView({
+			behavior: "smooth",
+			block: "start"
+		}), 50);
+		return () => window.clearTimeout(t);
+	}, [editing?.id]);
 	function printStatement() {
 		if (!printItems.length) {
 			toast.error("先点开一个合同，或勾选要打印的合同");
@@ -368,11 +376,13 @@ function ContractsPage() {
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "mt-1 max-w-2xl text-sm text-muted",
 						children: [
-							"独立模块。每个合同自己选报量是",
+							"点表格里的合同名称，页面滚到下方，",
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "最上面上传合同扫描件" }),
+							"。有文件就是有合同，没传就是无合同；原因写在备注里。报量可选",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "含税" }),
-							"还是",
+							"或",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "不含税" }),
-							"，按税率自动折算。开票、收款按实收实开。保证金单独记。"
+							"。"
 						]
 					})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex flex-wrap gap-2",
@@ -589,6 +599,10 @@ function ContractsPage() {
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
+									children: "扫描件"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
 									children: "总包"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
@@ -673,7 +687,7 @@ function ContractsPage() {
 								})
 							] })
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [list.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 26,
+							colSpan: 27,
 							className: "p-6 text-muted",
 							children: "还没有合同。点右上角新增，或到「导入导出」导入原来的合同管理表。"
 						}) }) : null, list.map((c, i) => {
@@ -712,6 +726,16 @@ function ContractsPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: `sticky left-14 z-10 p-2 font-medium shadow-[2px_0_0_var(--color-line)] ${on ? "bg-accent-soft" : "bg-surface"} group-hover:bg-accent-soft`,
 										children: c.name
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "p-2",
+										children: c.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+											tone: "ok",
+											children: "有合同"
+										}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "text-xs text-muted",
+											children: "无合同"
+										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-2 text-muted",
@@ -855,6 +879,7 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 		}));
 	}
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+		id: "contract-editor",
 		className: "space-y-4 rounded-xl border border-accent bg-surface p-5",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -884,10 +909,6 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 									toast.error("项目名称必填");
 									return;
 								}
-								if (c.hasPaper === false && !(c.noContractReason || "").trim()) {
-									toast.error("没有合同请填写原因");
-									return;
-								}
 								onSave({
 									...c,
 									id: c.id || uid()
@@ -897,6 +918,37 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 						})
 					]
 				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "rounded-lg border-2 border-dashed border-accent bg-accent-soft p-4",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap items-center justify-between gap-2",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "font-semibold",
+								children: "合同扫描件"
+							}),
+							c.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+								tone: "ok",
+								children: "有合同"
+							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+								children: "无合同"
+							})
+						]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-1 text-xs text-muted",
+						children: "点绿色按钮或把 PDF / 照片拖进来。文件名是「项目名称-合同电子版」，例如 某某住宅-合同电子版.pdf，存到 data/photos/合同扫描件。没传就是无合同，原因写在下面备注里。"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mt-3",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractScanBox, {
+							contract: c,
+							onFileName: (name) => patch("scanFileName", name)
+						})
+					})
+				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "grid gap-3 md:grid-cols-3",
@@ -921,38 +973,6 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
 							value: c.name,
 							onChange: (e) => patch("name", e.target.value)
-						})
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-						label: "合同原件",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-							className: "field-select w-full",
-							value: c.hasPaper === false ? "no" : "yes",
-							onChange: (e) => patch("hasPaper", e.target.value === "yes"),
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-								value: "yes",
-								children: "有合同扫描件"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-								value: "no",
-								children: "无合同"
-							})]
-						})
-					}),
-					c.hasPaper === false ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-						label: "无合同原因",
-						className: "md:col-span-2",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
-							value: c.noContractReason || "",
-							onChange: (e) => patch("noContractReason", e.target.value),
-							placeholder: "说明为什么没有合同"
-						})
-					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-						label: "合同扫描件（存到 data/photos/合同扫描件）",
-						className: "md:col-span-2",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractScanBox, {
-							contract: c,
-							disabled: creating,
-							onFileName: (name) => patch("scanFileName", name)
 						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
@@ -1687,23 +1707,27 @@ function EntryRows({ entries, title, onRemove, render }) {
 	});
 }
 function contractScanName(name) {
-	return `${(name || "未命名").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "") || "未命名"}-合同扫描件`;
+	const base = (name || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "");
+	return base ? `${base}-合同电子版` : "";
 }
-function ContractScanBox({ contract, disabled, onFileName }) {
+function ContractScanBox({ contract, onFileName }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "space-y-2",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilePick, {
 				kind: "file",
-				compact: true,
-				disabled,
 				accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
-				label: "上传合同扫描件",
-				hint: contract.scanFileName ? `已选：${contract.scanFileName}` : "点击或拖入 PDF / 照片，自动存到 data/photos/合同扫描件",
+				label: "点这里上传合同扫描件",
+				hint: contract.scanFileName ? `已选：${contract.scanFileName}，可再点或拖入替换` : "先填项目名称。文件保存为 项目名称-合同电子版，如 某某住宅-合同电子版.pdf",
 				onFile: async (file) => {
-					if (!file || disabled) return;
+					if (!file) return;
+					const base = contractScanName(contract.name);
+					if (!base) {
+						toast.error("先填项目名称，扫描件按 项目名称-合同电子版 保存");
+						return;
+					}
 					const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".pdf";
-					const named = new File([file], `${contractScanName(contract.name)}${ext}`, {
+					const named = new File([file], `${base}${ext}`, {
 						type: file.type,
 						lastModified: file.lastModified
 					});
@@ -1716,7 +1740,7 @@ function ContractScanBox({ contract, disabled, onFileName }) {
 				id: contract.id,
 				kind: "contract",
 				fileName: contract.scanFileName,
-				suggest: contractScanName(contract.name),
+				suggest: contractScanName(contract.name) || "合同电子版",
 				taken: [],
 				onReplaced: onFileName,
 				onDeleted: () => onFileName("")
