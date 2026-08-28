@@ -8,7 +8,7 @@ import{S as Plus,_ as Label,g as Input,h as toast,v as Button,y as useApp}from".
 import{n as WideTable}from"./wide-table-BtpzsvMP.js";
 import{n as Need}from"./can-9AzYldNF.js";
 import{t as Badge}from"./badge-_ctqz85I.js";
-var R=e(t()),h=n();
+var L=e(t()),R=n();
 var PAY_METHODS = ["现金", "转账", "微信", "支付宝", "对公", "其他"];
 var SAMPLE = [
 	["房租", "2026/3月-12月", "2026-03-01", "月", 1000, 10, 1e4, ""],
@@ -89,21 +89,21 @@ function uniqueNames(people, expenses) {
 	return [...s];
 }
 function Field({ label, children, className }) {
-	return /* @__PURE__ */ (0, h.jsxs)("label", {
+	return /* @__PURE__ */ (0, R.jsxs)("label", {
 		className,
 		children: [
-			/* @__PURE__ */ (0, h.jsx)(Label, { children: label }),
-			/* @__PURE__ */ (0, h.jsx)("div", { className: "mt-1", children })
+			/* @__PURE__ */ (0, R.jsx)(Label, { children: label }),
+			/* @__PURE__ */ (0, R.jsx)("div", { className: "mt-1", children })
 		]
 	});
 }
 function Mini({ label, value, hint }) {
-	return /* @__PURE__ */ (0, h.jsxs)("div", {
+	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "rounded-xl border border-line bg-surface p-4",
 		children: [
-			/* @__PURE__ */ (0, h.jsx)("div", { className: "text-xs text-muted", children: label }),
-			hint ? /* @__PURE__ */ (0, h.jsx)("div", { className: "text-[10px] text-subtle", children: hint }) : null,
-			/* @__PURE__ */ (0, h.jsxs)("div", {
+			/* @__PURE__ */ (0, R.jsx)("div", { className: "text-xs text-muted", children: label }),
+			hint ? /* @__PURE__ */ (0, R.jsx)("div", { className: "text-[10px] text-subtle", children: hint }) : null,
+			/* @__PURE__ */ (0, R.jsxs)("div", {
 				className: "mt-1 font-display text-lg font-semibold tabular-nums",
 				children: ["¥", money(value)]
 			})
@@ -111,16 +111,16 @@ function Mini({ label, value, hint }) {
 	});
 }
 function NameInput({ value, onChange, names, listId, placeholder }) {
-	return /* @__PURE__ */ (0, h.jsxs)(h.Fragment, { children: [
-		/* @__PURE__ */ (0, h.jsx)(Input, {
+	return /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
+		/* @__PURE__ */ (0, R.jsx)(Input, {
 			value: value || "",
 			list: listId,
 			placeholder,
 			onChange: (e) => onChange(e.target.value)
 		}),
-		/* @__PURE__ */ (0, h.jsx)("datalist", {
+		/* @__PURE__ */ (0, R.jsx)("datalist", {
 			id: listId,
-			children: (names || []).map((n) => /* @__PURE__ */ (0, h.jsx)("option", { value: n }, n))
+			children: (names || []).map((n) => /* @__PURE__ */ (0, R.jsx)("option", { value: n }, n))
 		})
 	] });
 }
@@ -129,17 +129,17 @@ function ExpensesPage() {
 	const { year, expenses, upsertExpense, removeExpenses, people } = useApp();
 	const list = expenses || [];
 	const names = uniqueNames(people, list);
-	const [q, setQ] = (0, R.useState)("");
-	const [status, setStatus] = (0, R.useState)("all");
-	const [scope, setScope] = (0, R.useState)("year");
-	const [selected, setSelected] = (0, R.useState)([]);
-	const [editing, setEditing] = (0, R.useState)(null);
-	const [creating, setCreating] = (0, R.useState)(false);
-	const [printFrom, setPrintFrom] = (0, R.useState)("");
-	const [printTo, setPrintTo] = (0, R.useState)("");
-	const [printStatus, setPrintStatus] = (0, R.useState)("未报销");
-	const [printImages, setPrintImages] = (0, R.useState)(false);
-	const [batch, setBatch] = (0, R.useState)({
+	const [q, setQ] = (0, L.useState)("");
+	const [status, setStatus] = (0, L.useState)("all");
+	const [scope, setScope] = (0, L.useState)("year");
+	const [selected, setSelected] = (0, L.useState)([]);
+	const [editing, setEditing] = (0, L.useState)(null);
+	const [creating, setCreating] = (0, L.useState)(false);
+	const [printFrom, setPrintFrom] = (0, L.useState)("");
+	const [printTo, setPrintTo] = (0, L.useState)("");
+	const [printStatus, setPrintStatus] = (0, L.useState)("未报销");
+	const [printImages, setPrintImages] = (0, L.useState)(false);
+	const [batch, setBatch] = (0, L.useState)({
 		claimant: "",
 		forWhom: "",
 		payAccount: "",
@@ -148,7 +148,7 @@ function ExpensesPage() {
 		payoutId: "",
 		payoutFileName: ""
 	});
-	(0, R.useEffect)(() => {
+	(0, L.useEffect)(() => {
 		if (!editing) return;
 		const t = window.setTimeout(() => document.getElementById("expense-editor")?.scrollIntoView({
 			behavior: "smooth",
@@ -156,7 +156,7 @@ function ExpensesPage() {
 		}), 50);
 		return () => window.clearTimeout(t);
 	}, [editing && editing.id]);
-	(0, R.useEffect)(() => {
+	(0, L.useEffect)(() => {
 		const rows = list.filter((e) => selected.includes(e.id));
 		if (!rows.length) return;
 		const first = rows[0];
@@ -172,7 +172,7 @@ function ExpensesPage() {
 			payoutFileName: same("payoutId") && first.payoutId ? first.payoutFileName || "" : ""
 		}));
 	}, [selected.join(","), list.length]);
-	const shown = (0, R.useMemo)(() => {
+	const shown = (0, L.useMemo)(() => {
 		let rows = list;
 		if (scope === "year") rows = rows.filter((e) => e.year === year);
 		if (status !== "all") rows = rows.filter((e) => e.status === status);
@@ -197,7 +197,7 @@ function ExpensesPage() {
 		missing: 0,
 		missPay: 0
 	});
-	const printRows = (0, R.useMemo)(() => {
+	const printRows = (0, L.useMemo)(() => {
 		let rows = selected.length ? list.filter((e) => selected.includes(e.id)) : shown;
 		if (printStatus !== "all") rows = rows.filter((e) => e.status === printStatus);
 		if (printFrom) rows = rows.filter((e) => (e.date || "") >= printFrom);
@@ -276,8 +276,8 @@ function ExpensesPage() {
 				payoutDate: day,
 				payoutId: pid,
 				payoutFileName: batch.payoutFileName || e.payoutFileName || "",
-				status:kDone ? "已报销" : e.status,
-				reimbursedAt:kDone ? day : e.reimbursedAt
+				status: markDone ? "已报销" : e.status,
+				reimbursedAt: markDone ? day : e.reimbursedAt
 			});
 		}
 		setBatch((b) => ({
@@ -325,42 +325,42 @@ function ExpensesPage() {
 		});
 		toast.success(`已保存打款凭证，挂到勾选的 ${batchRows.length} 笔`);
 	}
-	return /* @__PURE__ */ (0, h.jsx)(Need, {
+	return /* @__PURE__ */ (0, R.jsx)(Need, {
 		perm: "expenses.view",
-		children: /* @__PURE__ */ (0, h.jsxs)(h.Fragment, { children: [
-			/* @__PURE__ */ (0, h.jsxs)("div", {
+		children: /* @__PURE__ */ (0, R.jsxs)(R.Fragment, { children: [
+			/* @__PURE__ */ (0, R.jsxs)("div", {
 				className: "no-print space-y-5",
 				children: [
-					/* @__PURE__ */ (0, h.jsxs)("header", {
+					/* @__PURE__ */ (0, R.jsxs)("header", {
 						className: "flex flex-wrap items-end justify-between gap-3",
 						children: [
-							/* @__PURE__ */ (0, h.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, h.jsx)("h1", {
+							/* @__PURE__ */ (0, R.jsxs)("div", { children: [
+								/* @__PURE__ */ (0, R.jsx)("h1", {
 									className: "font-display text-2xl font-semibold",
 									children: "报销单"
 								}),
-								/* @__PURE__ */ (0, h.jsx)("p", {
+								/* @__PURE__ */ (0, R.jsx)("p", {
 									className: "mt-1 max-w-2xl text-sm text-muted",
 									children: "每笔记下报销人、给谁报、打到哪个账户。几笔一起报就勾选后填打款，共用一张打款凭证。搜索报销人/账户就能查到这批。"
 								})
 							] }),
-							/* @__PURE__ */ (0, h.jsxs)("div", {
+							/* @__PURE__ */ (0, R.jsxs)("div", {
 								className: "flex flex-wrap gap-2",
 								children: [
-									/* @__PURE__ */ (0, h.jsx)(Button, {
+									/* @__PURE__ */ (0, R.jsx)(Button, {
 										variant: "outline",
 										type: "button",
 										onClick: loadSample,
 										children: "载入示例 11 笔"
 									}),
-									/* @__PURE__ */ (0, h.jsxs)(Button, {
+									/* @__PURE__ */ (0, R.jsxs)(Button, {
 										type: "button",
 										onClick: () => {
 											setCreating(true);
 											setEditing(emptyExpense(year));
 										},
 										children: [
-											/* @__PURE__ */ (0, h.jsx)(Plus, { className: "size-4" }),
+											/* @__PURE__ */ (0, R.jsx)(Plus, { className: "size-4" }),
 											"新增报销"
 										]
 									})
@@ -368,45 +368,45 @@ function ExpensesPage() {
 							})
 						]
 					}),
-					/* @__PURE__ */ (0, h.jsxs)("div", {
+					/* @__PURE__ */ (0, R.jsxs)("div", {
 						className: "flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4",
 						children: [
-							/* @__PURE__ */ (0, h.jsxs)("label", {
+							/* @__PURE__ */ (0, R.jsxs)("label", {
 								className: "text-sm",
 								children: [
-									/* @__PURE__ */ (0, h.jsx)("span", { className: "text-xs text-muted", children: "年份" }),
-									/* @__PURE__ */ (0, h.jsxs)("select", {
+									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "年份" }),
+									/* @__PURE__ */ (0, R.jsxs)("select", {
 										className: "field-select mt-1 w-auto",
 										value: scope,
 										onChange: (e) => setScope(e.target.value),
 										children: [
-											/* @__PURE__ */ (0, h.jsxs)("option", { value: "year", children: [year, "年"] }),
-											/* @__PURE__ */ (0, h.jsx)("option", { value: "all", children: "全部年份" })
+											/* @__PURE__ */ (0, R.jsxs)("option", { value: "year", children: [year, "年"] }),
+											/* @__PURE__ */ (0, R.jsx)("option", { value: "all", children: "全部年份" })
 										]
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, h.jsxs)("label", {
+							/* @__PURE__ */ (0, R.jsxs)("label", {
 								className: "text-sm",
 								children: [
-									/* @__PURE__ */ (0, h.jsx)("span", { className: "text-xs text-muted", children: "状态" }),
-									/* @__PURE__ */ (0, h.jsxs)("select", {
+									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "状态" }),
+									/* @__PURE__ */ (0, R.jsxs)("select", {
 										className: "field-select mt-1 w-auto",
 										value: status,
 										onChange: (e) => setStatus(e.target.value),
 										children: [
-											/* @__PURE__ */ (0, h.jsx)("option", { value: "all", children: "全部" }),
-											/* @__PURE__ */ (0, h.jsx)("option", { value: "未报销", children: "未报销" }),
-											/* @__PURE__ */ (0, h.jsx)("option", { value: "已报销", children: "已报销" })
+											/* @__PURE__ */ (0, R.jsx)("option", { value: "all", children: "全部" }),
+											/* @__PURE__ */ (0, R.jsx)("option", { value: "未报销", children: "未报销" }),
+											/* @__PURE__ */ (0, R.jsx)("option", { value: "已报销", children: "已报销" })
 										]
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, h.jsxs)("label", {
+							/* @__PURE__ */ (0, R.jsxs)("label", {
 								className: "min-w-48 flex-1 text-sm",
 								children: [
-									/* @__PURE__ */ (0, h.jsx)("span", { className: "text-xs text-muted", children: "搜索" }),
-									/* @__PURE__ */ (0, h.jsx)(Input, {
+									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "搜索" }),
+									/* @__PURE__ */ (0, R.jsx)(Input, {
 										className: "mt-1",
 										value: q,
 										onChange: (e) => setQ(e.target.value),
@@ -414,7 +414,7 @@ function ExpensesPage() {
 									})
 								]
 							}),
-							selected.length ? /* @__PURE__ */ (0, h.jsxs)(Button, {
+							selected.length ? /* @__PURE__ */ (0, R.jsxs)(Button, {
 								variant: "danger",
 								type: "button",
 								onClick: () => del(selected),
@@ -422,29 +422,29 @@ function ExpensesPage() {
 							}) : null
 						]
 					}),
-					selected.length ? /* @__PURE__ */ (0, h.jsxs)("div", {
+					selected.length ? /* @__PURE__ */ (0, R.jsxs)("div", {
 						className: "space-y-3 rounded-xl border-2 border-dashed border-accent bg-accent-soft p-4",
 						children: [
-							/* @__PURE__ */ (0, h.jsxs)("div", {
+							/* @__PURE__ */ (0, R.jsxs)("div", {
 								className: "flex flex-wrap items-center justify-between gap-2",
 								children: [
-									/* @__PURE__ */ (0, h.jsxs)("div", { children: [
-										/* @__PURE__ */ (0, h.jsx)("div", { className: "text-sm font-semibold", children: "这几笔一起报销" }),
-										/* @__PURE__ */ (0, h.jsx)("p", {
+									/* @__PURE__ */ (0, R.jsxs)("div", { children: [
+										/* @__PURE__ */ (0, R.jsx)("div", { className: "text-sm font-semibold", children: "这几笔一起报销" }),
+										/* @__PURE__ */ (0, R.jsx)("p", {
 											className: "mt-0.5 text-xs text-muted",
 											children: `已勾 ${batchRows.length} 笔，合计 ¥${money(batchTotal)}。同一报销人、打到同一个账户，共用一张打款凭证。`
 										})
 									] }),
-									/* @__PURE__ */ (0, h.jsxs)("div", {
+									/* @__PURE__ */ (0, R.jsxs)("div", {
 										className: "flex flex-wrap gap-2",
 										children: [
-										/* @__PURE__ */ (0, h.jsx)(Button, {
+										/* @__PURE__ */ (0, R.jsx)(Button, {
 												variant: "outline",
 																							type: "button",
 												onClick: () => applyBatch(false),
 												children: "只挂打款，先不改状态"
 											}),
-											/* @__PURE__ */ (0, h.jsx)(Button, {
+											/* @__PURE__ */ (0, R.jsx)(Button, {
 												type: "button",
 												onClick: () => applyBatch(true),
 												children: "记为已报销"
@@ -453,12 +453,12 @@ function ExpensesPage() {
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, h.jsxs)("div", {
+							/* @__PURE__ */ (0, R.jsxs)("div", {
 								className: "grid gap-3 md:grid-cols-3",
 								children: [
-									/* @__PURE__ */ (0, h.jsx)(Field, {
+									/* @__PURE__ */ (0, R.jsx)(Field, {
 										label: "报销人 *（谁来报）",
-										children: /* @__PURE__ */ (0, h.jsx)(NameInput, {
+										children: /* @__PURE__ */ (0, R.jsx)(NameInput, {
 											value: batch.claimant,
 											names,
 											listId: "exp-claimant",
@@ -470,9 +470,9 @@ function ExpensesPage() {
 											}))
 										})
 									}),
-									/* @__PURE__ */ (0, h.jsx)(Field, {
+									/* @__PURE__ */ (0, R.jsx)(Field, {
 										label: "给谁报销",
-										children: /* @__PURE__ */ (0, h.jsx)(NameInput, {
+										children: /* @__PURE__ */ (0, R.jsx)(NameInput, {
 											value: batch.forWhom,
 											names,
 											listId: "exp-for",
@@ -480,36 +480,36 @@ function ExpensesPage() {
 											onChange: (v) => setBatch((b) => ({ ...b, forWhom: v }))
 										})
 									}),
-									/* @__PURE__ */ (0, h.jsx)(Field, {
+									/* @__PURE__ */ (0, R.jsx)(Field, {
 										label: "打款账户 *（打到哪个里）",
-										children: /* @__PURE__ */ (0, h.jsx)(Input, {
+										children: /* @__PURE__ */ (0, R.jsx)(Input, {
 											value: batch.payAccount,
 											placeholder: "如 张三工商尾号1234 / 微信",
 											onChange: (e) => setBatch((b) => ({ ...b, payAccount: e.target.value }))
 										})
 									}),
-									/* @__PURE__ */ (0, h.jsx)(Field, {
+									/* @__PURE__ */ (0, R.jsx)(Field, {
 										label: "打款日期",
-										children: /* @__PURE__ */ (0, h.jsx)(Input, {
+										children: /* @__PURE__ */ (0, R.jsx)(Input, {
 											type: "date",
 											value: batch.payoutDate,
 											onChange: (e) => setBatch((b) => ({ ...b, payoutDate: e.target.value }))
 										})
 									}),
-									/* @__PURE__ */ (0, h.jsx)(Field, {
+									/* @__PURE__ */ (0, R.jsx)(Field, {
 										label: "打款方式",
-										children: /* @__PURE__ */ (0, h.jsx)("select", {
+										children: /* @__PURE__ */ (0, R.jsx)("select", {
 											className: "field-select w-full",
 											value: batch.payoutMethod,
 											onChange: (e) => setBatch((b) => ({ ...b, payoutMethod: e.target.value })),
-											children: PAY_METHODS.map((m) => /* @__PURE__ */ (0, h.jsx)("option", { children: m }, m))
+											children: PAY_METHODS.map((m) => /* @__PURE__ */ (0, R.jsx)("option", { children: m }, m))
 										})
 									}),
-									/* @__PURE__ */ (0, h.jsxs)("div", {
+									/* @__PURE__ */ (0, R.jsxs)("div", {
 										className: "rounded-lg border border-line bg-surface p-3 text-sm",
 										children: [
-											/* @__PURE__ */ (0, h.jsx)("div", { className: "text-xs text-muted", children: "这批合计" }),
-											/* @__PURE__ */ (0, h.jsxs)("div", {
+											/* @__PURE__ */ (0, R.jsx)("div", { className: "text-xs text-muted", children: "这批合计" }),
+											/* @__PURE__ */ (0, R.jsxs)("div", {
 												className: "font-display text-lg font-semibold tabular-nums",
 												children: ["¥", money(batchTotal)]
 											})
@@ -517,14 +517,14 @@ function ExpensesPage() {
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, h.jsx)(FilePick, {
+							/* @__PURE__ */ (0, R.jsx)(FilePick, {
 								kind: "file",
 								accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
 								label: batch.payoutFileName ? "更换打款凭证" : "上传打款凭证",
 								hint: batch.payoutMethod === "现金" ? "现金打款可以不传。" : batch.payoutFileName ? `已选：${batch.payoutFileName}` : "转账/微信等请上传回单，几笔共用这一张。存在 data/photos/报销打款/",
 								onFile: uploadPayout
 							}),
-							batch.payoutFileName ? /* @__PURE__ */ (0, h.jsx)(DocActions, {
+							batch.payoutFileName ? /* @__PURE__ */ (0, R.jsx)(DocActions, {
 								id: batch.payoutId,
 								kind: "payout",
 								fileName: batch.payoutFileName,
@@ -537,30 +537,30 @@ function ExpensesPage() {
 							}) : null
 						]
 					}) : null,
-					/* @__PURE__ */ (0, h.jsxs)("div", {
+					/* @__PURE__ */ (0, R.jsxs)("div", {
 						className: "flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-accent bg-accent-soft p-4",
 						children: [
-							/* @__PURE__ */ (0, h.jsxs)("label", {
+							/* @__PURE__ */ (0, R.jsxs)("label", {
 								className: "text-sm",
 								children: [
-									/* @__PURE__ */ (0, h.jsx)("span", { className: "text-xs text-muted", children: "打印哪些" }),
-									/* @__PURE__ */ (0, h.jsxs)("select", {
+									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "打印哪些" }),
+									/* @__PURE__ */ (0, R.jsxs)("select", {
 										className: "field-select mt-1 w-auto",
 										value: printStatus,
 										onChange: (e) => setPrintStatus(e.target.value),
 										children: [
-											/* @__PURE__ */ (0, h.jsx)("option", { value: "未报销", children: "未报销" }),
-											/* @__PURE__ */ (0, h.jsx)("option", { value: "已报销", children: "已报销" }),
-											/* @__PURE__ */ (0, h.jsx)("option", { value: "all", children: "全部状态" })
+											/* @__PURE__ */ (0, R.jsx)("option", { value: "未报销", children: "未报销" }),
+											/* @__PURE__ */ (0, R.jsx)("option", { value: "已报销", children: "已报销" }),
+											/* @__PURE__ */ (0, R.jsx)("option", { value: "all", children: "全部状态" })
 										]
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, h.jsxs)("label", {
+							/* @__PURE__ */ (0, R.jsxs)("label", {
 								className: "text-sm",
 								children: [
-									/* @__PURE__ */ (0, h.jsx)("span", { className: "text-xs text-muted", children: "购买时间从" }),
-									/* @__PURE__ */ (0, h.jsx)(Input, {
+									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "购买时间从" }),
+									/* @__PURE__ */ (0, R.jsx)(Input, {
 										className: "mt-1",
 										type: "date",
 										value: printFrom,
@@ -568,11 +568,11 @@ function ExpensesPage() {
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, h.jsxs)("label", {
+							/* @__PURE__ */ (0, R.jsxs)("label", {
 								className: "text-sm",
 								children: [
-									/* @__PURE__ */ (0, h.jsx)("span", { className: "text-xs text-muted", children: "到" }),
-									/* @__PURE__ */ (0, h.jsx)(Input, {
+									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "到" }),
+									/* @__PURE__ */ (0, R.jsx)(Input, {
 										className: "mt-1",
 										type: "date",
 										value: printTo,
@@ -580,57 +580,57 @@ function ExpensesPage() {
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, h.jsxs)(Button, {
+							/* @__PURE__ */ (0, R.jsxs)(Button, {
 								variant: "outline",
 								type: "button",
 								onClick: doPrint,
 								children: ["打印报销单", printRows.length ? `（${printRows.length}）` : ""]
 							}),
-							/* @__PURE__ */ (0, h.jsxs)("label", {
+							/* @__PURE__ */ (0, R.jsxs)("label", {
 								className: "text-sm",
 								children: [
-									/* @__PURE__ */ (0, h.jsx)("span", { className: "text-xs text-muted", children: "影像资料" }),
-									/* @__PURE__ */ (0, h.jsxs)("select", {
+									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "影像资料" }),
+									/* @__PURE__ */ (0, R.jsxs)("select", {
 										className: "field-select mt-1 w-auto",
 										value: printImages ? "yes" : "no",
 										onChange: (e) => setPrintImages(e.target.value === "yes"),
 										children: [
-											/* @__PURE__ */ (0, h.jsx)("option", { value: "no", children: "不打印" }),
-											/* @__PURE__ */ (0, h.jsx)("option", { value: "yes", children: "打印" })
+											/* @__PURE__ */ (0, R.jsx)("option", { value: "no", children: "不打印" }),
+											/* @__PURE__ */ (0, R.jsx)("option", { value: "yes", children: "打印" })
 										]
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, h.jsx)("p", {
+							/* @__PURE__ */ (0, R.jsx)("p", {
 								className: "w-full text-xs text-muted",
 								children: selected.length ? `已勾选 ${selected.length} 笔，打印时只用勾选的。` : "没勾选就打印当前列表里符合条件的。"
 							})
 						]
 					}),
-					/* @__PURE__ */ (0, h.jsxs)("section", {
+					/* @__PURE__ */ (0, R.jsxs)("section", {
 						className: "grid gap-3 sm:grid-cols-2 lg:grid-cols-4",
 						children: [
-							/* @__PURE__ */ (0, h.jsx)(Mini, { label: "本表合计", value: totals.amount }),
-							/* @__PURE__ */ (0, h.jsx)(Mini, { label: "未报销", value: totals.open }),
-							/* @__PURE__ */ (0, h.jsx)(Mini, { label: "已报销", value: totals.done }),
-							/* @__PURE__ */ (0, h.jsx)(Mini, {
+							/* @__PURE__ */ (0, R.jsx)(Mini, { label: "本表合计", value: totals.amount }),
+							/* @__PURE__ */ (0, R.jsx)(Mini, { label: "未报销", value: totals.open }),
+							/* @__PURE__ */ (0, R.jsx)(Mini, { label: "已报销", value: totals.done }),
+							/* @__PURE__ */ (0, R.jsx)(Mini, {
 								label: "缺凭证",
 								hint: "购买或缺打款",
 								value: totals.missing + totals.missPay
 							})
 						]
 					}),
-					/* @__PURE__ */ (0, h.jsx)(WideTable, {
+					/* @__PURE__ */ (0, R.jsx)(WideTable, {
 						id: "expenses",
-						children: /* @__PURE__ */ (0, h.jsxs)("table", {
+						children: /* @__PURE__ */ (0, R.jsxs)("table", {
 							className: "wide-table text-sm",
 							children: [
-								/* @__PURE__ */ (0, h.jsx)("thead", {
+								/* @__PURE__ */ (0, R.jsx)("thead", {
 									className: "border-b border-line text-xs text-muted",
-									children: /* @__PURE__ */ (0, h.jsxs)("tr", { children: [
-										/* @__PURE__ */ (0, h.jsx)("th", {
+									children: /* @__PURE__ */ (0, R.jsxs)("tr", { children: [
+										/* @__PURE__ */ (0, R.jsx)("th", {
 											className: "w-10 p-3",
-											children: /* @__PURE__ */ (0, h.jsx)("input", {
+											children: /* @__PURE__ */ (0, R.jsx)("input", {
 												type: "checkbox",
 												className: "size-4",
 												checked: allChecked,
@@ -638,21 +638,21 @@ function ExpensesPage() {
 												"aria-label": "全选报销"
 											})
 										}),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "序号" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "项目" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "购买时间" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "金额" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "报销人" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "给谁" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "打款账户" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "状态" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "购买凭证" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "打款凭证" }),
-										/* @__PURE__ */ (0, h.jsx)("th", { className: "p-3", children: "备注" })
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "序号" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "项目" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "购买时间" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "金额" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "报销人" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "给谁" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "打款账户" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "状态" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "购买凭证" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "打款凭证" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "备注" })
 									] })
 								}),
-								/* @__PURE__ */ (0, h.jsxs)("tbody", { children: [
-									shown.length === 0 ? /* @__PURE__ */ (0, h.jsx)("tr", { children: /* @__PURE__ */ (0, h.jsx)("td", {
+								/* @__PURE__ */ (0, R.jsxs)("tbody", { children: [
+									shown.length === 0 ? /* @__PURE__ */ (0, R.jsx)("tr", { children: /* @__PURE__ */ (0, R.jsx)("td", {
 										colSpan: 12,
 										className: "p-6 text-muted",
 										children: "还没有报销。点右上角新增，或先「载入示例 11 笔」。勾几笔可一起报销、记打款。"
@@ -660,17 +660,17 @@ function ExpensesPage() {
 									shown.map((e, i) => {
 										const on = editing?.id === e.id;
 										const sib = e.payoutId ? list.filter((x) => x.payoutId === e.payoutId).length : 0;
-										return /* @__PURE__ */ (0, h.jsxs)("tr", {
+										return /* @__PURE__ */ (0, R.jsxs)("tr", {
 											className: `group cursor-pointer border-b border-line last:border-0 hover:bg-accent-soft ${on ? "bg-accent-soft" : ""}`,
 											onClick: () => {
 												setCreating(false);
 												setEditing(e);
 											},
 											children: [
-												/* @__PURE__ */ (0, h.jsx)("td", {
+												/* @__PURE__ */ (0, R.jsx)("td", {
 													className: "p-2",
 												onClick: (ev) => ev.stopPropagation(),
-													children: /* @__PURE__ */ (0, h.jsx)("input", {
+													children: /* @__PURE__ */ (0, R.jsx)("input", {
 														type: "checkbox",
 														className: "size-4",
 														checked: selected.includes(e.id),
@@ -678,29 +678,29 @@ function ExpensesPage() {
 														"aria-label": `选择 ${e.name}`
 													})
 												}),
-												/* @__PURE__ */ (0, h.jsx)("td", { className: "p-2 tabular-nums text-muted", children: i + 1 }),
-												/* @__PURE__ */ (0, h.jsx)("td", { className: "p-2 font-medium", children: e.name }),
-												/* @__PURE__ */ (0, h.jsx)("td", { className: "p-2", children: e.period || e.date }),
-												/* @__PURE__ */ (0, h.jsx)("td", { className: "p-2 text-right tabular-nums font-medium", children: money(e.amount) }),
-												/* @__PURE__ */ (0, h.jsx)("td", { className: "p-2", children: e.claimant || "—" }),
-												/* @__PURE__ */ (0, h.jsx)("td", { className: "p-2", children: e.forWhom || e.claimant || "—" }),
-												/* @__PURE__ */ (0, h.jsx)("td", { className: "p-2 text-xs", children: e.payAccount || "—" }),
-												/* @__PURE__ */ (0, h.jsx)("td", {
+												/* @__PURE__ */ (0, R.jsx)("td", { className: "p-2 tabular-nums text-muted", children: i + 1 }),
+												/* @__PURE__ */ (0, R.jsx)("td", { className: "p-2 font-medium", children: e.name }),
+												/* @__PURE__ */ (0, R.jsx)("td", { className: "p-2", children: e.period || e.date }),
+												/* @__PURE__ */ (0, R.jsx)("td", { className: "p-2 text-right tabular-nums font-medium", children: money(e.amount) }),
+												/* @__PURE__ */ (0, R.jsx)("td", { className: "p-2", children: e.claimant || "—" }),
+												/* @__PURE__ */ (0, R.jsx)("td", { className: "p-2", children: e.forWhom || e.claimant || "—" }),
+												/* @__PURE__ */ (0, R.jsx)("td", { className: "p-2 text-xs", children: e.payAccount || "—" }),
+												/* @__PURE__ */ (0, R.jsx)("td", {
 													className: "p-2",
-													children: /* @__PURE__ */ (0, h.jsx)(Badge, {
+													children: /* @__PURE__ */ (0, R.jsx)(Badge, {
 														tone: e.status === "已报销" ? "ok" : "warn",
 														children: e.status
 													})
 												}),
-												/* @__PURE__ */ (0, h.jsx)("td", {
+												/* @__PURE__ */ (0, R.jsx)("td", {
 													className: "p-2 text-xs",
-													children: e.payMethod === "现金" ? "现金无需" : e.voucherFileName || /* @__PURE__ */ (0, h.jsx)("span", { className: "text-warn", children: "缺" })
+													children: e.payMethod === "现金" ? "现金无需" : e.voucherFileName || /* @__PURE__ */ (0, R.jsx)("span", { className: "text-warn", children: "缺" })
 												}),
-												/* @__PURE__ */ (0, h.jsx)("td", {
+												/* @__PURE__ */ (0, R.jsx)("td", {
 													className: "p-2 text-xs",
-													children: e.payoutFileName ? /* @__PURE__ */ (0, h.jsxs)("span", { children: [e.payoutFileName, sib > 1 ? ` ·${sib}笔` : ""] }) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? /* @__PURE__ */ (0, h.jsx)("span", { className: "text-warn", children: "缺打款" }) : "—"
+													children: e.payoutFileName ? /* @__PURE__ */ (0, R.jsxs)("span", { children: [e.payoutFileName, sib > 1 ? ` ·${sib}笔` : ""] }) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? /* @__PURE__ */ (0, R.jsx)("span", { className: "text-warn", children: "缺打款" }) : "—"
 												}),
-												/* @__PURE__ */ (0, h.jsx)("td", { className: "max-w-40 truncate p-2 text-muted", children: e.remark })
+												/* @__PURE__ */ (0, R.jsx)("td", { className: "max-w-40 truncate p-2 text-muted", children: e.remark })
 											]
 										}, e.id);
 									})
@@ -708,7 +708,7 @@ function ExpensesPage() {
 							]
 						})
 					}),
-					editing ? /* @__PURE__ */ (0, h.jsx)(ExpenseEditor, {
+					editing ? /* @__PURE__ */ (0, R.jsx)(ExpenseEditor, {
 						draft: editing,
 						creating,
 						all: list,
@@ -728,7 +728,7 @@ function ExpensesPage() {
 					}, editing.id) : null
 				]
 			}),
-			/* @__PURE__ */ (0, h.jsx)(ExpenseSheets, {
+			/* @__PURE__ */ (0, R.jsx)(ExpenseSheets, {
 				rows: printRows,
 				withImages: printImages
 			})
@@ -737,8 +737,8 @@ function ExpensesPage() {
 }
 
 function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onSave, onDelete }) {
-	const [c, setC] = (0, R.useState)(draft);
-	(0, R.useEffect)(() => {
+	const [c, setC] = (0, L.useState)(draft);
+	(0, L.useEffect)(() => {
 		const onKey = (e) => {
 			if (e.key === "Escape") onCancel();
 		};
@@ -823,35 +823,28 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 		}
 		toast.success(group.length > 1 ? `已保存打款凭证，同批 ${group.length} 笔共用` : `已保存 ${named.name}`);
 	}
-	return /* @__PURE__ */ (0, h.jsxs)("section", {
+	return /* @__PURE__ */ (0, R.jsxs)("section", {
 		id: "expense-editor",
 		className: "space-y-4 rounded-xl border border-accent bg-surface p-5",
 		children: [
-			/* @__PURE__ */ (0, h.jsxs)("div", {
+			/* @__PURE__ */ (0, R.jsxs)("div", {
 				className: "flex flex-wrap items-center justify-between gap-2",
 				children: [
-					/* @__PURE__ */ (0, h.jsx)("h2", {
+					/* @__PURE__ */ (0, R.jsx)("h2", {
 						className: "font-semibold",
 						children: creating ? "新增报销" : c.name || "编辑报销"
 					}),
-					/* @__PURE__ */ (0, h.jsxs)("div", {
+					/* @__PURE__ */ (0, R.jsxs)("div", {
 						className: "flex flex-wrap items-center gap-2",
 						children: [
-							/* @__PURE__ */ (0, h.jsx)(Badge, {
+							/* @__PURE__ */ (0, R.jsx)(Badge, {
 								tone: c.status === "已报销" ? "ok" : "warn",
 								children: c.status
 							}),
-							/* @__PURE__ */ (0, h.jsx)("button", {
-								type: "button",
-								className: "inline-flex size-10 items-center justify-center rounded-sm text-2xl leading-none text-muted hover:bg-accent-soft hover:text-ink",
-								"aria-label": "关闭",
-								title: "关闭（Esc）",
-								onClick: onCancel,
-								children: "×"
-							}),
-							/* @__PURE__ */ (0, h.jsx)(Button, { variant: "outline", type: "button", onClick: onCancel, children: "关闭" }),
-							!creating ? /* @__PURE__ */ (0, h.jsx)(Button, { variant: "danger", type: "button", onClick: onDelete, children: "删除" }) : null,
-							/* @__PURE__ */ (0, h.jsx)(Button, {
+							/* @__PURE__ */ (0, R.jsx)(Button, { variant: "outline", type: "button", onClick: onCancel, children: "关闭" }),
+							!creating ? /* @__PURE__ */ (0, R.jsx)(Button, { variant: "outline", type: "button", onClick: () => window.print(), children: "打印报销单" }) : null,
+							!creating ? /* @__PURE__ */ (0, R.jsx)(Button, { variant: "danger", type: "button", onClick: onDelete, children: "删除" }) : null,
+							/* @__PURE__ */ (0, R.jsx)(Button, {
 								type: "button",
 								onClick: () => {
 									if (!c.name.trim()) {
@@ -872,19 +865,19 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 					})
 				]
 			}),
-			siblings.length > 1 ? /* @__PURE__ */ (0, h.jsxs)("p", {
+			siblings.length > 1 ? /* @__PURE__ */ (0, R.jsxs)("p", {
 				className: "rounded-lg border border-line bg-bg-elevated px-3 py-2 text-xs text-muted",
 				children: ["同批打款共 ", siblings.length, " 笔：", siblings.map((e) => e.name).join("、")]
 			}) : null,
-			/* @__PURE__ */ (0, h.jsxs)("div", {
+			/* @__PURE__ */ (0, R.jsxs)("div", {
 				className: "grid gap-3 md:grid-cols-3",
 				children: [
-					/* @__PURE__ */ (0, h.jsx)(Field, { label: "年份", children: /* @__PURE__ */ (0, h.jsx)(Input, { type: "number", value: c.year, onChange: (e) => patch("year", Number(e.target.value) || 0) }) }),
-					/* @__PURE__ */ (0, h.jsx)(Field, { label: "项目 *", children: /* @__PURE__ */ (0, h.jsx)(Input, { value: c.name, onChange: (e) => patch("name", e.target.value) }) }),
-					/* @__PURE__ */ (0, h.jsx)(Field, { label: "购买时间（显示）", children: /* @__PURE__ */ (0, h.jsx)(Input, { value: c.period, onChange: (e) => patch("period", e.target.value), placeholder: "如 2026/3月-12月 或 2026/4/9" }) }),
-					/* @__PURE__ */ (0, h.jsx)(Field, {
+					/* @__PURE__ */ (0, R.jsx)(Field, { label: "年份", children: /* @__PURE__ */ (0, R.jsx)(Input, { type: "number", value: c.year, onChange: (e) => patch("year", Number(e.target.value) || 0) }) }),
+					/* @__PURE__ */ (0, R.jsx)(Field, { label: "项目 *", children: /* @__PURE__ */ (0, R.jsx)(Input, { value: c.name, onChange: (e) => patch("name", e.target.value) }) }),
+					/* @__PURE__ */ (0, R.jsx)(Field, { label: "购买时间（显示）", children: /* @__PURE__ */ (0, R.jsx)(Input, { value: c.period, onChange: (e) => patch("period", e.target.value), placeholder: "如 2026/3月-12月 或 2026/4/9" }) }),
+					/* @__PURE__ */ (0, R.jsx)(Field, {
 						label: "筛选/打印用日期",
-						children: /* @__PURE__ */ (0, h.jsx)(Input, {
+						children: /* @__PURE__ */ (0, R.jsx)(Input, {
 							type: "date",
 							value: c.date,
 							onChange: (e) => {
@@ -893,22 +886,22 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 							}
 						})
 					}),
-					/* @__PURE__ */ (0, h.jsx)(Field, { label: "单位", children: /* @__PURE__ */ (0, h.jsx)(Input, { value: c.unit, onChange: (e) => patch("unit", e.target.value) }) }),
-					/* @__PURE__ */ (0, h.jsx)(Field, { label: "数量", children: /* @__PURE__ */ (0, h.jsx)(Input, { type: "number", step: "0.01", value: c.qty, onChange: (e) => patch("qty", Number(e.target.value) || 0) }) }),
-					/* @__PURE__ */ (0, h.jsx)(Field, { label: "单价", children: /* @__PURE__ */ (0, h.jsx)(Input, { type: "number", step: "0.01", value: c.price, onChange: (e) => patch("price", Number(e.target.value) || 0) }) }),
-					/* @__PURE__ */ (0, h.jsx)(Field, { label: "金额", children: /* @__PURE__ */ (0, h.jsx)(Input, { type: "number", step: "0.01", value: c.amount, onChange: (e) => patch("amount", Number(e.target.value) || 0) }) }),
-					/* @__PURE__ */ (0, h.jsx)(Field, {
+					/* @__PURE__ */ (0, R.jsx)(Field, { label: "单位", children: /* @__PURE__ */ (0, R.jsx)(Input, { value: c.unit, onChange: (e) => patch("unit", e.target.value) }) }),
+					/* @__PURE__ */ (0, R.jsx)(Field, { label: "数量", children: /* @__PURE__ */ (0, R.jsx)(Input, { type: "number", step: "0.01", value: c.qty, onChange: (e) => patch("qty", Number(e.target.value) || 0) }) }),
+					/* @__PURE__ */ (0, R.jsx)(Field, { label: "单价", children: /* @__PURE__ */ (0, R.jsx)(Input, { type: "number", step: "0.01", value: c.price, onChange: (e) => patch("price", Number(e.target.value) || 0) }) }),
+					/* @__PURE__ */ (0, R.jsx)(Field, { label: "金额", children: /* @__PURE__ */ (0, R.jsx)(Input, { type: "number", step: "0.01", value: c.amount, onChange: (e) => patch("amount", Number(e.target.value) || 0) }) }),
+					/* @__PURE__ */ (0, R.jsx)(Field, {
 						label: "购买支付方式",
-						children: /* @__PURE__ */ (0, h.jsx)("select", {
+						children: /* @__PURE__ */ (0, R.jsx)("select", {
 							className: "field-select w-full",
 							value: c.payMethod || "现金",
 							onChange: (e) => patch("payMethod", e.target.value),
-							children: PAY_METHODS.map((m) => /* @__PURE__ */ (0, h.jsx)("option", { children: m }, m))
+							children: PAY_METHODS.map((m) => /* @__PURE__ */ (0, R.jsx)("option", { children: m }, m))
 						})
 					}),
-					/* @__PURE__ */ (0, h.jsx)(Field, {
+					/* @__PURE__ */ (0, R.jsx)(Field, {
 						label: "报销人（谁来报）",
-						children: /* @__PURE__ */ (0, h.jsx)(NameInput, {
+						children: /* @__PURE__ */ (0, R.jsx)(NameInput, {
 							value: c.claimant,
 							names,
 							listId: "ed-claimant",
@@ -916,9 +909,9 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 							onChange: (v) => patch("claimant", v)
 						})
 					}),
-					/* @__PURE__ */ (0, h.jsx)(Field, {
+					/* @__PURE__ */ (0, R.jsx)(Field, {
 						label: "给谁报销",
-						children: /* @__PURE__ */ (0, h.jsx)(NameInput, {
+						children: /* @__PURE__ */ (0, R.jsx)(NameInput, {
 							value: c.forWhom,
 							names,
 							listId: "ed-for",
@@ -926,71 +919,71 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 							onChange: (v) => patch("forWhom", v)
 						})
 					}),
-					/* @__PURE__ */ (0, h.jsx)(Field, {
+					/* @__PURE__ */ (0, R.jsx)(Field, {
 						label: "打款账户（打到哪个里）",
-						children: /* @__PURE__ */ (0, h.jsx)(Input, {
+						children: /* @__PURE__ */ (0, R.jsx)(Input, {
 							value: c.payAccount || "",
 							placeholder: "如 张三工商尾号1234 / 微信",
 							onChange: (e) => patch("payAccount", e.target.value)
 						})
 					}),
-					/* @__PURE__ */ (0, h.jsx)(Field, {
+					/* @__PURE__ */ (0, R.jsx)(Field, {
 						label: "打款方式",
-						children: /* @__PURE__ */ (0, h.jsx)("select", {
+						children: /* @__PURE__ */ (0, R.jsx)("select", {
 							className: "field-select w-full",
 							value: c.payoutMethod || "转账",
 							onChange: (e) => patch("payoutMethod", e.target.value),
-							children: PAY_METHODS.map((m) => /* @__PURE__ */ (0, h.jsx)("option", { children: m }, m))
+							children: PAY_METHODS.map((m) => /* @__PURE__ */ (0, R.jsx)("option", { children: m }, m))
 						})
 					}),
-					/* @__PURE__ */ (0, h.jsx)(Field, {
+					/* @__PURE__ */ (0, R.jsx)(Field, {
 						label: "打款日期",
-						children: /* @__PURE__ */ (0, h.jsx)(Input, {
+						children: /* @__PURE__ */ (0, R.jsx)(Input, {
 							type: "date",
 							value: c.payoutDate || "",
 							onChange: (e) => patch("payoutDate", e.target.value)
 						})
 					}),
-					/* @__PURE__ */ (0, h.jsx)(Field, {
+					/* @__PURE__ */ (0, R.jsx)(Field, {
 						label: "报销状态",
-						children: /* @__PURE__ */ (0, h.jsxs)("select", {
+						children: /* @__PURE__ */ (0, R.jsxs)("select", {
 							className: "field-select w-full",
 							value: c.status,
 							onChange: (e) => patch("status", e.target.value),
 							children: [
-								/* @__PURE__ */ (0, h.jsx)("option", { children: "未报销" }),
-								/* @__PURE__ */ (0, h.jsx)("option", { children: "已报销" })
+								/* @__PURE__ */ (0, R.jsx)("option", { children: "未报销" }),
+								/* @__PURE__ */ (0, R.jsx)("option", { children: "已报销" })
 							]
 						})
 					}),
-					/* @__PURE__ */ (0, h.jsx)(Field, {
+					/* @__PURE__ */ (0, R.jsx)(Field, {
 						label: "备注",
 						className: "md:col-span-3",
-						children: /* @__PURE__ */ (0, h.jsx)(Input, { value: c.remark, onChange: (e) => patch("remark", e.target.value) })
+						children: /* @__PURE__ */ (0, R.jsx)(Input, { value: c.remark, onChange: (e) => patch("remark", e.target.value) })
 					})
 				]
 			}),
-			/* @__PURE__ */ (0, h.jsxs)("div", {
+			/* @__PURE__ */ (0, R.jsxs)("div", {
 				className: "rounded-lg border-2 border-dashed border-accent bg-accent-soft p-4",
 				children: [
-					/* @__PURE__ */ (0, h.jsxs)("div", {
+					/* @__PURE__ */ (0, R.jsxs)("div", {
 						className: "mb-2 flex flex-wrap items-center justify-between gap-2",
 						children: [
-							/* @__PURE__ */ (0, h.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, h.jsx)("div", { className: "text-sm font-semibold", children: "购买凭证" }),
-								/* @__PURE__ */ (0, h.jsx)("p", {
+							/* @__PURE__ */ (0, R.jsxs)("div", { children: [
+								/* @__PURE__ */ (0, R.jsx)("div", { className: "text-sm font-semibold", children: "购买凭证" }),
+								/* @__PURE__ */ (0, R.jsx)("p", {
 									className: "mt-0.5 text-xs text-muted",
 									children: c.payMethod === "现金" ? "现金购买可以不传。" : "勾选多笔再上传，会共用这一张。文件名「项目名称-金额」。"
 								})
 							] }),
-							c.payMethod === "现金" ? /* @__PURE__ */ (0, h.jsx)(Badge, { children: "现金无需凭证" }) : c.voucherFileName ? /* @__PURE__ */ (0, h.jsx)(Badge, { tone: "ok", children: "已有凭证" }) : /* @__PURE__ */ (0, h.jsx)(Badge, { tone: "warn", children: "缺凭证" })
+							c.payMethod === "现金" ? /* @__PURE__ */ (0, R.jsx)(Badge, { children: "现金无需凭证" }) : c.voucherFileName ? /* @__PURE__ */ (0, R.jsx)(Badge, { tone: "ok", children: "已有凭证" }) : /* @__PURE__ */ (0, R.jsx)(Badge, { tone: "warn", children: "缺凭证" })
 						]
 					}),
-					existingVouchers.length ? /* @__PURE__ */ (0, h.jsxs)("label", {
+					existingVouchers.length ? /* @__PURE__ */ (0, R.jsxs)("label", {
 						className: "mb-2 block text-sm",
 						children: [
-							/* @__PURE__ */ (0, h.jsx)("span", { className: "text-xs text-muted", children: "挂到已有购买凭证" }),
-							/* @__PURE__ */ (0, h.jsxs)("select", {
+							/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "挂到已有购买凭证" }),
+							/* @__PURE__ */ (0, R.jsxs)("select", {
 								className: "field-select mt-1 w-full",
 								value: c.voucherId || "",
 								onChange: (e) => {
@@ -1004,22 +997,22 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 									setC((prev) => ({ ...prev, voucherId: id, voucherFileName: hit?.voucherFileName || prev.voucherFileName }));
 								},
 								children: [
-									/* @__PURE__ */ (0, h.jsx)("option", { value: "", children: "不挂，单独上传" }),
-									existingVouchers.map((e) => /* @__PURE__ */ (0, h.jsx)("option", { value: e.voucherId, children: e.voucherFileName }, e.voucherId))
+									/* @__PURE__ */ (0, R.jsx)("option", { value: "", children: "不挂，单独上传" }),
+									existingVouchers.map((e) => /* @__PURE__ */ (0, R.jsx)("option", { value: e.voucherId, children: e.voucherFileName }, e.voucherId))
 								]
 							})
 						]
 					}) : null,
-					/* @__PURE__ */ (0, h.jsx)(FilePick, {
+					/* @__PURE__ */ (0, R.jsx)(FilePick, {
 						kind: "file",
 						accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
 						label: c.voucherFileName ? "更换购买凭证" : "上传购买凭证",
 						hint: c.voucherFileName ? `已选：${c.voucherFileName}` : shareTargets.length > 1 ? `将挂到勾选的 ${shareTargets.length} 笔` : "支持 PDF、照片",
 						onFile: uploadVoucher
 					}),
-					c.voucherFileName ? /* @__PURE__ */ (0, h.jsx)("div", {
+					c.voucherFileName ? /* @__PURE__ */ (0, R.jsx)("div", {
 						className: "mt-2",
-						children: /* @__PURE__ */ (0, h.jsx)(DocActions, {
+						children: /* @__PURE__ */ (0, R.jsx)(DocActions, {
 							id: c.voucherId || c.id,
 							kind: "expense",
 							fileName: c.voucherFileName,
@@ -1034,27 +1027,27 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 					}) : null
 				]
 			}),
-			/* @__PURE__ */ (0, h.jsxs)("div", {
+			/* @__PURE__ */ (0, R.jsxs)("div", {
 							className: "rounded-lg border-2 border-dashed border-line bg-bg-elevated p-4",
 				children: [
-					/* @__PURE__ */ (0, h.jsxs)("div", {
+					/* @__PURE__ */ (0, R.jsxs)("div", {
 						className: "mb-2 flex flex-wrap items-center justify-between gap-2",
 						children: [
-							/* @__PURE__ */ (0, h.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, h.jsx)("div", { className: "text-sm font-semibold", children: "打款凭证" }),
-								/* @__PURE__ */ (0, h.jsx)("p", {
+							/* @__PURE__ */ (0, R.jsxs)("div", { children: [
+								/* @__PURE__ */ (0, R.jsx)("div", { className: "text-sm font-semibold", children: "打款凭证" }),
+								/* @__PURE__ */ (0, R.jsx)("p", {
 									className: "mt-0.5 text-xs text-muted",
 									children: "公司把钱打给报销人/给谁的那张回单。同批几笔共用一张。现金可不传。"
 								})
 							] }),
-							(c.payoutMethod || "转账") === "现金" ? /* @__PURE__ */ (0, h.jsx)(Badge, { children: "现金无需凭证" }) : c.payoutFileName ? /* @__PURE__ */ (0, h.jsx)(Badge, { tone: "ok", children: "已有打款" }) : /* @__PURE__ */ (0, h.jsx)(Badge, { tone: "warn", children: "缺打款" })
+							(c.payoutMethod || "转账") === "现金" ? /* @__PURE__ */ (0, R.jsx)(Badge, { children: "现金无需凭证" }) : c.payoutFileName ? /* @__PURE__ */ (0, R.jsx)(Badge, { tone: "ok", children: "已有打款" }) : /* @__PURE__ */ (0, R.jsx)(Badge, { tone: "warn", children: "缺打款" })
 						]
 					}),
-					existingPayouts.length ? /* @__PURE__ */ (0, h.jsxs)("label", {
+					existingPayouts.length ? /* @__PURE__ */ (0, R.jsxs)("label", {
 						className: "mb-2 block text-sm",
 						children: [
-							/* @__PURE__ */ (0, h.jsx)("span", { className: "text-xs text-muted", children: "挂到已有打款（几笔一起报销）" }),
-							/* @__PURE__ */ (0, h.jsxs)("select", {
+							/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "挂到已有打款（几笔一起报销）" }),
+							/* @__PURE__ */ (0, R.jsxs)("select", {
 								className: "field-select mt-1 w-full",
 								value: c.payoutId || "",
 								onChange: (e) => {
@@ -1076,8 +1069,8 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 									}));
 								},
 								children: [
-									/* @__PURE__ */ (0, h.jsx)("option", { value: "", children: "不挂，单独上传" }),
-									existingPayouts.map((e) => /* @__PURE__ */ (0, h.jsx)("option", {
+									/* @__PURE__ */ (0, R.jsx)("option", { value: "", children: "不挂，单独上传" }),
+									existingPayouts.map((e) => /* @__PURE__ */ (0, R.jsx)("option", {
 										value: e.payoutId,
 										children: `${e.payoutFileName}（${e.claimant || "未填人"} → ${e.payAccount || "未填账户"}）`
 									}, e.payoutId))
@@ -1085,16 +1078,16 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 							})
 						]
 					}) : null,
-					/* @__PURE__ */ (0, h.jsx)(FilePick, {
+					/* @__PURE__ */ (0, R.jsx)(FilePick, {
 						kind: "file",
 						accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
 						label: c.payoutFileName ? "更换打款凭证" : "上传打款凭证",
 						hint: c.payoutFileName ? `已选：${c.payoutFileName}` : "存在 data/photos/报销打款/",
 						onFile: uploadPayout
 					}),
-					c.payoutFileName ? /* @__PURE__ */ (0, h.jsx)("div", {
+					c.payoutFileName ? /* @__PURE__ */ (0, R.jsx)("div", {
 						className: "mt-2",
-						children: /* @__PURE__ */ (0, h.jsx)(DocActions, {
+						children: /* @__PURE__ */ (0, R.jsx)(DocActions, {
 							id: c.payoutId || c.id,
 							kind: "payout",
 							fileName: c.payoutFileName,
@@ -1135,20 +1128,20 @@ function ExpenseSheets({ rows, withImages }) {
 			}
 		}
 	}
-	return /* @__PURE__ */ (0, h.jsxs)("div", {
+	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "print-only space-y-8 text-black",
 		children: [
-			/* @__PURE__ */ (0, h.jsxs)("article", {
+			/* @__PURE__ */ (0, R.jsxs)("article", {
 				className: "statement border border-black p-4",
 				children: [
-					/* @__PURE__ */ (0, h.jsx)("header", {
+					/* @__PURE__ */ (0, R.jsx)("header", {
 						className: "border-b border-black pb-2 text-center",
-						children: /* @__PURE__ */ (0, h.jsx)("div", {
+						children: /* @__PURE__ */ (0, R.jsx)("div", {
 							className: "text-2xl font-semibold tracking-widest",
 							children: "报销单"
 						})
 					}),
-					/* @__PURE__ */ (0, h.jsxs)("p", {
+					/* @__PURE__ */ (0, R.jsxs)("p", {
 						className: "mt-2 text-left text-xs",
 						children: [
 							"报销人：", claimants.join("、") || "—",
@@ -1156,15 +1149,15 @@ function ExpenseSheets({ rows, withImages }) {
 							"　打款账户：", accounts.join("、") || "—"
 						]
 					}),
-					/* @__PURE__ */ (0, h.jsxs)("table", {
+					/* @__PURE__ */ (0, R.jsxs)("table", {
 						className: "mt-3 w-full border-collapse text-center text-xs",
 						children: [
-							/* @__PURE__ */ (0, h.jsx)("thead", { children: /* @__PURE__ */ (0, h.jsx)("tr", { children: ["序号", "项目", "购买时间", "金额", "报销人", "给谁", "打款账户", "备注", "票据"].map((h) => /* @__PURE__ */ (0, h.jsx)("th", {
+							/* @__PURE__ */ (0, R.jsx)("thead", { children: /* @__PURE__ */ (0, R.jsx)("tr", { children: ["序号", "项目", "购买时间", "金额", "报销人", "给谁", "打款账户", "备注", "票据"].map((col) => /* @__PURE__ */ (0, R.jsx)("th", {
 								className: "border border-black px-1 py-1 font-medium",
-								children: h
-							}, h)) }) }),
-							/* @__PURE__ */ (0, h.jsxs)("tbody", { children: [
-								rows.map((e, i) => /* @__PURE__ */ (0, h.jsx)("tr", { children: [
+								children: col
+							}, col)) }) }),
+							/* @__PURE__ */ (0, R.jsxs)("tbody", { children: [
+								rows.map((e, i) => /* @__PURE__ */ (0, R.jsx)("tr", { children: [
 									i + 1,
 									e.name,
 									e.period || e.date,
@@ -1174,28 +1167,28 @@ function ExpenseSheets({ rows, withImages }) {
 									e.payAccount || "—",
 									e.remark || "",
 									e.payMethod === "现金" ? "现金" : e.voucherFileName || "—"
-								].map((v, k) => /* @__PURE__ */ (0, h.jsx)("td", {
+								].map((v, k) => /* @__PURE__ */ (0, R.jsx)("td", {
 									className: "border border-black px-1 py-1",
 									children: v
 								}, k)) }, e.id)),
-								/* @__PURE__ */ (0, h.jsx)("tr", { children: ["合计", "", "", money(total), "", "", "", "", ""].map((v, i) => /* @__PURE__ */ (0, h.jsx)("td", {
+								/* @__PURE__ */ (0, R.jsx)("tr", { children: ["合计", "", "", money(total), "", "", "", "", ""].map((v, i) => /* @__PURE__ */ (0, R.jsx)("td", {
 									className: "border border-black px-1 py-1 font-medium",
 									children: v
 								}, i)) })
 							] })
 						]
 					}),
-					/* @__PURE__ */ (0, h.jsxs)("p", {
+					/* @__PURE__ */ (0, R.jsxs)("p", {
 						className: "mt-4 text-right text-xs",
 						children: ["打印日期 ", today]
 					})
 				]
 			}),
-			images.map((e) => /* @__PURE__ */ (0, h.jsxs)("article", {
+			images.map((e) => /* @__PURE__ */ (0, R.jsxs)("article", {
 				className: "statement border border-black p-4",
 				children: [
-					/* @__PURE__ */ (0, h.jsx)("div", { className: "mb-2 text-sm font-semibold", children: e.name }),
-					/* @__PURE__ */ (0, h.jsx)("img", {
+					/* @__PURE__ */ (0, R.jsx)("div", { className: "mb-2 text-sm font-semibold", children: e.name }),
+					/* @__PURE__ */ (0, R.jsx)("img", {
 						src: `/api/doc?id=${encodeURIComponent(e.id)}&kind=${e.kind}`,
 						alt: e.name,
 						className: "max-h-[240mm] w-full object-contain"

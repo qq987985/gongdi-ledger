@@ -293,7 +293,7 @@ function PeoplePage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-3",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-											variant: "ghost",
+											variant: "danger",
 											size: "sm",
 											onClick: () => {
 												if (!confirmBatchDelete("人员", 1, `将删除 ${p.name} 的档案。考勤和发放记录里的名字还在。`)) return;

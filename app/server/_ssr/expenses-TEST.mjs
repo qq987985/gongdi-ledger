@@ -278,8 +278,8 @@ function ExpensesPage() {
 				payoutDate: day,
 				payoutId: pid,
 				payoutFileName: batch.payoutFileName || e.payoutFileName || "",
-				status:kDone ? "已报销" : e.status,
-				reimbursedAt:kDone ? day : e.reimbursedAt
+				status: markDone ? "已报销" : e.status,
+				reimbursedAt: markDone ? day : e.reimbursedAt
 			});
 		}
 		setBatch((b) => ({
@@ -843,15 +843,8 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 								tone: c.status === "已报销" ? "ok" : "warn",
 								children: c.status
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								type: "button",
-								className: "inline-flex size-10 items-center justify-center rounded-sm text-2xl leading-none text-muted hover:bg-accent-soft hover:text-ink",
-								"aria-label": "关闭",
-								title: "关闭（Esc）",
-								onClick: onCancel,
-								children: "×"
-							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", type: "button", onClick: onCancel, children: "关闭" }),
+							!creating ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", type: "button", onClick: () => window.print(), children: "打印报销单" }) : null,
 							!creating ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "danger", type: "button", onClick: onDelete, children: "删除" }) : null,
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 								type: "button",
@@ -1161,10 +1154,10 @@ function ExpenseSheets({ rows, withImages }) {
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
 						className: "mt-3 w-full border-collapse text-center text-xs",
 						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: ["序号", "项目", "购买时间", "金额", "报销人", "给谁", "打款账户", "备注", "票据"].map((h) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: ["序号", "项目", "购买时间", "金额", "报销人", "给谁", "打款账户", "备注", "票据"].map((col) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 								className: "border border-black px-1 py-1 font-medium",
-								children: h
-							}, h)) }) }),
+								children: col
+							}, col)) }) }),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [
 								rows.map((e, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: [
 									i + 1,
