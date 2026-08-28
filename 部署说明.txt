@@ -1,5 +1,5 @@
 ================================================
-工地台账  1.0.2
+工地台账  1.1.0
 ================================================
 
 两种 Docker 用法：
@@ -16,6 +16,7 @@
   app/
   Dockerfile
   docker-compose.yml
+  docker-compose.build.yml
   docker-compose.github.yml
   一键部署.sh
   一键拉取.sh
@@ -36,7 +37,7 @@
   ./一键部署.sh
 
 打开 http://NAS的IP:8501
-左下角应显示 1.0.2
+左下角应显示 1.1.0
 
 
 三、拉 GitHub 镜像（可选）
@@ -54,12 +55,23 @@ compose 只挂 data，不要挂 VERSION.txt。
 
 accounts  books  backups  templates
 photos/id  photos/bank  photos/ic
-photos/报量单  photos/发票  photos/收款回单  photos/考勤影像
+photos/报量单  photos/发票  photos/收款回单  photos/考勤影像  photos/合同扫描件
 
 脚本会自动建。也可先跑：./初始化目录.sh
 
 
-五、以后升级
+五、身份证和合同扫描件
+
+身份证两个文件，都放 photos/id：
+  张三-身份证-正面.jpg
+  张三-身份证-反面.jpg
+人员页只显示正面，点「查看反面」。
+
+合同原件上传到 photos/合同扫描件。
+没有合同：在合同页选「无合同」并填写原因。
+
+
+六、以后升级
 
 只覆盖软件文件，再执行一键部署或一键拉取。
 永远不要删 data。

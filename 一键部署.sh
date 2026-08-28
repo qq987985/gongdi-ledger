@@ -16,7 +16,7 @@ fi
 
 mkdir -p data/accounts data/books data/backups data/templates \
   data/photos/id data/photos/bank data/photos/ic \
-  data/photos/报量单 data/photos/发票 data/photos/收款回单 data/photos/考勤影像
+  data/photos/报量单 data/photos/发票 data/photos/收款回单 data/photos/考勤影像 data/photos/合同扫描件
 
 echo "停止旧容器..."
 docker compose down --timeout 8 2>/dev/null || true
@@ -33,4 +33,4 @@ docker compose -f "$COMPOSE" up -d --build --force-recreate
 echo
 echo "完成。打开：http://本机IP:8501"
 echo "数据目录：$(pwd)/data  （原有台账不会被清空）"
-echo "左下角应显示 1.0.2"
+echo "左下角应显示 1.1.0"
