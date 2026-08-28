@@ -7,11 +7,11 @@ import { n as Need } from "./can-gkGWV5bu.mjs";
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function FilesPage() {
-	const { year, attendanceDocs, contracts, contractEntries, patchAttendanceDoc, removeAttendanceDocs, patchContractEntry, upsertContract } = useApp();
+	const { year, attendanceDocs, contracts, contractEntries, expenses, patchAttendanceDoc, removeAttendanceDocs, patchContractEntry, upsertContract, upsertExpense } = useApp();
 	const [kind, setKind] = (0, import_react.useState)("all");
 	const [scope, setScope] = (0, import_react.useState)("year");
 	const [q, setQ] = (0, import_react.useState)("");
-	const taken = [...(attendanceDocs || []).map((d) => d.fileName), ...(contractEntries || []).map((e) => e.fileName), ...(contracts || []).map((c) => c.scanFileName)].filter(Boolean);
+	const taken = [...(attendanceDocs || []).map((d) => d.fileName), ...(contractEntries || []).map((e) => e.fileName), ...(contracts || []).map((c) => c.scanFileName), ...(expenses || []).map((e) => e.voucherFileName)].filter(Boolean);
 	const filtered = (0, import_react.useMemo)(() => {
 		const out = [];
 		for (const d of attendanceDocs || []) {
@@ -63,11 +63,28 @@ function FilesPage() {
 				source: "scan"
 			});
 		}
+		const seenV = /* @__PURE__ */ new Set();
+		for (const e of expenses || []) {
+			if (!e.voucherFileName || !e.voucherId) continue;
+			if (scope === "year" && e.year !== year) continue;
+			if (seenV.has(e.voucherId)) continue;
+			seenV.add(e.voucherId);
+			out.push({
+				id: e.voucherId,
+				kind: "expense",
+				fileName: e.voucherFileName,
+				belong: `${e.year} ${e.name}`,
+				extra: [e.payMethod, e.status].filter(Boolean).join(" · "),
+				suggest: `${(e.name || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "") || "未命名"}-${e.amount}`,
+				source: "expense"
+			});
+		}
 		return out;
 	}, [
 		attendanceDocs,
 		contractEntries,
 		contracts,
+		expenses,
 		year,
 		scope
 	]).filter((r) => {
@@ -91,7 +108,7 @@ function FilesPage() {
 					children: "影像资料"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-1 text-sm text-muted",
-					children: "文件在 NAS 的 /vol1/1000/docker/attendance/data/photos 下：报量单、发票、收款回单、考勤影像、合同扫描件。可查看、下载、复制、替换、删除。"
+					children: "文件在 NAS 的 /vol1/1000/docker/attendance/data/photos 下：报量单、发票、收款回单、考勤影像、合同扫描件、报销凭证。可查看、下载、复制、替换、删除。"
 				})] }),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4",
@@ -129,6 +146,10 @@ function FilesPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
 										value: "contract",
 										children: "合同扫描件"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "expense",
+										children: "报销凭证"
 									})
 								]
 							})]
@@ -240,6 +261,13 @@ function FilesPage() {
 													...c,
 													scanFileName: name
 												});
+											} else if (r.source === "expense") {
+												for (const e of expenses || []) {
+													if (e.voucherId === r.id) upsertExpense({
+														...e,
+														voucherFileName: name
+													});
+												}
 											} else patchContractEntry(r.id, { fileName: name });
 										},
 										onDeleted: () => {
@@ -250,6 +278,14 @@ function FilesPage() {
 													...c,
 													scanFileName: ""
 												});
+											} else if (r.source === "expense") {
+												for (const e of expenses || []) {
+													if (e.voucherId === r.id) upsertExpense({
+														...e,
+														voucherFileName: "",
+														voucherId: ""
+													});
+												}
 											} else patchContractEntry(r.id, { fileName: "" });
 										}
 									})

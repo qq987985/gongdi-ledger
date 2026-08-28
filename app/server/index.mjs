@@ -76,9 +76,9 @@ var public_assets_data_default = {
 	},
 	"/assets/doc-actions-CmcTaqrK.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"1946-87gmZ6+DuG7yTgLRjtosBMyAZ7M\"",
-		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 6470,
+		"etag": "\"195d-cLGxnvZv4nVbCghg6yxwsQVH4qk\"",
+		"mtime": "2026-08-28T06:21:11.000Z",
+		"size": 6493,
 		"path": "../public/assets/doc-actions-CmcTaqrK.js"
 	},
 	"/assets/download-DJvM19iB.js": {
@@ -102,6 +102,13 @@ var public_assets_data_default = {
 		"size": 7878,
 		"path": "../public/assets/excel-import-CV73N9jL.js"
 	},
+	"/assets/expenses-TEST.js": {
+		"type": "text/javascript; charset=utf-8",
+		"etag": "\"542b-ULYLAtuxzxRlLB5TSCqrW7oXICE\"",
+		"mtime": "2026-08-28T06:56:42.000Z",
+		"size": 21547,
+		"path": "../public/assets/expenses-TEST.js"
+	},
 	"/assets/file-pick-Sh_I8IQI.js": {
 		"type": "text/javascript; charset=utf-8",
 		"etag": "\"d3c-ueJbo+lkXSEaYbBUcIstqVIGASU\"",
@@ -111,9 +118,9 @@ var public_assets_data_default = {
 	},
 	"/assets/files-HkeknFqy.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"1577-MjEqbsgXWH8lfsDjuwEiSylDxgA\"",
-		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 5495,
+		"etag": "\"1887-wnnK1kHDi9p/c4uG938V0HKeowU\"",
+		"mtime": "2026-08-28T06:21:11.000Z",
+		"size": 6279,
 		"path": "../public/assets/files-HkeknFqy.js"
 	},
 	"/assets/import-_RtBCtwy.js": {
@@ -125,9 +132,9 @@ var public_assets_data_default = {
 	},
 	"/assets/index-ghxum7yZ.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"70660-9vQS9FNcwRk9jGf+Q115d/Pb84w\"",
-		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 460384,
+		"etag": "\"70c15-6XHesKvV+2VDyB42oXY4883lIyk\"",
+		"mtime": "2026-08-28T06:21:11.000Z",
+		"size": 461845,
 		"path": "../public/assets/index-ghxum7yZ.js"
 	},
 	"/assets/jsx-runtime-DREnUpxT.js": {
@@ -195,9 +202,9 @@ var public_assets_data_default = {
 	},
 	"/assets/routes-CGEpqByO.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"129d-Y8KWuupLuk8RS68rnkVE73ilYiw\"",
-		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 4765,
+		"etag": "\"1305-AvjZN5aD2CV9DB+Hzjh8Ofyw8rM\"",
+		"mtime": "2026-08-28T06:21:11.000Z",
+		"size": 4869,
 		"path": "../public/assets/routes-CGEpqByO.js"
 	},
 	"/assets/settings-CriQKq2d.js": {

@@ -7,6 +7,7 @@ var tsrStartManifest = () => ({ routes: {
 			"/attendance",
 			"/audit",
 			"/contracts",
+			"/expenses",
 			"/files",
 			"/import",
 			"/payments",
@@ -79,6 +80,18 @@ var tsrStartManifest = () => ({ routes: {
 			"/assets/file-pick-Sh_I8IQI.js",
 			"/assets/wide-table-BtpzsvMP.js",
 			"/assets/excel-import-CV73N9jL.js",
+			"/assets/can-9AzYldNF.js",
+			"/assets/badge-_ctqz85I.js"
+		]
+	},
+	"/expenses": {
+		filePath: "/workspace/src/routes/expenses.tsx",
+		children: void 0,
+		preloads: [
+			"/assets/expenses-TEST.js",
+			"/assets/doc-actions-CmcTaqrK.js",
+			"/assets/file-pick-Sh_I8IQI.js",
+			"/assets/wide-table-BtpzsvMP.js",
 			"/assets/can-9AzYldNF.js",
 			"/assets/badge-_ctqz85I.js"
 		]

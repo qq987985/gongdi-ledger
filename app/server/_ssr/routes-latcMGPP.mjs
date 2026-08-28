@@ -138,6 +138,11 @@ function Home() {
 									desc: "报量、开票、收款分开记，保证金独立"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Quick, {
+									to: "/expenses",
+									title: "报销单",
+									desc: "未报销可勾选打印，现金不用传凭证"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Quick, {
 									to: "/import",
 									title: "导入导出",
 									desc: "按年导出整本 Excel，WPS 可打开"

@@ -170,6 +170,28 @@ var PERM_GROUPS = [
 		]
 	},
 	{
+		key: "expenses",
+		label: "报销单",
+		items: [
+			{
+				id: "expenses.view",
+				label: "查看"
+			},
+			{
+				id: "expenses.edit",
+				label: "新增/修改"
+			},
+			{
+				id: "expenses.delete",
+				label: "删除"
+			},
+			{
+				id: "expenses.print",
+				label: "打印报销单"
+			}
+		]
+	},
+	{
 		key: "photos",
 		label: "照片",
 		items: [{
@@ -288,12 +310,16 @@ var PRESETS = [
 	{
 		id: "contract",
 		label: "合同财务",
-		hint: "合同、影像、导出",
+		hint: "合同、报销、影像、导出",
 		perms: [
 			"contracts.view",
 			"contracts.edit",
 			"contracts.delete",
 			"contracts.print",
+			"expenses.view",
+			"expenses.edit",
+			"expenses.delete",
+			"expenses.print",
 			"files.view",
 			"files.edit",
 			"export.use",
@@ -315,7 +341,7 @@ function hasPerm(perms, id) {
 function canWriteLedger(perms) {
 	const list = perms || [];
 	if (list.includes("*")) return true;
-	return list.some((p) => p.endsWith(".edit") || p.endsWith(".delete") || p === "import.use" || p.startsWith("settings.") || p === "photos.edit" || p === "files.edit");
+	return list.some((p) => p.endsWith(".edit") || p.endsWith(".delete") || p === "import.use" || p.startsWith("settings.") || p === "photos.edit" || p === "files.edit" || p === "expenses.edit");
 }
 var NAV_PERM = {
 	"/": "",
@@ -323,6 +349,7 @@ var NAV_PERM = {
 	"/attendance": "attendance.view",
 	"/payments": "payments.view",
 	"/contracts": "contracts.view",
+	"/expenses": "expenses.view",
 	"/photos": "photos.view",
 	"/files": "files.view",
 	"/query": "query.view",
@@ -1958,6 +1985,7 @@ function emptyState() {
 		payments: [],
 		contracts: [],
 		contractEntries: [],
+		expenses: [],
 		accessHash: ""
 	};
 }
@@ -2261,6 +2289,7 @@ function demoState() {
 		payments,
 		contracts,
 		contractEntries,
+		expenses: [],
 		accessHash: ""
 	};
 }
@@ -2471,6 +2500,36 @@ var useApp = create()(persist((set, get) => ({
 		contracts,
 		contractEntries: entries ?? get().contractEntries
 	}),
+	upsertExpense: (row) => {
+		const list = get().expenses || [];
+		const i = list.findIndex((x) => x.id === row.id);
+		const next = {
+			...row,
+			id: row.id || uid(),
+			qty: Number(row.qty) || 0,
+			price: Number(row.price) || 0,
+			amount: Number(row.amount) || 0,
+			status: row.status === "已报销" ? "已报销" : "未报销",
+			payMethod: row.payMethod || "现金",
+			voucherId: row.voucherId || "",
+			voucherFileName: row.voucherFileName || "",
+			reimbursedAt: row.status === "已报销" ? row.reimbursedAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) : ""
+		};
+		if (i >= 0) {
+			const copy = list.slice();
+			copy[i] = next;
+			set({ expenses: copy });
+			logOp("修改报销", next.name, "报销");
+		} else {
+			set({ expenses: [...list, next] });
+			logOp("新增报销", next.name, "报销");
+		}
+	},
+	removeExpenses: (ids) => {
+		set({ expenses: (get().expenses || []).filter((e) => !ids.includes(e.id)) });
+		logOp("删除报销", `${ids.length}笔`, "报销");
+	},
+	replaceExpenses: (expenses) => set({ expenses }),
 	setAccessHash: (accessHash) => set({ accessHash }),
 	setAll: (s) => set({
 		...s,
@@ -2478,7 +2537,7 @@ var useApp = create()(persist((set, get) => ({
 	})
 }), {
 	name: "gongdi-ledger-v5",
-	version: 9,
+	version: 10,
 	skipHydration: true,
 	storage: createJSONStorage(() => typeof window === "undefined" ? emptyStorage : localStorage),
 	migrate: (persisted, _version) => {
@@ -2516,6 +2575,7 @@ var useApp = create()(persist((set, get) => ({
 			contracts,
 			contractEntries,
 			attendanceDocs,
+			expenses: s.expenses || [],
 			years: derivedYears({
 				...s,
 				attendance,
@@ -2533,6 +2593,7 @@ var useApp = create()(persist((set, get) => ({
 		payments: s.payments,
 		contracts: s.contracts || [],
 		contractEntries: s.contractEntries || [],
+		expenses: s.expenses || [],
 		accessHash: s.accessHash || ""
 	})
 }));
@@ -2824,6 +2885,7 @@ function sliceState(s) {
 		payments: s.payments,
 		contracts: s.contracts || [],
 		contractEntries: s.contractEntries || [],
+		expenses: s.expenses || [],
 		accessHash: s.accessHash || ""
 	};
 }
@@ -2846,6 +2908,7 @@ async function pullNasLedger() {
 		payments: j.payments || [],
 		contracts: j.contracts || [],
 		contractEntries: j.contractEntries || [],
+		expenses: j.expenses || [],
 		accessHash: j.accessHash || ""
 	});
 }
@@ -3652,6 +3715,11 @@ var NAV = [
 		icon: FileText
 	},
 	{
+		to: "/expenses",
+		label: "报销单",
+		icon: FileText
+	},
+	{
 		to: "/photos",
 		label: "照片",
 		icon: Camera
@@ -3696,6 +3764,11 @@ var TABS = [
 	{
 		to: "/contracts",
 		label: "合同",
+		icon: FileText
+	},
+	{
+		to: "/expenses",
+		label: "报销",
 		icon: FileText
 	},
 	{
@@ -4291,6 +4364,8 @@ var $$splitComponentImporter$8 = () => import("./audit-uwDF_Ocw.mjs");
 var Route$22 = createFileRoute("/audit")({ component: lazyRouteComponent($$splitComponentImporter$8, "component") });
 var $$splitComponentImporter$7 = () => import("./contracts-CC7tdIeB.mjs");
 var Route$21 = createFileRoute("/contracts")({ component: lazyRouteComponent($$splitComponentImporter$7, "component") });
+var $$splitComponentImporter$exp = () => import("./expenses-TEST.mjs");
+var Route$exp = createFileRoute("/expenses")({ component: lazyRouteComponent($$splitComponentImporter$exp, "component") });
 var $$splitComponentImporter$6 = () => import("./files-aHBXG7a7.mjs");
 var Route$20 = createFileRoute("/files")({ component: lazyRouteComponent($$splitComponentImporter$6, "component") });
 var $$splitComponentImporter$5 = () => import("./import-Bq9k4s7c.mjs");
@@ -4416,7 +4491,7 @@ var Route$11 = createFileRoute("/api/backup")({ server: { handlers: { POST: asyn
 	});
 } } } });
 function kindOf$2(v) {
-	if (v === "report" || v === "invoice" || v === "receipt" || v === "attendance" || v === "contract") return v;
+	if (v === "report" || v === "invoice" || v === "receipt" || v === "attendance" || v === "contract" || v === "expense") return v;
 	return null;
 }
 var MIME = {
@@ -4777,6 +4852,11 @@ var rootRouteChildren = {
 	ContractsRoute: Route$21.update({
 		id: "/contracts",
 		path: "/contracts",
+		getParentRoute: () => Route$25
+	}),
+	ExpensesRoute: Route$exp.update({
+		id: "/expenses",
+		path: "/expenses",
 		getParentRoute: () => Route$25
 	}),
 	FilesRoute: Route$20.update({
