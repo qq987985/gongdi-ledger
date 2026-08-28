@@ -7,11 +7,11 @@ import { n as Need } from "./can-gkGWV5bu.mjs";
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function FilesPage() {
-	const { year, attendanceDocs, contracts, contractEntries, patchAttendanceDoc, removeAttendanceDocs, patchContractEntry } = useApp();
+	const { year, attendanceDocs, contracts, contractEntries, patchAttendanceDoc, removeAttendanceDocs, patchContractEntry, upsertContract } = useApp();
 	const [kind, setKind] = (0, import_react.useState)("all");
 	const [scope, setScope] = (0, import_react.useState)("year");
 	const [q, setQ] = (0, import_react.useState)("");
-	const taken = [...(attendanceDocs || []).map((d) => d.fileName), ...(contractEntries || []).map((e) => e.fileName)].filter(Boolean);
+	const taken = [...(attendanceDocs || []).map((d) => d.fileName), ...(contractEntries || []).map((e) => e.fileName), ...(contracts || []).map((c) => c.scanFileName)].filter(Boolean);
 	const filtered = (0, import_react.useMemo)(() => {
 		const out = [];
 		for (const d of attendanceDocs || []) {
@@ -50,6 +50,19 @@ function FilesPage() {
 				source: "contract"
 			});
 		}
+		for (const c of contracts || []) {
+			if (!c.scanFileName) continue;
+			if (scope === "year" && c.year !== year) continue;
+			out.push({
+				id: c.id,
+				kind: "contract",
+				fileName: c.scanFileName,
+				belong: `${c.year} ${c.name}`,
+				extra: c.hasPaper === false ? c.noContractReason || "无合同" : "合同扫描件",
+				suggest: `${(c.name || "未命名").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "") || "未命名"}-合同扫描件`,
+				source: "scan"
+			});
+		}
 		return out;
 	}, [
 		attendanceDocs,
@@ -78,7 +91,7 @@ function FilesPage() {
 					children: "影像资料"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-1 text-sm text-muted",
-					children: "文件在 NAS 的 /vol1/1000/docker/attendance/data/photos 下：报量单、发票、收款回单、考勤影像。可查看、下载、复制、替换、删除。"
+					children: "文件在 NAS 的 /vol1/1000/docker/attendance/data/photos 下：报量单、发票、收款回单、考勤影像、合同扫描件。可查看、下载、复制、替换、删除。"
 				})] }),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4",
@@ -112,6 +125,10 @@ function FilesPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
 										value: "receipt",
 										children: "收款回单"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "contract",
+										children: "合同扫描件"
 									})
 								]
 							})]
@@ -187,7 +204,7 @@ function FilesPage() {
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [filtered.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 							colSpan: 5,
 							className: "p-6 text-muted",
-							children: "还没有影像资料。到月度考勤或合同流水里上传。"
+							children: "还没有影像资料。到月度考勤、合同流水或合同扫描件里上传。"
 						}) }) : null, filtered.map((r) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
 							className: "border-b border-line last:border-0",
 							children: [
@@ -217,11 +234,23 @@ function FilesPage() {
 										taken,
 										onReplaced: (name) => {
 											if (r.source === "attendance") patchAttendanceDoc(r.id, { fileName: name });
-											else patchContractEntry(r.id, { fileName: name });
+											else if (r.source === "scan") {
+												const c = contracts.find((x) => x.id === r.id);
+												if (c) upsertContract({
+													...c,
+													scanFileName: name
+												});
+											} else patchContractEntry(r.id, { fileName: name });
 										},
 										onDeleted: () => {
 											if (r.source === "attendance") removeAttendanceDocs([r.id]);
-											else patchContractEntry(r.id, { fileName: "" });
+											else if (r.source === "scan") {
+												const c = contracts.find((x) => x.id === r.id);
+												if (c) upsertContract({
+													...c,
+													scanFileName: ""
+												});
+											} else patchContractEntry(r.id, { fileName: "" });
 										}
 									})
 								})

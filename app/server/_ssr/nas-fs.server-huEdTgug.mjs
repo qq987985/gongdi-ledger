@@ -34,17 +34,21 @@ function photosRoot() {
 	const root = dataDir();
 	return root ? join(root, "photos") : "";
 }
+function labelOf(kind) {
+	if (kind === "idBack") return "身份证-反面";
+	if (kind === "id" || kind === "idFront") return "身份证-正面";
+	return kind === "bank" ? "银行卡" : "IC卡";
+}
+function kindEnv(kind) {
+	const k = kind === "idBack" || kind === "idFront" ? "id" : kind;
+	return (k === "id" ? process.env.PHOTO_ID_DIR : k === "bank" ? process.env.PHOTO_BANK_DIR : process.env.PHOTO_IC_DIR) || "";
+}
 function kindDir(kind) {
 	const env = kindEnv(kind).trim();
 	if (env) return env;
 	const root = photosRoot();
-	return root ? join(root, kind) : "";
-}
-function labelOf(kind) {
-	return kind === "id" ? "身份证" : kind === "bank" ? "银行卡" : "IC卡";
-}
-function kindEnv(kind) {
-	return (kind === "id" ? process.env.PHOTO_ID_DIR : kind === "bank" ? process.env.PHOTO_BANK_DIR : process.env.PHOTO_IC_DIR) || "";
+	const folder = kind === "idBack" || kind === "idFront" || kind === "id" ? "id" : kind;
+	return root ? join(root, folder) : "";
 }
 function safeName(name) {
 	return name.replace(/[\\/:*?"<>|]/g, "").trim();
@@ -64,26 +68,36 @@ function photoSearchDirs(kind) {
 			mixed
 		});
 	};
-	const cn = labelOf(kind);
+	const cn = kind === "idBack" || kind === "id" || kind === "idFront" ? "身份证" : labelOf(kind);
+	const folder = kind === "idBack" || kind === "idFront" || kind === "id" ? "id" : kind;
 	const book = bookRoot();
 	const root = dataDir();
 	const shared = process.env.PHOTO_DIR?.trim() || (root ? join(root, "photos") : "");
 	add(kindDir(kind));
 	if (book) {
-		add(join(book, "photos", kind));
+		add(join(book, "photos", folder));
 		add(join(book, "photos", cn));
+		add(join(book, "photos", "id"));
 		add(join(book, cn));
 	}
 	add(kindEnv(kind));
-	add(join(shared, kind));
+	add(join(shared, folder));
+	add(join(shared, "id"));
 	add(join(shared, cn));
-	add(root ? join(root, "photos", kind) : "");
+	add(root ? join(root, "photos", folder) : "");
+	add(root ? join(root, "photos", "id") : "");
 	add(root ? join(root, "photos", cn) : "");
-	add(root ? join(root, kind) : "");
+	add(root ? join(root, folder) : "");
 	add(root ? join(root, cn) : "");
 	add(shared, true);
 	add(root ? join(root, "photos") : "", true);
 	return out;
+}
+function idSide(base) {
+	const b = compactName(base);
+	if (/反面|背面|back/.test(b)) return "back";
+	if (/正面|人像|头像|front/.test(b)) return "front";
+	return "plain";
 }
 function photoFileMatches(file, name, kind, requireLabel) {
 	const ext = extname(file).toLowerCase();
@@ -92,12 +106,25 @@ function photoFileMatches(file, name, kind, requireLabel) {
 	const n = compactName(name);
 	const b = compactName(base);
 	if (!n || !b) return false;
+	const side = idSide(base);
+	if (kind === "idBack") {
+		if (side !== "back") return false;
+		if (b === n) return !requireLabel;
+		return ["身份证", "身份"].some((lab) => {
+			const L = compactName(lab);
+			return b.startsWith(n + L) || b.startsWith(n) && b.includes(L);
+		});
+	}
+	if (kind === "id" || kind === "idFront") {
+		if (side === "back") return false;
+		if (b === n) return !requireLabel;
+		return ["身份证", "身份"].some((lab) => {
+			const L = compactName(lab);
+			return b.startsWith(n + L) || b.startsWith(n) && b.includes(L);
+		});
+	}
 	if (b === n) return !requireLabel;
-	return (kind === "id" ? ["身份证", "身份"] : kind === "bank" ? ["银行卡", "银行"] : [
-		"ic卡",
-		"ic",
-		"工卡"
-	]).some((lab) => {
+	return (kind === "bank" ? ["银行卡", "银行"] : ["ic卡", "ic", "工卡"]).some((lab) => {
 		const L = compactName(lab);
 		return b.startsWith(n + L) || b.startsWith(n) && b.includes(L);
 	});
@@ -113,7 +140,8 @@ var DOC_CN = {
 	report: "报量单",
 	invoice: "发票",
 	receipt: "收款回单",
-	attendance: "考勤影像"
+	attendance: "考勤影像",
+	contract: "合同扫描件"
 };
 function photosBase() {
 	const shared = process.env.PHOTO_DIR?.trim();
@@ -137,7 +165,8 @@ async function ensureDirs() {
 		"报量单",
 		"发票",
 		"收款回单",
-		"考勤影像"
+		"考勤影像",
+		"合同扫描件"
 	]) await mkdir(join(photos, sub), { recursive: true });
 	const book = bookRoot();
 	if (book) await mkdir(book, { recursive: true });
@@ -174,13 +203,14 @@ async function writeDataReadme() {
 accounts/     登录账号、密码、台账名单、权限
 books/        每本台账的数字（人员、考勤、发放、合同、操作记录）
 photos/       全部影像
-  id          身份证
+  id          身份证正反面（张三-身份证-正面.jpg / 张三-身份证-反面.jpg）
   bank        银行卡
   ic          IC卡
   报量单
   发票
   收款回单
   考勤影像
+  合同扫描件
 backups/      Excel 备份（含最新「考勤表.xlsx」）
 templates/    导入模板
 
@@ -195,7 +225,8 @@ async function migrateOldDocs() {
 		"report",
 		"invoice",
 		"receipt",
-		"attendance"
+		"attendance",
+		"contract"
 	]) {
 		const dest = docsDir(kind);
 		if (!dest) continue;
@@ -342,11 +373,18 @@ async function findPhotoHit(name, kind) {
 }
 function photoRank(file, name, kind) {
 	const ext = extname(file).toLowerCase();
-	const base = compactName(file.slice(0, file.length - ext.length));
-	if (base === compactName(name) + compactName(labelOf(kind))) return 4;
-	if (base.includes("正面") || base.includes("front")) return 3;
-	if (base.includes("反面") || base.includes("back")) return 2;
-	return 1;
+	const base = file.slice(0, file.length - ext.length);
+	const b = compactName(base);
+	const want = compactName(name) + compactName(labelOf(kind));
+	if (b === want) return 6;
+	const side = idSide(base);
+	if (kind === "idBack") return side === "back" ? 5 : 1;
+	if (kind === "id" || kind === "idFront") {
+		if (side === "front") return 5;
+		if (side === "plain") return 3;
+		return 1;
+	}
+	return 2;
 }
 async function savePhoto(name, kind, dataUrl) {
 	if (!persistOn()) return;
@@ -374,6 +412,7 @@ async function removePhoto(name, kind) {
 async function photoFlags(names) {
 	const kinds = [
 		"id",
+		"idBack",
 		"bank",
 		"ic"
 	];
@@ -386,6 +425,7 @@ async function photoFlags(names) {
 	for (const name of names) {
 		const row = {
 			id: false,
+			idBack: false,
 			bank: false,
 			ic: false
 		};
@@ -402,11 +442,13 @@ async function scanPhotoFolder(names) {
 	const flags = await photoFlags(names);
 	const matched = {
 		id: 0,
+		idBack: 0,
 		bank: 0,
 		ic: 0
 	};
 	for (const n of names) {
 		if (flags[n]?.id) matched.id += 1;
+		if (flags[n]?.idBack) matched.idBack += 1;
 		if (flags[n]?.bank) matched.bank += 1;
 		if (flags[n]?.ic) matched.ic += 1;
 	}

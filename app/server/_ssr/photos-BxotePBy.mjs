@@ -19,11 +19,13 @@ function PhotosPage() {
 		if (q && !p.name.includes(q) && !p.team.includes(q)) return false;
 		const f = flags[p.name] || {
 			id: false,
+			idBack: false,
 			bank: false,
 			ic: false
 		};
-		if (filter === "missing") return !(f.id && f.bank && f.ic);
+		if (filter === "missing") return !(f.id && f.idBack && f.bank && f.ic);
 		if (filter === "id") return !f.id;
+		if (filter === "idBack") return !f.idBack;
 		if (filter === "bank") return !f.bank;
 		if (filter === "ic") return !f.ic;
 		return true;
@@ -39,7 +41,7 @@ function PhotosPage() {
 					children: "照片管理"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-1 text-sm text-muted",
-					children: "人员和合同影像都在 data/photos。账号在 data/accounts，台账数字在 data/books。备份在 data/backups，模板在 data/templates。人员照片：张三-身份证.jpg。"
+					children: "人员和合同影像都在 data/photos。人员照片：张三-身份证-正面.jpg、张三-身份证-反面.jpg。显示正面，点「查看反面」。"
 				})] }),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex flex-wrap gap-2",
@@ -57,7 +59,8 @@ function PhotosPage() {
 						[
 							["all", "全部"],
 							["missing", "缺任意"],
-							["id", "缺身份证"],
+							["id", "缺正面"],
+							["idBack", "缺反面"],
 							["bank", "缺银行卡"],
 							["ic", "缺IC卡"]
 						].map(([k, label]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
@@ -85,7 +88,11 @@ function PhotosPage() {
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
-									children: "身份证"
+									children: "身份证正面"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
+									children: "身份证反面"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
@@ -97,12 +104,13 @@ function PhotosPage() {
 								})
 							] })
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [filtered.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 5,
+							colSpan: 6,
 							className: "p-8 text-center text-muted",
 							children: "没有匹配的人员"
 						}) }) : null, filtered.map((p) => {
 							const f = flags[p.name] || {
 								id: false,
+								idBack: false,
 								bank: false,
 								ic: false
 							};
@@ -122,6 +130,10 @@ function PhotosPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-3",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.id })
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "p-3",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.idBack })
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-3",

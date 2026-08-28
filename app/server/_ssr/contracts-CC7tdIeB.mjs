@@ -884,6 +884,10 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 									toast.error("项目名称必填");
 									return;
 								}
+								if (c.hasPaper === false && !(c.noContractReason || "").trim()) {
+									toast.error("没有合同请填写原因");
+									return;
+								}
 								onSave({
 									...c,
 									id: c.id || uid()
@@ -917,6 +921,38 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
 							value: c.name,
 							onChange: (e) => patch("name", e.target.value)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "合同原件",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							className: "field-select w-full",
+							value: c.hasPaper === false ? "no" : "yes",
+							onChange: (e) => patch("hasPaper", e.target.value === "yes"),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+								value: "yes",
+								children: "有合同扫描件"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+								value: "no",
+								children: "无合同"
+							})]
+						})
+					}),
+					c.hasPaper === false ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "无合同原因",
+						className: "md:col-span-2",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							value: c.noContractReason || "",
+							onChange: (e) => patch("noContractReason", e.target.value),
+							placeholder: "说明为什么没有合同"
+						})
+					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "合同扫描件（存到 data/photos/合同扫描件）",
+						className: "md:col-span-2",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractScanBox, {
+							contract: c,
+							disabled: creating,
+							onFileName: (name) => patch("scanFileName", name)
 						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
@@ -1648,6 +1684,44 @@ function EntryRows({ entries, title, onRemove, render }) {
 				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Trash2, { className: "size-3.5" })
 			})]
 		}, e.id))]
+	});
+}
+function contractScanName(name) {
+	return `${(name || "未命名").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "") || "未命名"}-合同扫描件`;
+}
+function ContractScanBox({ contract, disabled, onFileName }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-2",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilePick, {
+				kind: "file",
+				compact: true,
+				disabled,
+				accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
+				label: "上传合同扫描件",
+				hint: contract.scanFileName ? `已选：${contract.scanFileName}` : "点击或拖入 PDF / 照片，自动存到 data/photos/合同扫描件",
+				onFile: async (file) => {
+					if (!file || disabled) return;
+					const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".pdf";
+					const named = new File([file], `${contractScanName(contract.name)}${ext}`, {
+						type: file.type,
+						lastModified: file.lastModified
+					});
+					await setDoc(contract.id, "contract", named);
+					onFileName(named.name);
+					toast.success(`已保存 ${named.name}`);
+				}
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
+				id: contract.id,
+				kind: "contract",
+				fileName: contract.scanFileName,
+				suggest: contractScanName(contract.name),
+				taken: [],
+				onReplaced: onFileName,
+				onDeleted: () => onFileName("")
+			})
+		]
 	});
 }
 //#endregion

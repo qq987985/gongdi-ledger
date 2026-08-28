@@ -10,7 +10,9 @@ import { a as fileToDataUrl, c as scanPhotoFolder, i as downloadPhoto, l as setP
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var LABELS = {
-	id: "身份证",
+	id: "身份证-正面",
+	idFront: "身份证-正面",
+	idBack: "身份证-反面",
 	bank: "银行卡",
 	ic: "IC卡"
 };
@@ -33,7 +35,189 @@ function usePhotoFlags(names, nonce = 0) {
 	}, [key, nonce]);
 	return flags;
 }
+function IdCardSlot({ name, compact, onChanged }) {
+	const [front, setFront] = (0, import_react.useState)(null);
+	const [back, setBack] = (0, import_react.useState)(null);
+	const [busy, setBusy] = (0, import_react.useState)(false);
+	const [open, setOpen] = (0, import_react.useState)(false);
+	const [face, setFace] = (0, import_react.useState)("front");
+	const frontRef = (0, import_react.useRef)(null);
+	const backRef = (0, import_react.useRef)(null);
+	const photoAccept = "image/jpeg,image/png,image/webp,image/bmp,.jpg,.jpeg,.png,.webp,.bmp";
+	(0, import_react.useEffect)(() => {
+		let live = true;
+		Promise.all([getPhoto(name, "id"), getPhoto(name, "idBack")]).then(([f, b]) => {
+			if (live) {
+				setFront(f);
+				setBack(b);
+			}
+		});
+		return () => {
+			live = false;
+		};
+	}, [name]);
+	async function onFile(file, kind) {
+		if (!file || !name) return;
+		setBusy(true);
+		try {
+			const url = await fileToDataUrl(file);
+			await setPhoto(name, kind, url);
+			const saved = await getPhoto(name, kind) || url;
+			if (kind === "idBack") setBack(saved);
+			else setFront(saved);
+			onChanged?.();
+			toast.success(kind === "idBack" ? `反面已保存为「${name}-身份证-反面」` : `正面已保存为「${name}-身份证-正面」`);
+		} finally {
+			setBusy(false);
+		}
+	}
+	const shown = face === "back" && back ? back : front;
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-2",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center justify-between",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+					className: "text-xs font-medium text-muted",
+					children: "身份证"
+				}), front ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+					tone: "ok",
+					children: back ? "正反面齐全" : "仅正面"
+				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: "待上传正面" })]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(DropSurface, {
+				accept: photoAccept,
+				disabled: !name || busy,
+				onFiles: (files) => void onFile(files[0], "id"),
+				className: "overflow-hidden rounded-md border border-dashed border-line bg-bg",
+				activeClassName: "border-accent bg-accent-soft",
+				children: front ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					className: "block w-full",
+					onClick: () => {
+						setFace("front");
+						setOpen(true);
+					},
+					title: "点击看正面大图，拖入可更换正面",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+						src: front,
+						alt: `${name}身份证正面`,
+						className: compact ? "h-28 w-full object-cover" : "h-40 w-full object-contain"
+					})
+				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					className: `flex w-full flex-col items-center justify-center gap-1 text-subtle ${compact ? "h-28" : "h-40"}`,
+					disabled: !name || busy,
+					onClick: () => frontRef.current?.click(),
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "size-5" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "text-xs",
+							children: busy ? "上传中…" : "点击上传正面"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "px-2 text-center text-[11px] text-muted",
+							children: "文件名：姓名-身份证-正面"
+						})
+					]
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+				ref: frontRef,
+				type: "file",
+				accept: photoAccept,
+				className: "hidden",
+				disabled: !name || busy,
+				onChange: (e) => {
+					onFile(e.target.files?.[0], "id");
+					e.target.value = "";
+				}
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+				ref: backRef,
+				type: "file",
+				accept: photoAccept,
+				className: "hidden",
+				disabled: !name || busy,
+				onChange: (e) => {
+					onFile(e.target.files?.[0], "idBack");
+					e.target.value = "";
+				}
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-wrap gap-1",
+				children: [
+					front ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "inline-flex h-9 flex-1 items-center justify-center rounded-sm bg-accent px-2 text-xs font-medium text-accent-fg",
+						onClick: () => frontRef.current?.click(),
+						children: "更换正面"
+					}) : null,
+					back ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "inline-flex h-9 flex-1 items-center justify-center rounded-sm border border-line px-2 text-xs",
+						onClick: () => {
+							setFace("back");
+							setOpen(true);
+						},
+						children: "查看反面"
+					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "inline-flex h-9 flex-1 items-center justify-center rounded-sm border border-dashed border-line px-2 text-xs",
+						disabled: !name || busy,
+						onClick: () => backRef.current?.click(),
+						children: "上传反面"
+					}),
+					back ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "inline-flex h-9 items-center justify-center rounded-sm border border-line px-2 text-xs",
+						onClick: () => backRef.current?.click(),
+						children: "更换反面"
+					}) : null
+				]
+			}),
+			open && shown ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoLightbox, {
+				src: shown,
+				title: `${name} · 身份证${face === "back" ? "反面" : "正面"}`,
+				onClose: () => setOpen(false),
+				onCopy: async () => {
+					if (await copyPhoto(shown, `${name}-身份证-${face === "back" ? "反面" : "正面"}.png`) === "clipboard") toast.success("图片已复制，可粘贴到微信 / WPS");
+					else toast.message("当前环境不能写剪贴板，已改为下载，从下载里打开再复制");
+				},
+				onDownload: () => downloadPhoto(name, face === "back" ? "idBack" : "id", shown),
+				extra: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex gap-2",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: `rounded-sm px-3 py-1 text-xs ${face === "front" ? "bg-accent text-accent-fg" : "bg-surface text-ink"}`,
+						onClick: () => setFace("front"),
+						children: "正面"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: `rounded-sm px-3 py-1 text-xs ${face === "back" ? "bg-accent text-accent-fg" : "bg-surface text-ink"}`,
+						disabled: !back,
+						onClick: () => setFace("back"),
+						children: back ? "反面" : "暂无反面"
+					})]
+				})
+			}) : null
+		]
+	});
+}
 function PhotoSlot({ name, kind, compact, onChanged }) {
+	if (kind === "id" || kind === "idFront") return IdCardSlot({
+		name,
+		compact,
+		onChanged
+	});
+	return PhotoSlotPlain({
+		name,
+		kind,
+		compact,
+		onChanged
+	});
+}
+function PhotoSlotPlain({ name, kind, compact, onChanged }) {
 	const [src, setSrc] = (0, import_react.useState)(null);
 	const [busy, setBusy] = (0, import_react.useState)(false);
 	const [open, setOpen] = (0, import_react.useState)(false);
@@ -177,7 +361,7 @@ function PhotoSlot({ name, kind, compact, onChanged }) {
 		]
 	});
 }
-function PhotoLightbox({ src, title, onClose, onCopy, onDownload }) {
+function PhotoLightbox({ src, title, onClose, onCopy, onDownload, extra }) {
 	(0, import_react.useEffect)(() => {
 		const onKey = (e) => {
 			if (e.key === "Escape") onClose();
@@ -201,6 +385,7 @@ function PhotoLightbox({ src, title, onClose, onCopy, onDownload }) {
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex flex-wrap gap-2",
 						children: [
+							extra || null,
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								type: "button",
 								className: "inline-flex h-9 items-center gap-1 rounded-sm bg-surface px-3 text-xs text-ink",
@@ -245,10 +430,10 @@ function ScanPhotosButton({ names, onDone }) {
 			setBusy(true);
 			try {
 				const r = await scanPhotoFolder(names);
-				const n = r.matched.id + r.matched.bank + r.matched.ic;
+				const n = r.matched.id + r.matched.bank + r.matched.ic + (r.matched.idBack || 0);
 				const hit = r.dirs.filter((d) => d.count > 0);
-				toast.success(`已扫描。对上 ${r.matched.id} 张身份证、${r.matched.bank} 张银行卡、${r.matched.ic} 张IC卡（人员 ${r.people}）。文件夹里共 ${hit.reduce((s, d) => s + d.count, 0)} 张图。`);
-				if (!n && hit.length) toast.message("文件夹有图，但姓名对不上。文件名请用「张三-IC卡.png」，和人员表姓名一致。");
+				toast.success(`已扫描。正面 ${r.matched.id}、反面 ${r.matched.idBack || 0}、银行卡 ${r.matched.bank}、IC卡 ${r.matched.ic}（人员 ${r.people}）。`);
+				if (!n && hit.length) toast.message("文件夹有图，但姓名对不上。请用「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。");
 				if (!hit.length) toast.error("这几个目录是空的：data/photos/id、bank、ic");
 				onDone?.();
 			} catch (e) {

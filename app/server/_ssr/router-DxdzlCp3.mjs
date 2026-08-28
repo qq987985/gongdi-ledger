@@ -594,7 +594,10 @@ function emptyContract(year) {
 		status: "在建",
 		prelimAmount: 0,
 		settleReceivable: 0,
-		remark: ""
+		remark: "",
+		hasPaper: true,
+		noContractReason: "",
+		scanFileName: ""
 	};
 }
 /** 按合同设定，把录入的报量拆成含税 / 不含税 */
@@ -1515,7 +1518,10 @@ function parseContractWorkbook(buf) {
 				status: /审计/.test(pick(row, ["项目进度", "进度"])) ? "审计" : /结算/.test(pick(row, ["项目进度", "进度"])) ? "结算" : "在建",
 				prelimAmount: numPick(row, ["初审金额"]),
 				settleReceivable: numPick(row, ["结算应收金额"]),
-				remark: pick(row, ["备注"])
+				remark: pick(row, ["备注"]),
+				hasPaper: !/无合同|没有合同/.test(pick(row, ["有无合同", "合同原件"])),
+				noContractReason: pick(row, ["无合同原因", "没有合同原因"]),
+				scanFileName: ""
 			};
 			if (c.hasDeposit && !c.depositAmount && Number(depositRaw) > 1) c.depositAmount = Number(depositRaw);
 			contracts.push(c);
@@ -1577,7 +1583,9 @@ function contractTemplateWb() {
 		"项目进度",
 		"初审金额",
 		"结算应收金额",
-		"备注"
+		"备注",
+		"有无合同",
+		"无合同原因"
 	], [
 		1,
 		2026,
@@ -1597,7 +1605,9 @@ function contractTemplateWb() {
 		"在建",
 		0,
 		0,
-		"示例，导入前请改"
+		"示例，导入前请改",
+		"有扫描件",
+		""
 	]]), "合同管理表");
 	utils.book_append_sheet(wb, utils.aoa_to_sheet([
 		[
@@ -1679,7 +1689,8 @@ function contractTemplateWb() {
 		"项目进度只能是：在建 / 结算 / 审计。",
 		"报量含税列填「含税」或「不含税」。每个合同可以不同。开票、收款仍按实际金额。",
 		"两条线：① 应收 = 含税报量 × 付款比例；合同未付 = 应收 − 已付。② 剩余款 = 开票含税 − 已付。已付 = 代付农民工 + 到分包公司。",
-		"收款请拆成两笔：去向填「到分包公司」或「总包代付农民工」，日期可以不同。"
+		"收款请拆成两笔：去向填「到分包公司」或「总包代付农民工」，日期可以不同。",
+		"有无合同：填「有扫描件」或「无合同」。无合同时在「无合同原因」说明。合同扫描件在软件里上传，存到 data/photos/合同扫描件。"
 	]), "填写说明");
 	return wb;
 }
@@ -1716,7 +1727,9 @@ function buildContractWorkbook(args) {
 		"项目进度",
 		"初审金额",
 		"结算应收金额",
-		"备注"
+		"备注",
+		"有无合同",
+		"无合同原因"
 	]];
 	contracts.forEach((c, i) => {
 		const r = contractRollup(c, entries);
@@ -1750,7 +1763,9 @@ function buildContractWorkbook(args) {
 			c.status,
 			c.prelimAmount || "",
 			c.settleReceivable || "",
-			c.remark
+			c.remark,
+			c.hasPaper === false ? "无合同" : (c.scanFileName ? "有扫描件" : "有合同"),
+			c.hasPaper === false ? (c.noContractReason || "") : ""
 		]);
 	});
 	utils.book_append_sheet(wb, sheetFromAoa(aoa), "合同管理表");
@@ -4387,7 +4402,7 @@ var Route$11 = createFileRoute("/api/backup")({ server: { handlers: { POST: asyn
 	});
 } } } });
 function kindOf$2(v) {
-	if (v === "report" || v === "invoice" || v === "receipt" || v === "attendance") return v;
+	if (v === "report" || v === "invoice" || v === "receipt" || v === "attendance" || v === "contract") return v;
 	return null;
 }
 var MIME = {
@@ -4488,7 +4503,7 @@ var Route$8 = createFileRoute("/api/ledger")({ server: { handlers: {
 	}
 } } });
 function kindOf$1(v) {
-	if (v === "id" || v === "bank" || v === "ic") return v;
+	if (v === "id" || v === "idFront" || v === "idBack" || v === "bank" || v === "ic") return v === "idFront" ? "id" : v;
 	return null;
 }
 var Route$7 = createFileRoute("/api/photo")({ server: { handlers: {
@@ -4539,7 +4554,7 @@ var Route$7 = createFileRoute("/api/photo")({ server: { handlers: {
 	}
 } } });
 function kindOf(v) {
-	if (v === "id" || v === "bank" || v === "ic") return v;
+	if (v === "id" || v === "idFront" || v === "idBack" || v === "bank" || v === "ic") return v === "idFront" ? "id" : v;
 	return null;
 }
 var Route$6 = createFileRoute("/api/photo-file")({ server: { handlers: { GET: async ({ request }) => {

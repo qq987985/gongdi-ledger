@@ -17,7 +17,7 @@ function photoKey(name, kind) {
 	return `${name.trim()}::${kind}`;
 }
 function photoFileName(name, kind, ext = "jpg") {
-	const label = kind === "id" ? "身份证" : kind === "bank" ? "银行卡" : "IC卡";
+	const label = kind === "idBack" ? "身份证-反面" : kind === "id" || kind === "idFront" ? "身份证-正面" : kind === "bank" ? "银行卡" : "IC卡";
 	return `${name.trim()}-${label}.${ext}`;
 }
 async function idbGet(name, kind) {
@@ -88,7 +88,7 @@ async function listPhotoFlags(names) {
 	const flags = {};
 	await new Promise((resolve, reject) => {
 		const store = db.transaction(STORE, "readonly").objectStore(STORE);
-		let pending = names.length * 3;
+		let pending = names.length * 4;
 		if (pending === 0) {
 			resolve();
 			return;
@@ -96,11 +96,13 @@ async function listPhotoFlags(names) {
 		for (const name of names) {
 			flags[name] = {
 				id: false,
+				idBack: false,
 				bank: false,
 				ic: false
 			};
 			[
 				"id",
+				"idBack",
 				"bank",
 				"ic"
 			].forEach((kind) => {

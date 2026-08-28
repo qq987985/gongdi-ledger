@@ -220,7 +220,7 @@ function PeoplePage() {
 							children: "没有匹配的人员"
 						}) }) : null, filtered.map((p, i) => {
 							const f = flags[p.name];
-							const n = (f?.id ? 1 : 0) + (f?.bank ? 1 : 0) + (f?.ic ? 1 : 0);
+							const n = (f?.id ? 1 : 0) + (f?.idBack ? 1 : 0) + (f?.bank ? 1 : 0) + (f?.ic ? 1 : 0);
 							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
 								className: "border-b border-line last:border-0 hover:bg-bg-elevated",
 								children: [
@@ -287,7 +287,7 @@ function PeoplePage() {
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 											className: "text-left text-xs text-accent",
 											onClick: () => setEditing(p),
-											children: [n, "/3 已上传"]
+											children: [n, "/4 已上传"]
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -579,7 +579,7 @@ function PersonEditor({ person, creating, refresh = 0, onClose, onSave, onChange
 					]
 				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-4 text-xs text-muted",
-					children: "先填姓名再上传。也可直接拷到 NAS：/vol1/1000/docker/attendance/data/photos/id（身份证）、bank（银行卡）、ic（IC卡），文件名「姓名-身份证.jpg」。"
+					children: "先填姓名再上传。身份证格子只显示正面，边上可点「查看反面」。也可直接拷到 NAS：/vol1/1000/docker/attendance/data/photos/id，文件名「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。"
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "mt-6 flex justify-end gap-2",
