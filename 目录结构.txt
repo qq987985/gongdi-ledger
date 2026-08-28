@@ -6,7 +6,7 @@
 缺哪个补哪个即可，不要删已有文件。
 
 
-一、必须创建的 data 目录（13 个）
+一、必须创建的 data 目录（14 个）
 --------------------------------
 
 data
@@ -24,6 +24,7 @@ data/photos/收款回单
 data/photos/考勤影像
 data/photos/合同扫描件
 data/photos/报销凭证
+data/photos/报销打款
 
 books 下面的「台账编号」文件夹不用手建，软件新建台账时会建。
 不要创建 data/VERSION.txt（旧挂载残留会变成文件夹，导致首页 500）。
@@ -43,6 +44,7 @@ data/photos/收款回单/   收款回单
 data/photos/考勤影像/   月度考勤影像
 data/photos/合同扫描件/ 合同原件扫描（文件名=项目名称-合同电子版，如 某某住宅-合同电子版.pdf；有文件=有合同）
 data/photos/报销凭证/ 报销影像（文件名=项目名称-金额，几笔可共用一张；现金可不传）
+data/photos/报销打款/ 打款回单（几笔一起报销共用一张；文件名=报销人-账户-合计）
 data/backups/           Excel 备份
 data/templates/         导入用模板（运行时目录，不要传 GitHub）
 

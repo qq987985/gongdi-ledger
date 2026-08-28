@@ -27,6 +27,7 @@ mkdir "data\photos\收款回单" 2>nul
 mkdir "data\photos\考勤影像" 2>nul
 mkdir "data\photos\合同扫描件" 2>nul
 mkdir "data\photos\报销凭证" 2>nul
+mkdir "data\photos\报销打款" 2>nul
 
 set "GONGDI_HOME=%~dp0"
 set GONGDI_PORTABLE=1
