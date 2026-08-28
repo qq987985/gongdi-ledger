@@ -293,6 +293,9 @@ async function readLedger() {
 	try {
 		const raw = JSON.parse(await readFile(p, "utf8"));
 		if (!raw || typeof raw !== "object") return { empty: true };
+		if (await reconcileContractScans(raw)) try {
+			await writeFile(p, JSON.stringify(raw, null, 2), "utf8");
+		} catch {}
 		return raw;
 	} catch {
 		return { empty: true };
@@ -515,6 +518,24 @@ function docSearchDirs(kind) {
 function safeId(id) {
 	return id.replace(/[\\/:*?"<>|]/g, "").trim();
 }
+async function readPointerName(dir, sid) {
+	const ptr = join(dir, `${sid}.name.txt`);
+	if (!existsSync(ptr)) return "";
+	try {
+		return (await readFile(ptr, "utf8")).trim();
+	} catch {
+		return "";
+	}
+}
+async function sweepDocFiles(kind, sid) {
+	for (const d of docSearchDirs(kind)) {
+		const files = await listDirSafe(d);
+		const prev = await readPointerName(d, sid);
+		for (const f of files) {
+			if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt` || prev && f === prev) await rm(join(d, f), { force: true });
+		}
+	}
+}
 async function saveDoc(id, kind, buf, fileName) {
 	if (!persistOn()) return;
 	await ensureDirs();
@@ -525,27 +546,76 @@ async function saveDoc(id, kind, buf, fileName) {
 	if (!sid) return;
 	const ext = extname(fileName || "").slice(0, 8) || ".bin";
 	const orig = (fileName || `file${ext}`).replace(/[\\/]/g, "");
-	for (const d of docSearchDirs(kind)) for (const f of await listDirSafe(d)) if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt`) await rm(join(d, f), { force: true });
-	await writeFile(join(dir, `${sid}--${orig}`), buf);
+	await sweepDocFiles(kind, sid);
+	if (kind === "contract") {
+		await writeFile(join(dir, orig), buf);
+		await writeFile(join(dir, `${sid}.name.txt`), orig, "utf8");
+	} else await writeFile(join(dir, `${sid}--${orig}`), buf);
 }
 async function removeDocFile(id, kind) {
 	if (!persistOn()) return;
-	const sid = safeId(id);
-	for (const d of docSearchDirs(kind)) for (const f of await listDirSafe(d)) if (f.startsWith(`${sid}--`)) await rm(join(d, f), { force: true });
+	await sweepDocFiles(kind, safeId(id));
 }
 async function findDoc(id, kind) {
 	if (!persistOn()) return null;
 	const sid = safeId(id);
 	for (const d of docSearchDirs(kind)) {
-		const hit = (await listDirSafe(d)).find((f) => f.startsWith(`${sid}--`));
-		if (!hit) continue;
-		const fileName = hit.slice(`${sid}--`.length) || hit;
-		return {
+		const files = await listDirSafe(d);
+		const hit = files.find((f) => f.startsWith(`${sid}--`));
+		if (hit) return {
 			buf: await readFile(join(d, hit)),
-			fileName
+			fileName: hit.slice(`${sid}--`.length) || hit
+		};
+		const orig = await readPointerName(d, sid);
+		if (orig && files.includes(orig)) return {
+			buf: await readFile(join(d, orig)),
+			fileName: orig
 		};
 	}
 	return null;
+}
+function contractScanBase(name) {
+	return (name || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "");
+}
+async function reconcileContractScans(raw) {
+	const list = raw?.contracts;
+	if (!Array.isArray(list) || !list.length) return false;
+	const dirs = docSearchDirs("contract");
+	const all = [];
+	for (const d of dirs) for (const f of await listDirSafe(d)) {
+		if (f.endsWith(".name.txt") || f.startsWith(".")) continue;
+		all.push(f);
+	}
+	let changed = false;
+	for (const c of list) {
+		if (c.scanFileName) continue;
+		const sid = safeId(c.id || "");
+		let found = "";
+		const prefixed = all.find((f) => sid && f.startsWith(`${sid}--`));
+		if (prefixed) found = prefixed.slice(`${sid}--`.length);
+		if (!found && sid) {
+			for (const d of dirs) {
+				const orig = await readPointerName(d, sid);
+				if (orig && all.includes(orig)) {
+					found = orig;
+					break;
+				}
+			}
+		}
+		if (!found) {
+			const base = contractScanBase(c.name);
+			if (base) {
+				const prefix = `${base}-合同电子版`;
+				const hit = all.find((f) => f === prefix || f.startsWith(`${prefix}.`));
+				if (hit) found = hit;
+			}
+		}
+		if (found) {
+			c.scanFileName = found;
+			changed = true;
+		}
+	}
+	return changed;
 }
 async function listBookIds() {
 	const dir = join(dataDir(), "books");

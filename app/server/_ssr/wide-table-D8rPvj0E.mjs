@@ -24,6 +24,7 @@ function applyWidths(host, widths) {
 	const ths = [...host.querySelectorAll("thead th")];
 	if (!widths.length || widths.length !== ths.length) return;
 	ths.forEach((th, i) => {
+		if (th.dataset.colLock) return;
 		const w = widths[i];
 		if (w >= MIN_W) {
 			th.style.width = `${w}px`;
@@ -33,6 +34,7 @@ function applyWidths(host, widths) {
 	});
 }
 function setThWidth(th, w) {
+	if (th.dataset.colLock) return;
 	const n = Math.max(MIN_W, w);
 	th.style.width = `${n}px`;
 	th.style.minWidth = `${n}px`;
@@ -41,6 +43,7 @@ function setThWidth(th, w) {
 function onResizer(e, host) {
 	const th = e.target.closest("th");
 	if (!th || !host.contains(th)) return null;
+	if (th.dataset.colLock) return null;
 	if (th.getBoundingClientRect().right - e.clientX > 10) return null;
 	return th;
 }

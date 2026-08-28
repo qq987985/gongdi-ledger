@@ -69,9 +69,9 @@ var public_assets_data_default = {
 	},
 	"/assets/contracts-DXZapWfC.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"8a34-sCGwBdR5Ql27HZvamfOSGZFnXo4\"",
-		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 35380,
+		"etag": "\"894e-EbKKJ4h8wApwMWBaY6ykDY6lPaA\"",
+		"mtime": "2026-08-28T05:07:44.000Z",
+		"size": 35150,
 		"path": "../public/assets/contracts-DXZapWfC.js"
 	},
 	"/assets/doc-actions-CmcTaqrK.js": {
@@ -90,9 +90,9 @@ var public_assets_data_default = {
 	},
 	"/assets/excel-BYSb_v_l.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"3f5a-YXmgltvDv4uqWB6rZnk3pwQBJLQ\"",
-		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 16218,
+		"etag": "\"3fcf-dRB3pzMi6/ebdgFrrLpmVi/i1qU\"",
+		"mtime": "2026-08-28T05:07:44.000Z",
+		"size": 16335,
 		"path": "../public/assets/excel-BYSb_v_l.js"
 	},
 	"/assets/excel-import-CV73N9jL.js": {
@@ -223,9 +223,9 @@ var public_assets_data_default = {
 	},
 	"/assets/wide-table-BtpzsvMP.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"a03-v0GecG5yoX1yZxS1gNG9aI7R9F8\"",
-		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 2563,
+		"etag": "\"a4e-ubuZ4E0y0+fELOR9GDFNtF9gvTk\"",
+		"mtime": "2026-08-28T05:07:44.000Z",
+		"size": 2638,
 		"path": "../public/assets/wide-table-BtpzsvMP.js"
 	},
 	"/assets/xlsx-Cul4fuIT.js": {
@@ -251,9 +251,9 @@ var public_assets_data_default = {
 	},
 	"/templates/contracts.xlsx": {
 		"type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-		"etag": "\"1544-g/SGFXwfY4DMmkGJ4AMoRXAZHvs\"",
-		"mtime": "2026-08-27T01:12:58.671Z",
-		"size": 5444,
+		"etag": "\"213c-NRPr/aCs/Cidaj1an6i2Bf9248k\"",
+		"mtime": "2026-08-28T05:08:00.000Z",
+		"size": 8508,
 		"path": "../public/templates/contracts.xlsx"
 	},
 	"/templates/payments.xlsx": {

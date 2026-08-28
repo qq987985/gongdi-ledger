@@ -1542,9 +1542,13 @@ function parseContractWorkbook(buf) {
 				status: normalizeContractStatus(pick(row, ["项目进度", "进度"])),
 				prelimAmount: numPick(row, ["初审金额"]),
 				settleReceivable: numPick(row, ["结算应收金额"]),
-				remark: pick(row, ["备注"]),
+				remark: (() => {
+					const note = pick(row, ["备注"]);
+					const reason = pick(row, ["无合同原因", "没有合同原因"]);
+					return reason ? note ? `${note}；无合同：${reason}` : `无合同：${reason}` : note;
+				})(),
 				hasPaper: !/无合同|没有合同/.test(pick(row, ["有无合同", "合同原件"])),
-				noContractReason: pick(row, ["无合同原因", "没有合同原因"]),
+				noContractReason: "",
 				scanFileName: ""
 			};
 			if (c.hasDeposit && !c.depositAmount && Number(depositRaw) > 1) c.depositAmount = Number(depositRaw);
@@ -1708,7 +1712,7 @@ function contractTemplateWb() {
 		"「是否有押金」已改为保证金：填 有/无，金额填在保证金金额。",
 		"项目进度只能是：在建 / 完工 / 总版图 / 初审 / 终审 / 分包结算 / 结算完成 / 结算已开票 / 质保期 / 退质保金 / 完成。旧表里的「结算」当作分包结算，「审计」当作终审。",
 		"报量含税列填「含税」或「不含税」。每个合同可以不同。开票、收款仍按实际金额。",
-		"两条线：① 应收 = 含税报量 × 付款比例；合同未付 = 应收 − 已付。② 剩余款 = 开票含税 − 已付。已付 = 代付农民工 + 到分包公司。",
+		"两条线：① 应收 = 含税报量 × 付款比例；合同未付 = 应收 − 已付。② 剩余款 = 开票金额 − 已付。已付 = 代付农民工 + 到分包公司。",
 		"收款请拆成两笔：去向填「到分包公司」或「总包代付农民工」，日期可以不同。",
 		"合同扫描件在软件里上传，文件名是「项目名称-合同电子版」，存到 data/photos/合同扫描件。有文件即有合同，没传即无合同；原因写在备注。"
 	]), "填写说明");
@@ -1727,18 +1731,15 @@ function buildContractWorkbook(args) {
 		"合同金额/结算金额",
 		"税率",
 		"报量含税",
-		"月报量(录入)",
-		"月报量含税",
-		"月报量不含税",
+		"报量金额",
 		"合同付款比例",
 		"应收（含税报量×比例）",
-		"开票含税",
-		"开票不含税",
+		"开票金额",
 		"已付（代付+到分包）",
 		"代付农民工",
 		"到分包公司",
 		"合同未付（应收−已付）",
-		"剩余款（开票含税−已付）",
+		"剩余款（开票金额−已付）",
 		"质保期开始时间",
 		"质保期结束时间",
 		"是否有保证金",
@@ -1761,13 +1762,10 @@ function buildContractWorkbook(args) {
 			c.contractAmount || "",
 			c.taxRate ? `${c.taxRate}%` : "",
 			c.reportTaxMode === "incl" ? "含税" : "不含税",
-			r.report || "",
-			r.reportIncl || "",
-			r.reportExcl || "",
+			(c.reportTaxMode === "incl" ? r.reportIncl : r.reportExcl) || "",
 			c.payRatio ? `${c.payRatio}%` : "",
 			r.payable || "",
 			r.invoice || "",
-			r.invoiceExcl || "",
 			r.receipt || "",
 			r.workerPay || "",
 			r.subPay || "",
@@ -1892,12 +1890,12 @@ function buildContractWorkbook(args) {
 		"项目名称",
 		"含税报量",
 		"应收（含税报量×比例）",
-		"开票含税",
+		"开票金额",
 		"已付（代付+到分包）",
 		"代付农民工",
 		"到分包公司",
 		"合同未付（应收−已付）",
-		"剩余款（开票含税−已付）"
+		"剩余款（开票金额−已付）"
 	]];
 	contracts.forEach((c) => {
 		const r = contractRollup(c, entries);
@@ -1920,9 +1918,9 @@ function buildContractWorkbook(args) {
 	utils.book_append_sheet(wb, noteSheet([
 		"导出说明（此表不会导入）",
 		"合同管理表是汇总。明细在：月报量 / 开票 / 收款。资金对照是公式结果。",
-		"应收 = 含税报量 × 付款比例。合同未付 = 应收 − 已付。剩余款 = 开票含税 − 已付。",
+		"应收 = 含税报量 × 付款比例。合同未付 = 应收 − 已付。剩余款 = 开票金额 − 已付。",
 		"已付 = 代付农民工 + 到分包公司。收款明细里两笔日期可以不同。",
-		"影像资料列出已上传文件名，原件在 NAS 的 data/docs。"
+		"影像资料列出已上传文件名，原件在 NAS 的 data/photos（报量单、发票、收款回单、合同扫描件）。"
 	]), "填写说明");
 	return wb;
 }
@@ -2097,7 +2095,7 @@ function demoState() {
 		hasDeposit: false,
 		depositAmount: 0,
 		manager: "李经营",
-		status: "结算",
+		status: "分包结算",
 		prelimAmount: 78e4,
 		settleReceivable: 12e4,
 		remark: "虚构示例，可删"

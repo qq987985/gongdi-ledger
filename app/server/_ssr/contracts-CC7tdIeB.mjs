@@ -509,10 +509,10 @@ function ContractsPage() {
 							children: "合同未付（应收−已付）"
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("br", {}),
-						"开票线：开票含税 → 已付 → ",
+						"开票线：开票金额 → 已付 → ",
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", {
 							className: "text-ink",
-							children: "剩余款（开票含税−已付）"
+							children: "剩余款（开票金额−已付）"
 						}),
 						"。保证金、结算金额手填，不进这两条自动账。"
 					]
@@ -549,7 +549,7 @@ function ContractsPage() {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Mini, {
 							label: "剩余款",
-							hint: "开票含税−已付",
+							hint: "开票金额−已付",
 							value: totals.remain
 						})
 					]
@@ -588,7 +588,8 @@ function ContractsPage() {
 									children: "项目名称"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
+									className: "min-w-[5.5rem] whitespace-nowrap p-3",
+									"data-col-lock": "1",
 									children: "扫描件"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
@@ -613,15 +614,7 @@ function ContractsPage() {
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
-									children: "月报量(录入)"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
-									children: "月报量含税"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
-									children: "月报量不含税"
+									children: "报量金额"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
@@ -633,11 +626,7 @@ function ContractsPage() {
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
-									children: "开票含税"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
-									children: "开票不含税"
+									children: "开票金额"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ThHint, {
 									hint: "代付+到分包",
@@ -656,7 +645,7 @@ function ContractsPage() {
 									children: "合同未付"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ThHint, {
-									hint: "开票含税−已付",
+									hint: "开票金额−已付",
 									children: "剩余款"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
@@ -677,7 +666,7 @@ function ContractsPage() {
 								})
 							] })
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [list.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 27,
+							colSpan: 24,
 							className: "p-6 text-muted",
 							children: "还没有合同。点右上角新增，或到「导入导出」导入原来的合同管理表。"
 						}) }) : null, list.map((c, i) => {
@@ -718,7 +707,7 @@ function ContractsPage() {
 										children: c.name
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-2",
+										className: "min-w-[5.5rem] whitespace-nowrap p-2",
 										children: c.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
 											tone: "ok",
 											children: "有合同"
@@ -749,15 +738,7 @@ function ContractsPage() {
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-2 text-right tabular-nums",
-										children: money(r.report)
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-2 text-right tabular-nums",
-										children: money(r.reportIncl)
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-2 text-right tabular-nums",
-										children: money(r.reportExcl)
+										children: money(c.reportTaxMode === "incl" ? r.reportIncl : r.reportExcl)
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
 										className: "p-2 text-right tabular-nums",
@@ -770,10 +751,6 @@ function ContractsPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-2 text-right tabular-nums",
 										children: money(r.invoice)
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-2 text-right tabular-nums",
-										children: money(r.invoiceExcl)
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-2 text-right tabular-nums",
@@ -806,7 +783,7 @@ function ContractsPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-2",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
-											tone: ["在建", "完工", "结算完成", "结算已开票", "完成"].includes(c.status) ? "ok" : ["初审", "终审", "分包结算", "质保期", "退质保金"].includes(c.status) ? "warn" : void 0,
+											tone: ["在建", "完工", "结算完成", "结算已开票", "完成"].includes(c.status) ? "ok" : ["总版图", "初审", "终审", "分包结算", "质保期", "退质保金"].includes(c.status) ? "warn" : void 0,
 											children: CONTRACT_STATUSES.includes(c.status) ? c.status : c.status === "审计" ? "终审" : c.status === "结算" ? "分包结算" : c.status
 										})
 									}),
@@ -960,7 +937,17 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractScanBox, {
 				contract: c,
-				onFileName: (name) => patch("scanFileName", name)
+				onFileName: (name) => {
+					setC((prev) => {
+						const next = {
+							...prev,
+							scanFileName: name,
+							id: prev.id || uid()
+						};
+						queueMicrotask(() => onSave(next));
+						return next;
+					});
+				}
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "grid gap-3 md:grid-cols-3",
@@ -1074,7 +1061,7 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-						label: "剩余款（开票含税−已付）",
+						label: "剩余款（开票金额−已付）",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
 							readOnly: true,
 							value: money(roll.remain)
@@ -1737,7 +1724,7 @@ function ContractScanBox({ contract, onFileName }) {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "mt-0.5 text-xs text-muted",
-							children: "就在「保存合同信息」下面。点绿色按钮或把 PDF / 照片拖进来。文件名保存为「项目名称-合同电子版」。没传就是无合同，原因写备注。"
+							children: "点绿色按钮或把 PDF / 照片拖进来。上传后立刻算有合同，不用再点保存。文件名是「项目名称-合同电子版」。没传就是无合同，原因写备注。"
 						})
 					] }),
 					contract.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
