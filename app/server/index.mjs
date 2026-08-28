@@ -69,9 +69,9 @@ var public_assets_data_default = {
 	},
 	"/assets/contracts-DXZapWfC.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"87da-SIUPUbJvysBBPl+uzkoVZAfJWKw\"",
+		"etag": "\"8a34-sCGwBdR5Ql27HZvamfOSGZFnXo4\"",
 		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 34778,
+		"size": 35380,
 		"path": "../public/assets/contracts-DXZapWfC.js"
 	},
 	"/assets/doc-actions-CmcTaqrK.js": {

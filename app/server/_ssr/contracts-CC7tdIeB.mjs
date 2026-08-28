@@ -340,7 +340,7 @@ function ContractsPage() {
 	]);
 	(0, import_react.useEffect)(() => {
 		if (!editing) return;
-		const t = window.setTimeout(() => document.getElementById("contract-editor")?.scrollIntoView({
+		const t = window.setTimeout(() => (document.getElementById("contract-scan") || document.getElementById("contract-editor"))?.scrollIntoView({
 			behavior: "smooth",
 			block: "start"
 		}), 50);
@@ -367,7 +367,7 @@ function ContractsPage() {
 						className: "mt-1 max-w-2xl text-sm text-muted",
 						children: [
 							"点表格里的合同名称，页面滚到下方，",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "保存合同信息旁边上传扫描件" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "保存合同信息正下方有虚线框「合同电子版」" }),
 							"。有文件就是有合同，没传就是无合同；原因写在备注里。报量可选",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "含税" }),
 							"或",
@@ -908,10 +908,6 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 							tone: "ok",
 							children: "有合同"
 						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: "无合同" }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractScanBox, {
-							contract: c,
-							onFileName: (name) => patch("scanFileName", name)
-						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 							variant: "outline",
 							type: "button",
@@ -962,9 +958,9 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 					]
 				})]
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-				className: "text-xs text-muted",
-				children: "扫描件按「项目名称-合同电子版」保存，例如 某某住宅-合同电子版.pdf。没传就是无合同，原因写在备注里。"
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractScanBox, {
+				contract: c,
+				onFileName: (name) => patch("scanFileName", name)
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "grid gap-3 md:grid-cols-3",
@@ -1728,14 +1724,33 @@ function contractScanName(name) {
 }
 function ContractScanBox({ contract, onFileName }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "flex flex-wrap items-center gap-1",
+		id: "contract-scan",
+		className: "rounded-lg border-2 border-dashed border-accent bg-accent-soft p-4",
 		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "mb-3 flex flex-wrap items-center justify-between gap-2",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "text-sm font-semibold",
+							children: "合同电子版（扫描件）"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+							className: "mt-0.5 text-xs text-muted",
+							children: "就在「保存合同信息」下面。点绿色按钮或把 PDF / 照片拖进来。文件名保存为「项目名称-合同电子版」。没传就是无合同，原因写备注。"
+						})
+					] }),
+					contract.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+						tone: "ok",
+						children: "有合同"
+					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: "无合同" })
+				]
+			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilePick, {
 				kind: "file",
-				inline: true,
 				accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
 				label: contract.scanFileName ? "更换合同电子版" : "上传合同电子版",
-				hint: contract.scanFileName ? `已选：${contract.scanFileName}，可再点或拖入替换` : "先填项目名称。文件保存为 项目名称-合同电子版.pdf",
+				hint: contract.scanFileName ? `已选：${contract.scanFileName}，可再点或拖入替换` : "支持 PDF、照片。请先填项目名称。",
 				onFile: async (file) => {
 					if (!file) return;
 					const base = contractScanName(contract.name);
@@ -1753,13 +1768,20 @@ function ContractScanBox({ contract, onFileName }) {
 					toast.success(`已保存 ${named.name}`);
 				}
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
-				id: contract.id,
-				kind: "contract",
-				fileName: contract.scanFileName,
-				suggest: contractScanName(contract.name) || "合同电子版",
-				taken: [],
-				onDeleted: () => onFileName("")
+			contract.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "mt-2 truncate text-xs text-muted",
+				children: contract.scanFileName
+			}) : null,
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "mt-2",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
+					id: contract.id,
+					kind: "contract",
+					fileName: contract.scanFileName,
+					suggest: contractScanName(contract.name) || "合同电子版",
+					taken: [],
+					onDeleted: () => onFileName("")
+				})
 			})
 		]
 	});
