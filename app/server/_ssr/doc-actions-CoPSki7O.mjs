@@ -14,7 +14,8 @@ var DOC_KIND_LABEL = {
 	receipt: "收款回单",
 	attendance: "考勤影像",
 	contract: "合同扫描件",
-	expense: "报销凭证"
+	expense: "报销凭证",
+	payout: "报销打款"
 };
 function openDb() {
 	return new Promise((resolve, reject) => {

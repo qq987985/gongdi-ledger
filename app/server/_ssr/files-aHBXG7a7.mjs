@@ -11,7 +11,7 @@ function FilesPage() {
 	const [kind, setKind] = (0, import_react.useState)("all");
 	const [scope, setScope] = (0, import_react.useState)("year");
 	const [q, setQ] = (0, import_react.useState)("");
-	const taken = [...(attendanceDocs || []).map((d) => d.fileName), ...(contractEntries || []).map((e) => e.fileName), ...(contracts || []).map((c) => c.scanFileName), ...(expenses || []).map((e) => e.voucherFileName)].filter(Boolean);
+	const taken = [...(attendanceDocs || []).map((d) => d.fileName), ...(contractEntries || []).map((e) => e.fileName), ...(contracts || []).map((c) => c.scanFileName), ...(expenses || []).map((e) => e.voucherFileName), ...(expenses || []).map((e) => e.payoutFileName)].filter(Boolean);
 	const filtered = (0, import_react.useMemo)(() => {
 		const out = [];
 		for (const d of attendanceDocs || []) {
@@ -79,6 +79,23 @@ function FilesPage() {
 				source: "expense"
 			});
 		}
+		const seenP = /* @__PURE__ */ new Set();
+		for (const e of expenses || []) {
+			if (!e.payoutFileName || !e.payoutId) continue;
+			if (scope === "year" && e.year !== year) continue;
+			if (seenP.has(e.payoutId)) continue;
+			seenP.add(e.payoutId);
+			const sib = (expenses || []).filter((x) => x.payoutId === e.payoutId).length;
+			out.push({
+				id: e.payoutId,
+				kind: "payout",
+				fileName: e.payoutFileName,
+				belong: `${e.year} ${e.claimant || e.name}`,
+				extra: [e.payAccount, e.forWhom || e.claimant, sib > 1 ? `${sib}笔一起` : "", e.payoutDate, e.status].filter(Boolean).join(" · "),
+				suggest: `${(e.claimant || "报销").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "")}-${(e.payAccount || "账户").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "")}`,
+				source: "payout"
+			});
+		}
 		return out;
 	}, [
 		attendanceDocs,
@@ -108,7 +125,7 @@ function FilesPage() {
 					children: "影像资料"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-1 text-sm text-muted",
-					children: "文件在 NAS 的 /vol1/1000/docker/attendance/data/photos 下：报量单、发票、收款回单、考勤影像、合同扫描件、报销凭证。可查看、下载、复制、替换、删除。"
+					children: "文件在 NAS 的 /vol1/1000/docker/attendance/data/photos 下：报量单、发票、收款回单、考勤影像、合同扫描件、报销凭证、报销打款。可查看、下载、复制、替换、删除。"
 				})] }),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4",
@@ -150,6 +167,10 @@ function FilesPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
 										value: "expense",
 										children: "报销凭证"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+										value: "payout",
+										children: "报销打款"
 									})
 								]
 							})]
@@ -181,7 +202,7 @@ function FilesPage() {
 								className: "mt-1",
 								value: q,
 								onChange: (e) => setQ(e.target.value),
-								placeholder: "文件名 / 项目 / 月份"
+								placeholder: "文件名 / 项目 / 报销人 / 账户"
 							})]
 						})
 					]
@@ -268,6 +289,13 @@ function FilesPage() {
 														voucherFileName: name
 													});
 												}
+											} else if (r.source === "payout") {
+												for (const e of expenses || []) {
+													if (e.payoutId === r.id) upsertExpense({
+														...e,
+														payoutFileName: name
+													});
+												}
 											} else patchContractEntry(r.id, { fileName: name });
 										},
 										onDeleted: () => {
@@ -284,6 +312,14 @@ function FilesPage() {
 														...e,
 														voucherFileName: "",
 														voucherId: ""
+													});
+												}
+											} else if (r.source === "payout") {
+												for (const e of expenses || []) {
+													if (e.payoutId === r.id) upsertExpense({
+														...e,
+														payoutFileName: "",
+														payoutId: ""
 													});
 												}
 											} else patchContractEntry(r.id, { fileName: "" });

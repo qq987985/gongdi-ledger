@@ -142,7 +142,8 @@ var DOC_CN = {
 	receipt: "收款回单",
 	attendance: "考勤影像",
 	contract: "合同扫描件",
-	expense: "报销凭证"
+	expense: "报销凭证",
+	payout: "报销打款"
 };
 function photosBase() {
 	const shared = process.env.PHOTO_DIR?.trim();
@@ -168,7 +169,8 @@ async function ensureDirs() {
 		"收款回单",
 		"考勤影像",
 		"合同扫描件",
-		"报销凭证"
+		"报销凭证",
+		"报销打款"
 	]) await mkdir(join(photos, sub), { recursive: true });
 	const book = bookRoot();
 	if (book) await mkdir(book, { recursive: true });
@@ -214,6 +216,7 @@ photos/       全部影像
   考勤影像
   合同扫描件
   报销凭证
+  报销打款
 backups/      Excel 备份（含最新「考勤表.xlsx」）
 templates/    导入模板
 
@@ -230,7 +233,8 @@ async function migrateOldDocs() {
 		"receipt",
 		"attendance",
 		"contract",
-		"expense"
+		"expense",
+		"payout"
 	]) {
 		const dest = docsDir(kind);
 		if (!dest) continue;
@@ -551,7 +555,7 @@ async function saveDoc(id, kind, buf, fileName) {
 	const ext = extname(fileName || "").slice(0, 8) || ".bin";
 	const orig = (fileName || `file${ext}`).replace(/[\\/]/g, "");
 	await sweepDocFiles(kind, sid);
-	if (kind === "contract" || kind === "expense") {
+	if (kind === "contract" || kind === "expense" || kind === "payout") {
 		await writeFile(join(dir, orig), buf);
 		await writeFile(join(dir, `${sid}.name.txt`), orig, "utf8");
 	} else await writeFile(join(dir, `${sid}--${orig}`), buf);

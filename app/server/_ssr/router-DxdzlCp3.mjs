@@ -2513,6 +2513,13 @@ var useApp = create()(persist((set, get) => ({
 			payMethod: row.payMethod || "现金",
 			voucherId: row.voucherId || "",
 			voucherFileName: row.voucherFileName || "",
+			claimant: row.claimant || "",
+			forWhom: row.forWhom || "",
+			payAccount: row.payAccount || "",
+			payoutId: row.payoutId || "",
+			payoutFileName: row.payoutFileName || "",
+			payoutDate: row.payoutDate || "",
+			payoutMethod: row.payoutMethod || "",
 			reimbursedAt: row.status === "已报销" ? row.reimbursedAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) : ""
 		};
 		if (i >= 0) {
@@ -4491,7 +4498,7 @@ var Route$11 = createFileRoute("/api/backup")({ server: { handlers: { POST: asyn
 	});
 } } } });
 function kindOf$2(v) {
-	if (v === "report" || v === "invoice" || v === "receipt" || v === "attendance" || v === "contract" || v === "expense") return v;
+	if (v === "report" || v === "invoice" || v === "receipt" || v === "attendance" || v === "contract" || v === "expense" || v === "payout") return v;
 	return null;
 }
 var MIME = {
