@@ -62,16 +62,16 @@ var public_assets_data_default = {
 	},
 	"/assets/contracts-D6qZj01d.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"1b38-T83BlT4og4FC+QkxrWy6pv9PzQE\"",
+		"etag": "\"1ba1-PxMnhPXf6IMqzj+bSf7avNOe5dU\"",
 		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 6968,
+		"size": 7073,
 		"path": "../public/assets/contracts-D6qZj01d.js"
 	},
 	"/assets/contracts-DXZapWfC.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"82f9-75Z2wW4sMdqc4ztTdUuMt95vGdo\"",
+		"etag": "\"87da-SIUPUbJvysBBPl+uzkoVZAfJWKw\"",
 		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 33529,
+		"size": 34778,
 		"path": "../public/assets/contracts-DXZapWfC.js"
 	},
 	"/assets/doc-actions-CmcTaqrK.js": {
@@ -90,9 +90,9 @@ var public_assets_data_default = {
 	},
 	"/assets/excel-BYSb_v_l.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"3d76-+L4Dt513tnD3zYKzVtEt1awmP2U\"",
+		"etag": "\"3f5a-YXmgltvDv4uqWB6rZnk3pwQBJLQ\"",
 		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 15734,
+		"size": 16218,
 		"path": "../public/assets/excel-BYSb_v_l.js"
 	},
 	"/assets/excel-import-CV73N9jL.js": {
@@ -104,9 +104,9 @@ var public_assets_data_default = {
 	},
 	"/assets/file-pick-Sh_I8IQI.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"b9b-EveOnYVAB2IDCgYTUZTfiYN9E/4\"",
+		"etag": "\"d3c-ueJbo+lkXSEaYbBUcIstqVIGASU\"",
 		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 2971,
+		"size": 3388,
 		"path": "../public/assets/file-pick-Sh_I8IQI.js"
 	},
 	"/assets/files-HkeknFqy.js": {
@@ -153,16 +153,16 @@ var public_assets_data_default = {
 	},
 	"/assets/people-CUFknR2e.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"3183-zKBpANRxMWiIEIO7bhVkdARLqy4\"",
+		"etag": "\"371b-bW46rwqr81VyAeil4bwXX4oXqUc\"",
 		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 12675,
+		"size": 14107,
 		"path": "../public/assets/people-CUFknR2e.js"
 	},
 	"/assets/photo-slot-D71m3Ysb.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"2f66-o9yApceWIW2jERDwUB+yJh0eFnQ\"",
+		"etag": "\"306a-bPdKWIlatDbm0SYK157THJTGBcs\"",
 		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 12134,
+		"size": 12394,
 		"path": "../public/assets/photo-slot-D71m3Ysb.js"
 	},
 	"/assets/photos-CjObQgDK.js": {

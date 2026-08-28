@@ -334,6 +334,30 @@ function PeoplePage() {
 		})
 	});
 }
+function confirmEdits(kind, name, creating, before, after, labels) {
+	if (typeof window === "undefined") return true;
+	if (creating) return window.confirm(`确认新增${kind}「${name || "未命名"}」？`);
+	const lines = [];
+	for (const key of Object.keys(labels)) {
+		let a = before?.[key], b = after?.[key];
+		if (a === true) a = "是";
+		else if (a === false) a = "否";
+		if (b === true) b = "是";
+		else if (b === false) b = "否";
+		if (a === "day") a = "按工天";
+		if (b === "day") b = "按工天";
+		if (a === "month") a = "按月";
+		if (b === "month") b = "按月";
+		const as = a == null || a === "" ? "（空）" : String(a);
+		const bs = b == null || b === "" ? "（空）" : String(b);
+		if (as === bs) continue;
+		lines.push(`${labels[key]}：${as} → ${bs}`);
+	}
+	if (!lines.length) return window.confirm(`没有改动。仍要保存${kind}「${name}」？`);
+	const show = lines.slice(0, 8);
+	const extra = lines.length > 8 ? `\n…另有 ${lines.length - 8} 项` : "";
+	return window.confirm(`确认保存${kind}「${name}」？\n\n改了 ${lines.length} 项：\n${show.join("\n")}${extra}`);
+}
 function PersonEditor({ person, creating, refresh = 0, onClose, onSave, onChanged }) {
 	const [form, setForm] = (0, import_react.useState)(() => ({
 		...person,
@@ -373,26 +397,57 @@ function PersonEditor({ person, creating, refresh = 0, onClose, onSave, onChange
 			].filter(Boolean).join("、")}`);
 			return;
 		}
-		onSave({
+		const next = {
 			...form,
 			idValidFrom: normalizeIdDate(form.idValidFrom),
 			idValidTo: normalizeIdDate(form.idValidTo, true)
-		});
+		};
+		if (!confirmEdits("人员", next.name, creating, person, next, {
+			name: "姓名",
+			team: "班组",
+			payType: "计薪",
+			dailyWage: "日工资",
+			monthWage: "月工资",
+			otRule: "加班",
+			idCard: "身份证号",
+			idIssuer: "签发机关",
+			idValidFrom: "有效期起",
+			idValidTo: "有效期止",
+			phone: "电话",
+			personNo: "IC卡号",
+			bank: "开户行",
+			cardNo: "银行卡号",
+			address: "户籍地址",
+			remark: "备注"
+		})) return;
+		onSave(next);
 	}
+	(0, import_react.useEffect)(() => {
+		const onKey = (e) => {
+			if (e.key === "Escape") onClose();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [onClose]);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 		className: "fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 md:items-center md:p-6",
+		onClick: onClose,
 		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "max-h-screen w-full max-w-3xl overflow-y-auto rounded-t-xl bg-surface p-5 shadow-panel md:rounded-xl",
+			onClick: (e) => e.stopPropagation(),
 			children: [
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex items-center justify-between",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 						className: "font-display text-lg font-semibold",
 						children: creating ? "新增人员" : form.name
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-						variant: "ghost",
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "inline-flex size-10 items-center justify-center rounded-sm text-2xl leading-none text-muted hover:bg-accent-soft hover:text-ink",
+						"aria-label": "关闭",
+						title: "关闭（Esc）",
 						onClick: onClose,
-						children: "关闭"
+						children: "×"
 					})]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {

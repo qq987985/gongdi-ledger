@@ -571,9 +571,33 @@ function nextYear(years) {
 }
 var CONTRACT_STATUSES = [
 	"在建",
-	"结算",
-	"审计"
+	"完工",
+	"总版图",
+	"初审",
+	"终审",
+	"分包结算",
+	"结算完成",
+	"结算已开票",
+	"质保期",
+	"退质保金",
+	"完成"
 ];
+function normalizeContractStatus(raw) {
+	const s = String(raw || "").trim();
+	if (CONTRACT_STATUSES.includes(s)) return s;
+	if (/退质保/.test(s)) return "退质保金";
+	if (/质保/.test(s)) return "质保期";
+	if (/结算已开票|已开票/.test(s)) return "结算已开票";
+	if (/结算完成/.test(s)) return "结算完成";
+	if (/分包结算/.test(s)) return "分包结算";
+	if (/总版图/.test(s)) return "总版图";
+	if (/终审|审计/.test(s)) return "终审";
+	if (/初审/.test(s)) return "初审";
+	if (/完工/.test(s)) return "完工";
+	if (/完成/.test(s)) return "完成";
+	if (/结算/.test(s)) return "分包结算";
+	return "在建";
+}
 function emptyContract(year) {
 	return {
 		id: uid(),
@@ -1515,7 +1539,7 @@ function parseContractWorkbook(buf) {
 					"经营人员",
 					"项目部\n经营人员"
 				]),
-				status: /审计/.test(pick(row, ["项目进度", "进度"])) ? "审计" : /结算/.test(pick(row, ["项目进度", "进度"])) ? "结算" : "在建",
+				status: normalizeContractStatus(pick(row, ["项目进度", "进度"])),
 				prelimAmount: numPick(row, ["初审金额"]),
 				settleReceivable: numPick(row, ["结算应收金额"]),
 				remark: pick(row, ["备注"]),
@@ -1682,7 +1706,7 @@ function contractTemplateWb() {
 		"合同管理是独立模块。月报量、开票、收款请在第二张表按笔填写。",
 		"如果只填第一张表里的月报量/开票/收款合计，导入时会各生成一笔「导入合计」，之后可再拆明细。",
 		"「是否有押金」已改为保证金：填 有/无，金额填在保证金金额。",
-		"项目进度只能是：在建 / 结算 / 审计。",
+		"项目进度只能是：在建 / 完工 / 总版图 / 初审 / 终审 / 分包结算 / 结算完成 / 结算已开票 / 质保期 / 退质保金 / 完成。旧表里的「结算」当作分包结算，「审计」当作终审。",
 		"报量含税列填「含税」或「不含税」。每个合同可以不同。开票、收款仍按实际金额。",
 		"两条线：① 应收 = 含税报量 × 付款比例；合同未付 = 应收 − 已付。② 剩余款 = 开票含税 − 已付。已付 = 代付农民工 + 到分包公司。",
 		"收款请拆成两笔：去向填「到分包公司」或「总包代付农民工」，日期可以不同。",

@@ -56,6 +56,9 @@ function ContractStatementSheets({ items }) {
 		className: "print-only space-y-8 text-black",
 		children: items.map(({ contract: c, entries }) => {
 			const roll = contractRollup(c, entries);
+			const reportInclMode = c.reportTaxMode === "incl";
+			const reportLabel = reportInclMode ? "含税金额" : "不含税金额";
+			const reportVal = reportInclMode ? roll.reportIncl : roll.reportExcl;
 			const reports = entries.filter((e) => e.kind === "report").slice().sort(sortByDate);
 			const invoices = entries.filter((e) => e.kind === "invoice").slice().sort(sortByDate);
 			const receipts = entries.filter((e) => e.kind === "receipt").slice().sort(sortByDate);
@@ -103,10 +106,6 @@ function ContractStatementSheets({ items }) {
 										value: c.subcontractor
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Row, {
-										label: "经营人员：",
-										value: c.manager
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Row, {
 										label: "合同金额：",
 										value: c.contractAmount ? `¥${money(c.contractAmount)}` : ""
 									}),
@@ -139,9 +138,9 @@ function ContractStatementSheets({ items }) {
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
 								className: "mt-3 w-full border-collapse text-center text-xs",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: [
-									"报量含税",
+									reportLabel,
 									"应收（含税报量×比例）",
-									"开票含税",
+									"开票金额",
 									"已付",
 									"代付农民工",
 									"到分包公司",
@@ -151,7 +150,7 @@ function ContractStatementSheets({ items }) {
 									className: "border border-black px-1 py-1 font-medium",
 									children: h
 								}, h)) }) }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: [
-									money(roll.reportIncl),
+									money(reportVal),
 									money(roll.payable),
 									money(roll.invoice),
 									money(roll.receipt),
@@ -170,9 +169,7 @@ function ContractStatementSheets({ items }) {
 						title: "报量记录",
 						heads: [
 							"日期",
-							"录入金额",
-							"含税",
-							"不含税",
+							reportLabel,
 							"期次",
 							"影像",
 							"备注"
@@ -182,18 +179,14 @@ function ContractStatementSheets({ items }) {
 							const tax = splitTax(e.amount, c.taxRate, c.reportTaxMode || "excl");
 							return [
 								e.date || "—",
-								money(e.amount),
-								money(tax.incl),
-								money(tax.excl),
+								money(reportInclMode ? tax.incl : tax.excl),
 								e.no || "",
 								e.fileName || "",
 								e.remark || ""
 							];
 						}).concat(reports.length ? [[
 							"合计",
-							money(roll.report),
-							money(roll.reportIncl),
-							money(roll.reportExcl),
+							money(reportVal),
 							"",
 							"",
 							""
@@ -230,8 +223,7 @@ function ContractStatementSheets({ items }) {
 						title: "开票记录",
 						heads: [
 							"日期",
-							"含税金额",
-							"不含税金额",
+							"开票金额",
 							"税率",
 							"发票号",
 							"影像",
@@ -241,7 +233,6 @@ function ContractStatementSheets({ items }) {
 						rows: invoices.map((e) => [
 							e.date || "—",
 							money(e.amount),
-							money(e.amountExcl),
 							e.taxRate ? `${e.taxRate}%` : "",
 							e.no || "",
 							e.fileName || "",
@@ -249,7 +240,6 @@ function ContractStatementSheets({ items }) {
 						]).concat(invoices.length ? [[
 							"合计",
 							money(roll.invoice),
-							money(roll.invoiceExcl),
 							"",
 							"",
 							"",
@@ -377,7 +367,7 @@ function ContractsPage() {
 						className: "mt-1 max-w-2xl text-sm text-muted",
 						children: [
 							"点表格里的合同名称，页面滚到下方，",
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "最上面上传合同扫描件" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "保存合同信息旁边上传扫描件" }),
 							"。有文件就是有合同，没传就是无合同；原因写在备注里。报量可选",
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "含税" }),
 							"或",
@@ -544,7 +534,7 @@ function ContractsPage() {
 							value: totals.payable
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Mini, {
-							label: "开票含税",
+							label: "开票金额",
 							value: totals.invoice
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Mini, {
@@ -816,8 +806,8 @@ function ContractsPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-2",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
-											tone: c.status === "在建" ? "ok" : c.status === "审计" ? "warn" : void 0,
-											children: c.status
+											tone: ["在建", "完工", "结算完成", "结算已开票", "完成"].includes(c.status) ? "ok" : ["初审", "终审", "分包结算", "质保期", "退质保金"].includes(c.status) ? "warn" : void 0,
+											children: CONTRACT_STATUSES.includes(c.status) ? c.status : c.status === "审计" ? "终审" : c.status === "结算" ? "分包结算" : c.status
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -869,6 +859,30 @@ function Mini({ label, hint, value }) {
 		]
 	});
 }
+function confirmEdits(kind, name, creating, before, after, labels) {
+	if (typeof window === "undefined") return true;
+	if (creating) return window.confirm(`确认新增${kind}「${name || "未命名"}」？`);
+	const lines = [];
+	for (const key of Object.keys(labels)) {
+		let a = before?.[key], b = after?.[key];
+		if (a === true) a = "是";
+		else if (a === false) a = "否";
+		if (b === true) b = "是";
+		else if (b === false) b = "否";
+		if (a === "incl") a = "含税";
+		if (b === "incl") b = "含税";
+		if (a === "excl") a = "不含税";
+		if (b === "excl") b = "不含税";
+		const as = a == null || a === "" ? "（空）" : String(a);
+		const bs = b == null || b === "" ? "（空）" : String(b);
+		if (as === bs) continue;
+		lines.push(`${labels[key]}：${as} → ${bs}`);
+	}
+	if (!lines.length) return window.confirm(`没有改动。仍要保存${kind}「${name}」？`);
+	const show = lines.slice(0, 8);
+	const extra = lines.length > 8 ? `\n…另有 ${lines.length - 8} 项` : "";
+	return window.confirm(`确认保存${kind}「${name}」？\n\n改了 ${lines.length} 项：\n${show.join("\n")}${extra}`);
+}
 function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry, onRemoveEntries }) {
 	const [c, setC] = (0, import_react.useState)(draft);
 	const roll = contractRollup(c, entries);
@@ -888,8 +902,16 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 					className: "font-semibold",
 					children: creating ? "新增合同" : c.name || "编辑合同"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex gap-2",
+					className: "flex flex-wrap items-center gap-2",
 					children: [
+						c.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+							tone: "ok",
+							children: "有合同"
+						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: "无合同" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractScanBox, {
+							contract: c,
+							onFileName: (name) => patch("scanFileName", name)
+						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 							variant: "outline",
 							type: "button",
@@ -909,6 +931,27 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 									toast.error("项目名称必填");
 									return;
 								}
+								if (!confirmEdits("合同", c.name, creating, draft, c, {
+									year: "年份",
+									code: "项目号",
+									name: "项目名称",
+									contractor: "总包",
+									subcontractor: "分包",
+									contractAmount: "合同金额",
+									taxRate: "税率",
+									reportTaxMode: "报量计税",
+									payRatio: "付款比例",
+									warrantyStart: "质保开始",
+									warrantyEnd: "质保结束",
+									hasDeposit: "保证金",
+									depositAmount: "保证金金额",
+									manager: "经营人员",
+									status: "项目进度",
+									prelimAmount: "初审金额",
+									settleReceivable: "结算金额",
+									remark: "备注",
+									scanFileName: "合同电子版"
+								})) return;
 								onSave({
 									...c,
 									id: c.id || uid()
@@ -919,36 +962,9 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 					]
 				})]
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "rounded-lg border-2 border-dashed border-accent bg-accent-soft p-4",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-wrap items-center justify-between gap-2",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "font-semibold",
-								children: "合同扫描件"
-							}),
-							c.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
-								tone: "ok",
-								children: "有合同"
-							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
-								children: "无合同"
-							})
-						]
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-						className: "mt-1 text-xs text-muted",
-						children: "点绿色按钮或把 PDF / 照片拖进来。文件名是「项目名称-合同电子版」，例如 某某住宅-合同电子版.pdf，存到 data/photos/合同扫描件。没传就是无合同，原因写在下面备注里。"
-					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "mt-3",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractScanBox, {
-							contract: c,
-							onFileName: (name) => patch("scanFileName", name)
-						})
-					})
-				]
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "text-xs text-muted",
+				children: "扫描件按「项目名称-合同电子版」保存，例如 某某住宅-合同电子版.pdf。没传就是无合同，原因写在备注里。"
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "grid gap-3 md:grid-cols-3",
@@ -993,7 +1009,7 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 						label: "项目进度",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
 							className: "field-select w-full",
-							value: c.status,
+							value: CONTRACT_STATUSES.includes(c.status) ? c.status : c.status === "审计" ? "终审" : c.status === "结算" ? "分包结算" : "在建",
 							onChange: (e) => patch("status", e.target.value),
 							children: CONTRACT_STATUSES.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: s }, s))
 						})
@@ -1147,11 +1163,11 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 				className: "text-xs text-muted",
 				children: [
-					"含税报量 ¥",
-					money(roll.reportIncl),
+					c.reportTaxMode === "incl" ? "含税金额 ¥" : "不含税金额 ¥",
+					money(c.reportTaxMode === "incl" ? roll.reportIncl : roll.reportExcl),
 					" · 应收 ¥",
 					money(roll.payable),
-					" · 开票含税 ¥",
+					" · 开票金额 ¥",
 					money(roll.invoice),
 					" · 已付 ¥",
 					money(roll.receipt),
@@ -1284,7 +1300,7 @@ function ReportBook({ contract, entries, disabled, onAdd, onRemove }) {
 						value: amount,
 						onChange: (e) => setAmount(Number(e.target.value) || 0),
 						disabled,
-						placeholder: "报量金额"
+						placeholder: contract.reportTaxMode === "incl" ? "含税金额" : "不含税金额"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
 						value: no,
@@ -1341,7 +1357,7 @@ function ReportBook({ contract, entries, disabled, onAdd, onRemove }) {
 						className: "tabular-nums",
 						children: [
 							e.date || "—",
-							" · ¥",
+							contract.reportTaxMode === "incl" ? " · 含税金额 ¥" : " · 不含税金额 ¥",
 							money(e.amount)
 						]
 					}),
@@ -1395,7 +1411,7 @@ function InvoiceBook({ contract, entries, disabled, onAdd, onRemove }) {
 					className: "text-xs tabular-nums text-muted",
 					children: [
 						entries.length,
-						" 张 · 含税 ¥",
+						" 张 · 开票金额 ¥",
 						money(total)
 					]
 				})]
@@ -1495,7 +1511,7 @@ function InvoiceBook({ contract, entries, disabled, onAdd, onRemove }) {
 						className: "tabular-nums",
 						children: [
 							e.date || "—",
-							" · 含税 ¥",
+							" · 开票金额 ¥",
 							money(e.amount)
 						]
 					}),
@@ -1712,13 +1728,14 @@ function contractScanName(name) {
 }
 function ContractScanBox({ contract, onFileName }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-2",
+		className: "flex flex-wrap items-center gap-1",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilePick, {
 				kind: "file",
+				inline: true,
 				accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
-				label: "点这里上传合同扫描件",
-				hint: contract.scanFileName ? `已选：${contract.scanFileName}，可再点或拖入替换` : "先填项目名称。文件保存为 项目名称-合同电子版，如 某某住宅-合同电子版.pdf",
+				label: contract.scanFileName ? "更换合同电子版" : "上传合同电子版",
+				hint: contract.scanFileName ? `已选：${contract.scanFileName}，可再点或拖入替换` : "先填项目名称。文件保存为 项目名称-合同电子版.pdf",
 				onFile: async (file) => {
 					if (!file) return;
 					const base = contractScanName(contract.name);
@@ -1742,7 +1759,6 @@ function ContractScanBox({ contract, onFileName }) {
 				fileName: contract.scanFileName,
 				suggest: contractScanName(contract.name) || "合同电子版",
 				taken: [],
-				onReplaced: onFileName,
 				onDeleted: () => onFileName("")
 			})
 		]

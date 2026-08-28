@@ -71,7 +71,15 @@ function IdCardSlot({ name, compact, onChanged }) {
 			setBusy(false);
 		}
 	}
+	async function copyFace(which) {
+		const pic = which === "back" ? back : front;
+		if (!pic) return;
+		if (await copyPhoto(pic, `${name}-身份证-${which === "back" ? "反面" : "正面"}.png`) === "clipboard") toast.success("图片已复制，可粘贴到微信 / WPS");
+		else toast.message("当前环境不能写剪贴板，已改为下载，从下载里打开再复制");
+	}
 	const shown = face === "back" && back ? back : front;
+	const btnFill = "inline-flex h-10 flex-1 items-center justify-center whitespace-nowrap rounded-sm bg-accent px-2 text-sm font-medium text-accent-fg";
+	const btnGhost = "inline-flex h-9 items-center justify-center gap-1 whitespace-nowrap rounded-sm px-1 text-xs";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "space-y-2",
 		children: [
@@ -145,17 +153,17 @@ function IdCardSlot({ name, compact, onChanged }) {
 				}
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-wrap gap-1",
+				className: "flex gap-1",
 				children: [
 					front ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
-						className: "inline-flex h-9 flex-1 items-center justify-center rounded-sm bg-accent px-2 text-xs font-medium text-accent-fg",
+						className: btnFill,
 						onClick: () => frontRef.current?.click(),
 						children: "更换正面"
 					}) : null,
 					back ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
-						className: "inline-flex h-9 flex-1 items-center justify-center rounded-sm border border-line px-2 text-xs",
+						className: btnFill,
 						onClick: () => {
 							setFace("back");
 							setOpen(true);
@@ -163,19 +171,56 @@ function IdCardSlot({ name, compact, onChanged }) {
 						children: "查看反面"
 					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
-						className: "inline-flex h-9 flex-1 items-center justify-center rounded-sm border border-dashed border-line px-2 text-xs",
+						className: btnFill,
 						disabled: !name || busy,
 						onClick: () => backRef.current?.click(),
 						children: "上传反面"
 					}),
 					back ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						type: "button",
-						className: "inline-flex h-9 items-center justify-center rounded-sm border border-line px-2 text-xs",
+						className: btnFill,
 						onClick: () => backRef.current?.click(),
 						children: "更换反面"
 					}) : null
 				]
 			}),
+			front ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "grid grid-cols-4 gap-1",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						className: btnGhost,
+						onClick: () => {
+							setFace("front");
+							setOpen(true);
+						},
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Expand, { className: "size-3.5 shrink-0" }), "放大"]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						className: btnGhost,
+						onClick: () => void copyFace("front"),
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Copy, { className: "size-3.5 shrink-0" }), "复制"]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						className: btnGhost,
+						onClick: () => downloadPhoto(name, "id", front),
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "size-3.5 shrink-0" }), "下载"]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: `${btnGhost} text-danger`,
+						onClick: async () => {
+							await deletePhoto(name, "id");
+							setFront(null);
+							setOpen(false);
+							onChanged?.();
+						},
+						children: "清除"
+					})
+				]
+			}) : null,
 			open && shown ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoLightbox, {
 				src: shown,
 				title: `${name} · 身份证${face === "back" ? "反面" : "正面"}`,
@@ -312,7 +357,7 @@ function PhotoSlotPlain({ name, kind, compact, onChanged }) {
 					}
 				}), src ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",
-					className: "inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-sm bg-accent text-sm font-medium text-accent-fg",
+					className: "inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-sm bg-accent px-2 text-sm font-medium text-accent-fg",
 					disabled: !name || busy,
 					onClick: () => inputRef.current?.click(),
 					children: "更换照片"

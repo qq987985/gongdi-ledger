@@ -50,7 +50,7 @@ function DropSurface({ accept = "", multiple, disabled, className, activeClassNa
 		children
 	});
 }
-function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, compact, onFile, onFiles }) {
+function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, compact, inline, onFile, onFiles }) {
 	const ref = (0, import_react.useRef)(null);
 	const [name, setName] = (0, import_react.useState)("");
 	const Icon = kind === "image" ? ImagePlus : kind === "file" ? Paperclip : FileSpreadsheet;
@@ -61,6 +61,31 @@ function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, com
 		onFile?.(files[0]);
 		if (ref.current) ref.current.value = "";
 	}
+	const btn = /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+		type: "button",
+		disabled,
+		title: hint,
+		className: "inline-flex h-10 items-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50",
+		onClick: () => ref.current?.click(),
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "size-4" }), label]
+	});
+	const input = /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+		ref,
+		type: "file",
+		accept,
+		multiple,
+		disabled,
+		className: "sr-only",
+		onChange: (e) => take(pickFiles(e.target.files, accept, multiple))
+	});
+	if (inline) return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(DropSurface, {
+		accept,
+		multiple,
+		disabled,
+		onFiles: take,
+		className: cn("inline-flex", disabled && "opacity-50"),
+		children: [input, btn]
+	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(DropSurface, {
 		accept,
 		multiple,
@@ -68,15 +93,7 @@ function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, com
 		onFiles: take,
 		className: cn("rounded-lg border border-dashed transition-colors duration-150", compact ? "px-3 py-2" : "px-4 py-4", disabled ? "opacity-50" : "border-line-strong bg-bg-elevated"),
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-				ref,
-				type: "file",
-				accept,
-				multiple,
-				disabled,
-				className: "sr-only",
-				onChange: (e) => take(pickFiles(e.target.files, accept, multiple))
-			}),
+			input,
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 				type: "button",
 				disabled,
