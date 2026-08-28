@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.1.6**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.2.0**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -24,6 +24,13 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.2.0
+
+- **报销单**（测试）：侧栏进入，现金不用传凭证，其他支付要传
+- 凭证按 **项目名称-金额** 存在 `data/photos/报销凭证/`，几笔可共用一张
+- 未报销可勾选、按日期打印。**打印报销单** 在「影像资料 打印 / 不打印」前面
+- 按钮和合同页同一套：绿色「上传报销凭证」、保存报销信息、打印报销单
 
 ### 1.1.6
 
@@ -82,7 +89,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 ./一键部署.sh
 ```
 
-打开 `http://NAS的IP:8501`，左下角应显示 **1.1.6**。
+打开 `http://NAS的IP:8501`，左下角应显示 **1.2.0**。
 
 拉 GitHub 镜像（Actions 全绿，并且 Packages 里 `gongdi-ledger` 已设 Public）：
 
@@ -93,7 +100,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 国内镜像：`ghcr.1ms.run/qq987985/gongdi-ledger:latest`  
 compose **只挂 data**，不要再挂 `VERSION.txt`。
 
-本机构建镜像名：`gongdi-ledger:1.1.6`，端口 `8501:8080`。
+本机构建镜像名：`gongdi-ledger:1.2.0`，端口 `8501:8080`。
 
 ---
 
