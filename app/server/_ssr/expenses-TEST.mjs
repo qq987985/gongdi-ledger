@@ -727,6 +727,7 @@ function ExpensesPage() {
 												"aria-label": "全选报销"
 											})
 										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "操作" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "序号" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "项目" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "购买时间" }),
@@ -737,8 +738,7 @@ function ExpensesPage() {
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "状态" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "购买凭证" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "打款凭证" }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "备注" }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3" })
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "备注" })
 									] })
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [
@@ -765,6 +765,20 @@ function ExpensesPage() {
 														"aria-label": `选择 ${e.name}`
 													})
 												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+													className: "p-2",
+													onClick: (ev) => ev.stopPropagation(),
+													children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+														variant: "outline",
+														size: "sm",
+														type: "button",
+														onClick: () => {
+															setCreating(false);
+															setEditing(e);
+														},
+														children: "更改"
+													})
+												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2 tabular-nums text-muted", children: i + 1 }),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2 font-medium", children: e.name }),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2", children: e.period || e.date }),
@@ -787,21 +801,7 @@ function ExpensesPage() {
 													className: "p-2 text-xs",
 													children: e.payoutFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [e.payoutFileName, sib > 1 ? ` ·${sib}笔` : ""] }) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-warn", children: "缺打款" }) : "—"
 												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "max-w-40 truncate p-2 text-muted", children: e.remark }),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-													className: "p-2",
-													onClick: (ev) => ev.stopPropagation(),
-													children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-														variant: "outline",
-														size: "sm",
-														type: "button",
-														onClick: () => {
-															setCreating(false);
-															setEditing(e);
-														},
-														children: "更改"
-													})
-												})
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "max-w-40 truncate p-2 text-muted", children: e.remark })
 											]
 										}, e.id);
 									})
@@ -812,7 +812,7 @@ function ExpensesPage() {
 										children: [
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 												className: "p-2",
-												colSpan: 4,
+												colSpan: 5,
 												children: `合计（${sumTip}）`
 											}),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -821,7 +821,7 @@ function ExpensesPage() {
 											}),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 												className: "p-2 text-xs font-normal text-muted",
-												colSpan: 8,
+												colSpan: 7,
 												children: `未报销 ¥${money(totals.open)}　已报销 ¥${money(totals.done)}`
 											})
 										]

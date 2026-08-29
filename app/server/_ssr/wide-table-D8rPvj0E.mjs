@@ -108,7 +108,7 @@ function WideTable({ id, children, className }) {
 		}),
 		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "mb-1 text-[11px] text-muted md:hidden",
-			children: "宽表请左右滑动查看。点一行可打开详情。"
+			children: "宽表请左右滑动。「更改」在勾选框右边。点一行是勾选。"
 		}),
 		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 			ref,

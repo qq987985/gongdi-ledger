@@ -572,6 +572,10 @@ function ContractsPage() {
 									})
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
+									children: "操作"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "sticky left-0 z-10 bg-surface p-3",
 									children: "序号"
 								}),
@@ -663,8 +667,7 @@ function ContractsPage() {
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
 									children: "备注"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3" })
+								})
 							] })
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [list.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 							colSpan: 25,
@@ -686,6 +689,20 @@ function ContractsPage() {
 											checked: selected.includes(c.id),
 											onChange: (e) => setSelected((s) => toggleSel(s, c.id, e.target.checked)),
 											"aria-label": `选择 ${c.name}`
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "p-2",
+										onClick: (e) => e.stopPropagation(),
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+											variant: "outline",
+											size: "sm",
+											type: "button",
+											onClick: () => {
+												setCreating(false);
+												setEditing(c);
+											},
+											children: "更改"
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -788,20 +805,6 @@ function ContractsPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "max-w-40 truncate p-2 text-muted",
 										children: c.remark
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-2",
-										onClick: (e) => e.stopPropagation(),
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-											variant: "outline",
-											size: "sm",
-											type: "button",
-											onClick: () => {
-												setCreating(false);
-												setEditing(c);
-											},
-											children: "更改"
-										})
 									})
 								]
 							}, c.id);

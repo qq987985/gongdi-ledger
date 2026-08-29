@@ -70,9 +70,9 @@ var public_assets_data_default = {
 	},
 	"/assets/contracts-DXZapWfC.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"8a11-a+XNNxfZCLkYS2qP1LvG/N9Jpys\"",
-		"mtime": "2026-08-29T07:35:15.000Z",
-		"size": 35345,
+		"etag": "\"8a23-3OpHkdamkFJHinYsZzi34md4SFk\"",
+		"mtime": "2026-08-29T07:53:34.000Z",
+		"size": 35363,
 		"path": "../public/assets/contracts-DXZapWfC.js"
 	},
 
@@ -108,9 +108,9 @@ var public_assets_data_default = {
 
 	"/assets/expenses-TEST.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"d2f6-xNeNgTQ110IOu3rXEFYizFBdWbQ\"",
-		"mtime": "2026-08-29T07:35:15.000Z",
-		"size": 54006,
+		"etag": "\"d30a-dJiQzLnS3L763/ikb8jDvB1Q4ZM\"",
+		"mtime": "2026-08-29T07:53:34.000Z",
+		"size": 54026,
 		"path": "../public/assets/expenses-TEST.js"
 	},
 
@@ -161,17 +161,17 @@ var public_assets_data_default = {
 	},
 	"/assets/payments-BBP-7-1d.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"6caa-aHGf5e9C46mef+pnOPwdoeAh5pw\"",
-		"mtime": "2026-08-29T07:35:15.000Z",
-		"size": 27818,
+		"etag": "\"60cc-OT8AYctwWn4KJ8xaCTxz8nnKbBI\"",
+		"mtime": "2026-08-29T07:55:30.000Z",
+		"size": 24780,
 		"path": "../public/assets/payments-BBP-7-1d.js"
 	},
 
 	"/assets/people-CUFknR2e.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"385e-Xwkpx+XRqJKX5syO++0SYwIbwxE\"",
-		"mtime": "2026-08-29T07:35:15.000Z",
-		"size": 14430,
+		"etag": "\"389c-5l4ibfVE9I4JFxgRuxEYl0rMaIg\"",
+		"mtime": "2026-08-29T07:53:34.000Z",
+		"size": 14492,
 		"path": "../public/assets/people-CUFknR2e.js"
 	},
 
@@ -242,11 +242,12 @@ var public_assets_data_default = {
 	},
 	"/assets/wide-table-BtpzsvMP.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"a4e-ubuZ4E0y0+fELOR9GDFNtF9gvTk\"",
-		"mtime": "2026-08-28T05:07:44.000Z",
-		"size": 2638,
+		"etag": "\"a63-zZcEE0OeZv58+YyNDucZJ6WJsJ4\"",
+		"mtime": "2026-08-29T07:53:34.000Z",
+		"size": 2659,
 		"path": "../public/assets/wide-table-BtpzsvMP.js"
 	},
+
 	"/assets/xlsx-Cul4fuIT.js": {
 		"type": "text/javascript; charset=utf-8",
 		"etag": "\"665ce-rY4UFCvbVI5v1Xhp6rvMB35BhvU\"",

@@ -169,6 +169,10 @@ function PeoplePage() {
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
+									children: "操作"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
 									children: "序号"
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("th", {
@@ -215,7 +219,7 @@ function PeoplePage() {
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3" })
 							] })
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [filtered.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 11,
+							colSpan: 12,
 							className: "p-8 text-center text-sm text-muted",
 							children: "没有匹配的人员"
 						}) }) : null, filtered.map((p, i) => {
@@ -233,6 +237,17 @@ function PeoplePage() {
 											className: "size-4",
 											checked: selected.includes(p.id),
 											onChange: (e) => setSelected((s) => toggleSel(s, p.id, e.target.checked))
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "p-3",
+										onClick: (e) => e.stopPropagation(),
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+											variant: "outline",
+											size: "sm",
+											type: "button",
+											onClick: () => setEditing(p),
+											children: "更改"
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -296,17 +311,7 @@ function PeoplePage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-3",
 										onClick: (e) => e.stopPropagation(),
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex flex-wrap gap-1",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-													variant: "outline",
-													size: "sm",
-													type: "button",
-													onClick: () => setEditing(p),
-													children: "更改"
-												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 													variant: "danger",
 													size: "sm",
 													type: "button",
@@ -318,8 +323,6 @@ function PeoplePage() {
 													},
 													children: "删除"
 												})
-											]
-										})
 									})
 								]
 							}, p.id);
