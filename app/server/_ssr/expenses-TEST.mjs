@@ -12,19 +12,6 @@ var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 
 var PAY_METHODS = ["现金", "转账", "微信", "支付宝", "对公", "其他"];
-var SAMPLE = [
-	["房租", "2026/3月-12月", "2026-03-01", "月", 1000, 10, 1e4, ""],
-	["打印机", "2026/4/9", "2026-04-09", "台", 1, 2649, 2649, ""],
-	["水果", "2026/5/12", "2026-05-12", "项", 1, 336.95, 336.95, ""],
-	["阀门检测费用", "2026/5/18", "2026-05-18", "项", 1, 3070, 3070, ""],
-	["阀门合格证", "2026/5/18", "2026-05-18", "项", 1, 260, 260, ""],
-	["水果", "2026/5/22", "2026-05-22", "项", 1, 338.98, 338.98, ""],
-	["水果", "2026/5/23", "2026-05-23", "项", 1, 413.47, 413.47, ""],
-	["圣女果", "2026/6/15", "2026-06-15", "项", 1, 509, 509, ""],
-	["冰淇淋", "2026/8/3", "2026-08-03", "项", 1, 614, 614, ""],
-	["张钰", "2026/8/2", "2026-08-02", "项", 1, 1e3, 1e3, ""],
-	["标书（精整修磨）", "2026/8/3", "2026-08-03", "项", 4, 1e3, 4e3, ""]
-];
 
 function safeBase(s) {
 	return (s || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "").trim() || "未命名";
@@ -219,25 +206,6 @@ function ExpensesPage() {
 		}
 		toast.success("已删除报销");
 	}
-	function loadSample() {
-		if (!confirm("载入 11 笔示例（房租、打印机、水果等），方便试打印。不会删你已有的记录。")) return;
-		SAMPLE.forEach((row) => {
-			upsertExpense({
-				...emptyExpense(year),
-				name: row[0],
-				period: row[1],
-				date: row[2],
-				unit: row[3],
-				qty: row[4],
-				price: row[5],
-				amount: row[6],
-				remark: row[7],
-				payMethod: "现金",
-				status: "未报销"
-			});
-		});
-		toast.success("已加入 11 笔示例，可勾选后点打印或一起报销");
-	}
 	function doPrint() {
 		if (!printRows.length) {
 			toast.error("当前没有可打印的报销。可勾选几笔，或把打印范围改成「未报销」。");
@@ -349,12 +317,6 @@ function ExpensesPage() {
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "flex flex-wrap gap-2",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-										variant: "outline",
-										type: "button",
-										onClick: loadSample,
-										children: "载入示例 11 笔"
-									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
 										type: "button",
 										onClick: () => {
@@ -657,7 +619,7 @@ function ExpensesPage() {
 									shown.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										colSpan: 12,
 										className: "p-6 text-muted",
-										children: "还没有报销。点右上角新增，或先「载入示例 11 笔」。勾几笔可一起报销、记打款。"
+										children: "还没有报销。点右上角「新增报销」。勾几笔可一起报销、记打款。"
 									}) }) : null,
 									shown.map((e, i) => {
 										const on = editing?.id === e.id;
@@ -696,7 +658,7 @@ function ExpensesPage() {
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 													className: "p-2 text-xs",
-													children: e.payMethod === "现金" ? "现金无需" : e.voucherFileName || /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-warn", children: "缺" })
+													children: e.voucherFileName || (e.payMethod === "现金" ? "—" : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-warn", children: "缺" }))
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 													className: "p-2 text-xs",
@@ -975,10 +937,10 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "text-sm font-semibold", children: "购买凭证" }),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "mt-0.5 text-xs text-muted",
-									children: c.payMethod === "现金" ? "现金购买可以不传。" : "勾选多笔再上传，会共用这一张。文件名「项目名称-金额」。"
+									children: "现金也可以传，不强制。勾选多笔再上传会共用这一张。文件名「项目名称-金额」。"
 								})
 							] }),
-							c.payMethod === "现金" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: "现金无需凭证" }) : c.voucherFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "ok", children: "已有凭证" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "warn", children: "缺凭证" })
+							c.voucherFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "ok", children: "已有凭证" }) : c.payMethod === "现金" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: "未传（选填）" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "warn", children: "缺凭证" })
 						]
 					}),
 					existingVouchers.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
@@ -1168,7 +1130,7 @@ function ExpenseSheets({ rows, withImages }) {
 									e.forWhom || e.claimant || "—",
 									e.payAccount || "—",
 									e.remark || "",
-									e.payMethod === "现金" ? "现金" : e.voucherFileName || "—"
+									e.voucherFileName || (e.payMethod === "现金" ? "现金" : "—")
 								].map((v, k) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 									className: "border border-black px-1 py-1",
 									children: v

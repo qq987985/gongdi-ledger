@@ -104,9 +104,9 @@ var public_assets_data_default = {
 	},
 	"/assets/expenses-TEST.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"c2b6-BnyRR/gvN0wy4h7Glcm675p3xYY\"",
-		"mtime": "2026-08-28T08:22:30.000Z",
-		"size": 49846,
+		"etag": "\"bc95-bTvSrz6i5+tZAvxdIT+2h6TQxQ8\"",
+		"mtime": "2026-08-29T03:11:25.000Z",
+		"size": 48277,
 		"path": "../public/assets/expenses-TEST.js"
 	},
 	"/assets/file-pick-Sh_I8IQI.js": {
