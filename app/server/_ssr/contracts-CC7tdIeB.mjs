@@ -663,21 +663,19 @@ function ContractsPage() {
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
 									children: "备注"
-								})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3" })
 							] })
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [list.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 24,
+							colSpan: 25,
 							className: "p-6 text-muted",
 							children: "还没有合同。点右上角新增，或到「导入导出」导入原来的合同管理表。"
 						}) }) : null, list.map((c, i) => {
 							const r = contractRollup(c, contractEntries);
 							const on = editing?.id === c.id;
 							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-								className: `group cursor-pointer border-b border-line last:border-0 hover:bg-accent-soft ${on ? "bg-accent-soft" : ""}`,
-								onClick: () => {
-									setCreating(false);
-									setEditing(c);
-								},
+								className: `group border-b border-line last:border-0 hover:bg-accent-soft ${on || selected.includes(c.id) ? "bg-accent-soft" : ""}`,
+								onClick: () => setSelected((s) => toggleSel(s, c.id, !s.includes(c.id))),
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-2",
@@ -790,6 +788,20 @@ function ContractsPage() {
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "max-w-40 truncate p-2 text-muted",
 										children: c.remark
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+										className: "p-2",
+										onClick: (e) => e.stopPropagation(),
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+											variant: "outline",
+											size: "sm",
+											type: "button",
+											onClick: () => {
+												setCreating(false);
+												setEditing(c);
+											},
+											children: "更改"
+										})
 									})
 								]
 							}, c.id);

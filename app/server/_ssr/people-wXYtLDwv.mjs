@@ -222,10 +222,12 @@ function PeoplePage() {
 							const f = flags[p.name];
 							const n = (f?.id ? 1 : 0) + (f?.idBack ? 1 : 0) + (f?.bank ? 1 : 0) + (f?.ic ? 1 : 0);
 							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-								className: "border-b border-line last:border-0 hover:bg-bg-elevated",
+								className: `border-b border-line last:border-0 hover:bg-accent-soft ${selected.includes(p.id) || editing?.id === p.id ? "bg-accent-soft" : ""}`,
+								onClick: () => setSelected((s) => toggleSel(s, p.id, !s.includes(p.id))),
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-3",
+										onClick: (e) => e.stopPropagation(),
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 											type: "checkbox",
 											className: "size-4",
@@ -239,9 +241,8 @@ function PeoplePage() {
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
 										className: "p-3",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											className: "font-medium underline-offset-2 hover:underline",
-											onClick: () => setEditing(p),
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "font-medium",
 											children: p.name
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 											className: "text-xs text-subtle",
@@ -284,24 +285,40 @@ function PeoplePage() {
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-3",
+										onClick: (e) => e.stopPropagation(),
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 											className: "text-left text-xs text-accent",
+											type: "button",
 											onClick: () => setEditing(p),
 											children: [n, "/4 已上传"]
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 										className: "p-3",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-											variant: "danger",
-											size: "sm",
-											onClick: () => {
-												if (!confirmBatchDelete("人员", 1, `将删除 ${p.name} 的档案。考勤和发放记录里的名字还在。`)) return;
-												removePeople([p.id]);
-												setSelected((s) => s.filter((id) => id !== p.id));
-												toast.success(`已删除 ${p.name}`);
-											},
-											children: "删除"
+										onClick: (e) => e.stopPropagation(),
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex flex-wrap gap-1",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+													variant: "outline",
+													size: "sm",
+													type: "button",
+													onClick: () => setEditing(p),
+													children: "更改"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+													variant: "danger",
+													size: "sm",
+													type: "button",
+													onClick: () => {
+														if (!confirmBatchDelete("人员", 1, `将删除 ${p.name} 的档案。考勤和发放记录里的名字还在。`)) return;
+														removePeople([p.id]);
+														setSelected((s) => s.filter((id) => id !== p.id));
+														toast.success(`已删除 ${p.name}`);
+													},
+													children: "删除"
+												})
+											]
 										})
 									})
 								]

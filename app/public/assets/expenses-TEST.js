@@ -735,12 +735,13 @@ function ExpensesPage() {
 										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "状态" }),
 										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "购买凭证" }),
 										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "打款凭证" }),
-										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "备注" })
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3", children: "备注" }),
+										/* @__PURE__ */ (0, R.jsx)("th", { className: "p-3" })
 									] })
 								}),
 								/* @__PURE__ */ (0, R.jsxs)("tbody", { children: [
 									shown.length === 0 ? /* @__PURE__ */ (0, R.jsx)("tr", { children: /* @__PURE__ */ (0, R.jsx)("td", {
-										colSpan: 12,
+										colSpan: 13,
 										className: "p-6 text-muted",
 										children: "还没有报销。点右上角「新增报销」。勾几笔可一起报销、记打款。"
 									}) }) : null,
@@ -748,11 +749,8 @@ function ExpensesPage() {
 										const on = editing?.id === e.id;
 										const sib = e.payoutId ? list.filter((x) => x.payoutId === e.payoutId).length : 0;
 										return /* @__PURE__ */ (0, R.jsxs)("tr", {
-											className: `group cursor-pointer border-b border-line last:border-0 hover:bg-accent-soft ${on ? "bg-accent-soft" : ""}`,
-											onClick: () => {
-												setCreating(false);
-												setEditing(e);
-											},
+											className: `group border-b border-line last:border-0 hover:bg-accent-soft ${on || selected.includes(e.id) ? "bg-accent-soft" : ""}`,
+											onClick: () => setSelected((s) => toggleSel(s, e.id, !s.includes(e.id))),
 											children: [
 												/* @__PURE__ */ (0, R.jsx)("td", {
 													className: "p-2",
@@ -787,7 +785,21 @@ function ExpensesPage() {
 													className: "p-2 text-xs",
 													children: e.payoutFileName ? /* @__PURE__ */ (0, R.jsxs)("span", { children: [e.payoutFileName, sib > 1 ? ` ·${sib}笔` : ""] }) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? /* @__PURE__ */ (0, R.jsx)("span", { className: "text-warn", children: "缺打款" }) : "—"
 												}),
-												/* @__PURE__ */ (0, R.jsx)("td", { className: "max-w-40 truncate p-2 text-muted", children: e.remark })
+												/* @__PURE__ */ (0, R.jsx)("td", { className: "max-w-40 truncate p-2 text-muted", children: e.remark }),
+												/* @__PURE__ */ (0, R.jsx)("td", {
+													className: "p-2",
+													onClick: (ev) => ev.stopPropagation(),
+													children: /* @__PURE__ */ (0, R.jsx)(Button, {
+														variant: "outline",
+														size: "sm",
+														type: "button",
+														onClick: () => {
+															setCreating(false);
+															setEditing(e);
+														},
+														children: "更改"
+													})
+												})
 											]
 										}, e.id);
 									})
@@ -807,7 +819,7 @@ function ExpensesPage() {
 											}),
 											/* @__PURE__ */ (0, R.jsx)("td", {
 												className: "p-2 text-xs font-normal text-muted",
-												colSpan: 7,
+												colSpan: 8,
 												children: `未报销 ¥${money(totals.open)}　已报销 ¥${money(totals.done)}`
 											})
 										]

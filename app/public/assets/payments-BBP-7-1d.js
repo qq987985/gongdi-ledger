@@ -1,1 +1,693 @@
-import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{r as t}from"./audit-K39-jiKA.js";import{t as n}from"./jsx-runtime-DREnUpxT.js";import{a as r,i,n as ee}from"./utils-BSPq25aB.js";import{S as a,c as o,l as s}from"./contracts-D6qZj01d.js";import{_ as c,g as l,h as u,v as d,y as te}from"./index-ghxum7yZ.js";import{n as ne}from"./wide-table-BtpzsvMP.js";import{i as re,o as ie}from"./excel-import-CV73N9jL.js";import{n as f}from"./can-9AzYldNF.js";import{t as p}from"./badge-_ctqz85I.js";import{i as m,n as ae,r as oe,t as h}from"./ym-pick-DyiGGoH2.js";var g=e(t()),_=n();function v(){let e=te(),{year:t,people:n,payments:v,addPayment:se,patchPayments:y,removePayments:ce}=e,b=n.map(e=>e.name),x=s(e),[S,C]=(0,g.useState)(``),[w,le]=(0,g.useState)(t),[T,ue]=(0,g.useState)(1),[E,de]=(0,g.useState)(t),[D,fe]=(0,g.useState)(12),[O,pe]=(0,g.useState)(`all`),[k,me]=(0,g.useState)(`all`),[A,he]=(0,g.useState)(``),[j,M]=(0,g.useState)(``),[N,P]=(0,g.useState)(``),[F,I]=(0,g.useState)(0),[L,ge]=(0,g.useState)(``),[R,z]=(0,g.useState)(``),[B,V]=(0,g.useState)([]),[H,_e]=(0,g.useState)(new Date().toISOString().slice(0,10)),U=(0,g.useMemo)(()=>{let e=new Set([...x,t,w,E]);for(let t of v){let n=o(t.date);n&&e.add(n)}return[...e].sort((e,t)=>e-t)},[x,t,w,E,v]),W=(0,g.useMemo)(()=>ae(w,T,E,D),[w,T,E,D]),G=m(W[0].year,W[0].month),K=m(W[W.length-1].year,W[W.length-1].month),ve=oe(w,T,E,D),q=(0,g.useMemo)(()=>v.filter(e=>{let t=a(e.date)||e.date;if(!t)return!0;let n=Number(t.slice(0,4)),r=Number(t.slice(5,7));if(!n||!r)return!0;let i=m(n,r);return i>=G&&i<=K}),[v,G,K]),ye=(0,g.useMemo)(()=>[...new Set(q.map(e=>e.source).filter(Boolean))],[q]),J=(0,g.useMemo)(()=>{let e=q;if(O===`pending`&&(e=e.filter(e=>!e.date)),O===`paid`&&(e=e.filter(e=>!!e.date)),k!==`all`&&(e=e.filter(e=>e.source===k)),S.trim()){let t=S.trim();e=e.filter(e=>[e.owner,e.receiver,e.source,e.remark].some(e=>e.includes(t)))}return e},[q,k,S,O]),Y=q.filter(e=>!e.date).length,be=q.filter(e=>!e.date).reduce((e,t)=>e+t.amount,0),xe=J.filter(e=>e.date).reduce((e,t)=>e+t.amount,0),Se=J.reduce((e,t)=>e+t.amount,0),Ce=J.filter(e=>e.owner!==e.receiver).length,X=[...new Set([...b,...v.map(e=>e.owner)].filter(Boolean))],we=[...new Set([...b,...v.map(e=>e.receiver)].filter(Boolean))],Te=[...new Set(v.map(e=>e.source).filter(Boolean))],Ee=J.length>0&&J.every(e=>B.includes(e.id)),Z=(0,g.useMemo)(()=>{let e=new Map;for(let t of J.filter(e=>e.date))e.set(t.owner,(e.get(t.owner)||0)+t.amount);return[...e.entries()].sort((e,t)=>t[1]-e[1])},[J]);function Q(e,t){e.length&&ee(`发放记录`,e.length,`只删发放流水。人员档案和考勤不动。`)&&(ce(e),V(t=>t.filter(t=>!e.includes(t))),u.success(t))}function $(e,t){if(!e.length)return;let n=a(t)||t.trim();if(!n){u.error(`请选择或填写发放日期`);return}y(e,{date:n}),V([]),u.success(`已给 ${e.length} 笔补上日期 ${n}`)}return(0,_.jsx)(f,{perm:`payments.view`,children:(0,_.jsxs)(`div`,{className:`space-y-5`,children:[(0,_.jsxs)(`header`,{className:`flex flex-wrap items-end justify-between gap-3`,children:[(0,_.jsxs)(`div`,{children:[(0,_.jsx)(`h1`,{className:`font-display text-2xl font-semibold`,children:`发放记录`}),(0,_.jsx)(`p`,{className:`mt-1 max-w-xl text-sm text-muted`,children:`按月份区间查，和「个人查询」一样。查单月就把起止设成同一个月。没日期的是待发放，不按月份丢掉。`})]}),(0,_.jsxs)(`div`,{className:`flex flex-wrap gap-2`,children:[(0,_.jsx)(ie,{href:`/api/file/payment-template`,filename:`发放记录导入模板.xlsx`}),(0,_.jsx)(re,{})]})]}),(0,_.jsxs)(`div`,{className:`flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4`,children:[(0,_.jsx)(h,{label:`从`,years:U,y:w,m:T,onY:le,onM:ue}),(0,_.jsx)(`span`,{className:`pb-2 text-sm text-muted`,children:`到`}),(0,_.jsx)(h,{label:`到`,years:U,y:E,m:D,onY:de,onM:fe}),(0,_.jsxs)(`p`,{className:`w-full text-xs text-muted`,children:[`当前查询：`,ve,` · 共 `,W.length,` 个月。待发放没有日期，会一直显示在列表里。`]})]}),(0,_.jsxs)(`form`,{className:`grid gap-3 rounded-xl border border-line bg-surface p-4 md:grid-cols-3`,onSubmit:e=>{e.preventDefault();let t=A.trim();if(!t||F<=0){u.error(`请填写实际收款人和金额`);return}let n=j.trim()||t;se({owner:t,receiver:n,date:a(N)||N.trim(),amount:F,source:L.trim(),remark:R.trim()}),u.success(N?n===t?`已记到 ${t} 头上`:`已记到 ${t} 头上，${n} 代收`:`已上报 ${t}，待发放`),I(0),z(``)},children:[(0,_.jsxs)(`div`,{children:[(0,_.jsx)(c,{children:`实际收款人（入账）`}),(0,_.jsx)(l,{className:`mt-1`,list:`pay-owners`,value:A,placeholder:`工资记在谁头上`,onChange:e=>{let t=e.target.value;(!j||j===A)&&M(t),he(t)}}),(0,_.jsx)(`datalist`,{id:`pay-owners`,children:X.map(e=>(0,_.jsx)(`option`,{value:e},e))})]}),(0,_.jsxs)(`div`,{children:[(0,_.jsx)(c,{children:`收款人（代收可填别人）`}),(0,_.jsx)(l,{className:`mt-1`,list:`pay-receivers`,value:j,placeholder:`空则同实际收款人`,onChange:e=>M(e.target.value)}),(0,_.jsx)(`datalist`,{id:`pay-receivers`,children:we.map(e=>(0,_.jsx)(`option`,{value:e},e))})]}),(0,_.jsxs)(`div`,{children:[(0,_.jsx)(c,{children:`发放日期（空=待发放）`}),(0,_.jsx)(l,{className:`mt-1`,type:`date`,value:N,onChange:e=>P(e.target.value)})]}),(0,_.jsxs)(`div`,{children:[(0,_.jsx)(c,{children:`发放金额（元）`}),(0,_.jsx)(l,{className:`mt-1`,type:`number`,value:F||``,onChange:e=>I(Number(e.target.value)||0)})]}),(0,_.jsxs)(`div`,{children:[(0,_.jsx)(c,{children:`发放方`}),(0,_.jsx)(l,{className:`mt-1`,list:`pay-sources`,value:L,placeholder:`如：五冶条钢-钻孔切割8月请款`,onChange:e=>ge(e.target.value)}),(0,_.jsx)(`datalist`,{id:`pay-sources`,children:Te.map(e=>(0,_.jsx)(`option`,{value:e},e))})]}),(0,_.jsxs)(`div`,{children:[(0,_.jsx)(c,{children:`备注`}),(0,_.jsx)(l,{className:`mt-1`,value:R,onChange:e=>z(e.target.value)})]}),(0,_.jsx)(`div`,{className:`md:col-span-3`,children:(0,_.jsx)(d,{type:`submit`,children:`添加发放`})})]}),(0,_.jsxs)(`div`,{className:`flex flex-wrap items-center gap-3`,children:[(0,_.jsx)(l,{className:`max-w-xs`,placeholder:`搜索实际收款人 / 收款人`,value:S,onChange:e=>C(e.target.value)}),(0,_.jsxs)(`select`,{className:`field-select w-auto max-w-xs`,value:k,onChange:e=>me(e.target.value),children:[(0,_.jsx)(`option`,{value:`all`,children:`全部发放方`}),ye.map(e=>(0,_.jsx)(`option`,{value:e,children:e},e))]}),(0,_.jsx)(`div`,{className:`flex rounded-full border border-line p-0.5 text-xs`,children:[[`all`,`全部`],[`pending`,`待发放${Y?` ${Y}`:``}`],[`paid`,`已发放`]].map(([e,t])=>(0,_.jsx)(`button`,{type:`button`,className:`h-8 rounded-full px-3 ${O===e?`bg-accent text-accent-fg`:`text-muted`}`,onClick:()=>pe(e),children:t},e))}),(0,_.jsxs)(`span`,{className:`text-sm text-muted`,children:[J.length,` 笔 · 合计 ¥`,i(Se),O===`all`?` · 待发放 ¥${i(be)}`:``,O===`paid`?` · 已发 ¥${i(xe)}`:``,`· 代收 `,Ce,` 笔`]}),B.length>0?(0,_.jsxs)(`div`,{className:`flex flex-wrap items-center gap-2`,children:[(0,_.jsx)(l,{type:`date`,className:`w-40`,value:H,onChange:e=>_e(e.target.value)}),(0,_.jsxs)(d,{size:`sm`,type:`button`,onClick:()=>$(B,H),children:[`给所选补日期（`,B.length,`）`]}),(0,_.jsxs)(d,{variant:`danger`,size:`sm`,type:`button`,onClick:()=>Q(B,`已删除 ${B.length} 笔发放`),children:[`删除所选（`,B.length,`）`]})]}):null]}),Z.length>0?(0,_.jsxs)(`div`,{className:`overflow-x-auto rounded-xl border border-line bg-surface`,children:[(0,_.jsx)(`div`,{className:`border-b border-line px-4 py-2 text-xs text-muted`,children:`按实际收款人入账（只计已填日期的；待发放不算已发）`}),(0,_.jsxs)(`table`,{className:`w-full text-left text-sm`,children:[(0,_.jsx)(`thead`,{className:`text-xs text-muted`,children:(0,_.jsxs)(`tr`,{children:[(0,_.jsx)(`th`,{className:`p-3`,children:`实际收款人`}),(0,_.jsx)(`th`,{className:`p-3`,children:`已入账金额`})]})}),(0,_.jsx)(`tbody`,{children:Z.slice(0,12).map(([e,t])=>(0,_.jsxs)(`tr`,{className:`border-t border-line`,children:[(0,_.jsx)(`td`,{className:`p-3`,children:e}),(0,_.jsxs)(`td`,{className:`p-3 text-right tabular-nums`,children:[`¥`,i(t)]})]},e))})]})]}):null,(0,_.jsx)(ne,{id:`payments`,children:(0,_.jsxs)(`table`,{className:`wide-table text-sm`,children:[(0,_.jsx)(`thead`,{className:`border-b border-line text-xs text-muted`,children:(0,_.jsxs)(`tr`,{children:[(0,_.jsx)(`th`,{className:`w-10 p-3`,children:(0,_.jsx)(`input`,{type:`checkbox`,className:`size-4`,checked:Ee,onChange:e=>V(e.target.checked?J.map(e=>e.id):[]),"aria-label":`全选发放记录`})}),(0,_.jsx)(`th`,{className:`p-3`,children:`序号`}),(0,_.jsx)(`th`,{className:`p-3`,children:`实际收款人`}),(0,_.jsx)(`th`,{className:`p-3`,children:`发放日期`}),(0,_.jsx)(`th`,{className:`p-3`,children:`发放金额（元）`}),(0,_.jsx)(`th`,{className:`p-3`,children:`发放方`}),(0,_.jsx)(`th`,{className:`p-3`,children:`收款人`}),(0,_.jsx)(`th`,{className:`p-3`,children:`备注`}),(0,_.jsx)(`th`,{className:`p-3`})]})}),(0,_.jsxs)(`tbody`,{children:[J.length===0?(0,_.jsx)(`tr`,{children:(0,_.jsx)(`td`,{colSpan:9,className:`p-8 text-center text-muted`,children:`暂无发放记录`})}):null,J.map((e,t)=>(0,_.jsxs)(`tr`,{className:`border-b border-line last:border-0`,children:[(0,_.jsx)(`td`,{className:`p-3`,children:(0,_.jsx)(`input`,{type:`checkbox`,className:`size-4`,checked:B.includes(e.id),onChange:t=>V(n=>r(n,e.id,t.target.checked)),"aria-label":`选择 ${e.owner} ${e.date}`})}),(0,_.jsx)(`td`,{className:`p-3 tabular-nums text-muted`,children:t+1}),(0,_.jsx)(`td`,{className:`p-3 font-medium`,children:e.owner}),(0,_.jsx)(`td`,{className:`p-3`,children:e.date?(0,_.jsx)(l,{type:`date`,className:`h-9 w-[10.5rem]`,value:a(e.date)||e.date,onChange:t=>y([e.id],{date:t.target.value})}):(0,_.jsxs)(`div`,{className:`flex flex-wrap items-center gap-2`,children:[(0,_.jsx)(p,{tone:`warn`,children:`待发放`}),(0,_.jsx)(l,{type:`date`,className:`h-9 w-[10.5rem]`,value:``,onChange:t=>{t.target.value&&$([e.id],t.target.value)}})]})}),(0,_.jsxs)(`td`,{className:`p-3 tabular-nums`,children:[`¥`,i(e.amount)]}),(0,_.jsx)(`td`,{className:`p-3 text-muted`,children:e.source}),(0,_.jsxs)(`td`,{className:`p-3`,children:[e.receiver,e.owner===e.receiver?(0,_.jsx)(p,{className:`ml-2`,children:`本人`}):(0,_.jsx)(p,{tone:`warn`,className:`ml-2`,children:`代收`})]}),(0,_.jsx)(`td`,{className:`p-3 text-muted`,children:e.remark}),(0,_.jsx)(`td`,{className:`p-3`,children:(0,_.jsx)(d,{variant:`ghost`,size:`sm`,onClick:()=>Q([e.id],`已删除 1 笔发放`),children:`删除`})})]},e.id))]})]})})]})})}export{v as component};
+import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";
+import{r as t}from"./audit-K39-jiKA.js";
+import{t as n}from"./jsx-runtime-DREnUpxT.js";
+import{a as toggleSel,i as money,n as confirmBatchDelete}from"./utils-BSPq25aB.js";
+import{S as parseDateYmd,c as dateYear,l as derivedYears}from"./contracts-D6qZj01d.js";
+import{_ as Label,g as Input,h as toast,v as Button,y as useApp}from"./index-ghxum7yZ.js";
+import{n as WideTable}from"./wide-table-BtpzsvMP.js";
+import{i as PaymentImport,o as TplLink}from"./excel-import-CV73N9jL.js";
+import{n as Need}from"./can-9AzYldNF.js";
+import{t as Badge}from"./badge-_ctqz85I.js";
+import{i as ymKey,n as monthsInRange,r as rangeLabel,t as YmPick}from"./ym-pick-DyiGGoH2.js";
+var import_react=e(t()),import_jsx_runtime=n();
+function PaymentsPage() {
+	const store = useApp();
+	const { year, people, payments, addPayment, patchPayments, removePayments } = store;
+	const names = people.map((p) => p.name);
+	const years = derivedYears(store);
+	const [q, setQ] = (0, import_react.useState)("");
+	const [fromY, setFromY] = (0, import_react.useState)(year);
+	const [fromM, setFromM] = (0, import_react.useState)(1);
+	const [toY, setToY] = (0, import_react.useState)(year);
+	const [toM, setToM] = (0, import_react.useState)(12);
+	const [status, setStatus] = (0, import_react.useState)("all");
+	const [batch, setBatch] = (0, import_react.useState)("all");
+	const [owner, setOwner] = (0, import_react.useState)("");
+	const [receiver, setReceiver] = (0, import_react.useState)("");
+	const [date, setDate] = (0, import_react.useState)("");
+	const [amount, setAmount] = (0, import_react.useState)(0);
+	const [source, setSource] = (0, import_react.useState)("");
+	const [remark, setRemark] = (0, import_react.useState)("");
+	const [selected, setSelected] = (0, import_react.useState)([]);
+	const [editing, setEditing] = (0, import_react.useState)(null);
+	const [fillDate, setFillDate] = (0, import_react.useState)((/* @__PURE__ */ new Date()).toISOString().slice(0, 10));
+	const yearOpts = (0, import_react.useMemo)(() => {
+		const set = /* @__PURE__ */ new Set([
+			...years,
+			year,
+			fromY,
+			toY
+		]);
+		for (const p of payments) {
+			const y = dateYear(p.date);
+			if (y) set.add(y);
+		}
+		return [...set].sort((a, b) => a - b);
+	}, [
+		years,
+		year,
+		fromY,
+		toY,
+		payments
+	]);
+	const span = (0, import_react.useMemo)(() => monthsInRange(fromY, fromM, toY, toM), [
+		fromY,
+		fromM,
+		toY,
+		toM
+	]);
+	const lo = ymKey(span[0].year, span[0].month);
+	const hi = ymKey(span[span.length - 1].year, span[span.length - 1].month);
+	const label = rangeLabel(fromY, fromM, toY, toM);
+	const ranged = (0, import_react.useMemo)(() => {
+		return payments.filter((p) => {
+			const d = parseDateYmd(p.date) || p.date;
+			if (!d) return true;
+			const y = Number(d.slice(0, 4));
+			const m = Number(d.slice(5, 7));
+			if (!y || !m) return true;
+			const k = ymKey(y, m);
+			return k >= lo && k <= hi;
+		});
+	}, [
+		payments,
+		lo,
+		hi
+	]);
+	const batches = (0, import_react.useMemo)(() => [...new Set(ranged.map((p) => p.source).filter(Boolean))], [ranged]);
+	const filtered = (0, import_react.useMemo)(() => {
+		let list = ranged;
+		if (status === "pending") list = list.filter((p) => !p.date);
+		if (status === "paid") list = list.filter((p) => Boolean(p.date));
+		if (batch !== "all") list = list.filter((p) => p.source === batch);
+		if (q.trim()) {
+			const s = q.trim();
+			list = list.filter((p) => [
+				p.owner,
+				p.receiver,
+				p.source,
+				p.remark
+			].some((x) => x.includes(s)));
+		}
+		return list;
+	}, [
+		ranged,
+		batch,
+		q,
+		status
+	]);
+	const pendingCount = ranged.filter((p) => !p.date).length;
+	const pendingAmt = ranged.filter((p) => !p.date).reduce((s, p) => s + p.amount, 0);
+	const paidAmt = filtered.filter((p) => p.date).reduce((s, p) => s + p.amount, 0);
+	const total = filtered.reduce((s, p) => s + p.amount, 0);
+	const proxyCount = filtered.filter((p) => p.owner !== p.receiver).length;
+	const ownerNames = [...new Set([...names, ...payments.map((p) => p.owner)].filter(Boolean))];
+	const receiverNames = [...new Set([...names, ...payments.map((p) => p.receiver)].filter(Boolean))];
+	const sources = [...new Set(payments.map((p) => p.source).filter(Boolean))];
+	const allChecked = filtered.length > 0 && filtered.every((p) => selected.includes(p.id));
+	const byOwner = (0, import_react.useMemo)(() => {
+		const m = /* @__PURE__ */ new Map();
+		for (const p of filtered.filter((x) => x.date)) m.set(p.owner, (m.get(p.owner) || 0) + p.amount);
+		return [...m.entries()].sort((a, b) => b[1] - a[1]);
+	}, [filtered]);
+	function dropIds(ids, hint) {
+		if (!ids.length) return;
+		if (!confirmBatchDelete("发放记录", ids.length, "只删发放流水。人员档案和考勤不动。")) return;
+		removePayments(ids);
+		setSelected((s) => s.filter((id) => !ids.includes(id)));
+		toast.success(hint);
+	}
+	function applyDate(ids, raw) {
+		if (!ids.length) return;
+		const d = parseDateYmd(raw) || raw.trim();
+		if (!d) {
+			toast.error("请选择或填写发放日期");
+			return;
+		}
+		patchPayments(ids, { date: d });
+		setSelected([]);
+		toast.success(`已给 ${ids.length} 笔补上日期 ${d}`);
+	}
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Need, {
+		perm: "payments.view",
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "space-y-5",
+			children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", {
+					className: "flex flex-wrap items-end justify-between gap-3",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+						className: "font-display text-2xl font-semibold",
+						children: "发放记录"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-1 max-w-xl text-sm text-muted",
+						children: "点一行勾选，点「更改」才打开编辑。保存要确认。待发放没有日期，会一直显示在列表里。"
+					})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap gap-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TplLink, {
+							href: "/api/file/payment-template",
+							filename: "发放记录导入模板.xlsx"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PaymentImport, {})]
+					})]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(YmPick, {
+							label: "从",
+							years: yearOpts,
+							y: fromY,
+							m: fromM,
+							onY: setFromY,
+							onM: setFromM
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "pb-2 text-sm text-muted",
+							children: "到"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(YmPick, {
+							label: "到",
+							years: yearOpts,
+							y: toY,
+							m: toM,
+							onY: setToY,
+							onM: setToM
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+							className: "w-full text-xs text-muted",
+							children: [
+								"当前查询：",
+								label,
+								" · 共 ",
+								span.length,
+								" 个月。待发放没有日期，会一直显示在列表里。"
+							]
+						})
+					]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("form", {
+					className: "grid gap-3 rounded-xl border border-line bg-surface p-4 md:grid-cols-3",
+					onSubmit: (e) => {
+						e.preventDefault();
+						const who = owner.trim();
+						if (!who || amount <= 0) {
+							toast.error("请填写实际收款人和金额");
+							return;
+						}
+						const recv = receiver.trim() || who;
+						addPayment({
+							owner: who,
+							receiver: recv,
+							date: parseDateYmd(date) || date.trim(),
+							amount,
+							source: source.trim(),
+							remark: remark.trim()
+						});
+						toast.success(date ? recv !== who ? `已记到 ${who} 头上，${recv} 代收` : `已记到 ${who} 头上` : `已上报 ${who}，待发放`);
+						setAmount(0);
+						setRemark("");
+					},
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "实际收款人（入账）" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								className: "mt-1",
+								list: "pay-owners",
+								value: owner,
+								placeholder: "工资记在谁头上",
+								onChange: (e) => {
+									const v = e.target.value;
+									if (!receiver || receiver === owner) setReceiver(v);
+									setOwner(v);
+								}
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("datalist", {
+								id: "pay-owners",
+								children: ownerNames.map((n) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: n }, n))
+							})
+						] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "收款人（代收可填别人）" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								className: "mt-1",
+								list: "pay-receivers",
+								value: receiver,
+								placeholder: "空则同实际收款人",
+								onChange: (e) => setReceiver(e.target.value)
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("datalist", {
+								id: "pay-receivers",
+								children: receiverNames.map((n) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: n }, n))
+							})
+						] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "发放日期（空=待发放）" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "mt-1",
+							type: "date",
+							value: date,
+							onChange: (e) => setDate(e.target.value)
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "发放金额（元）" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "mt-1",
+							type: "number",
+							value: amount || "",
+							onChange: (e) => setAmount(Number(e.target.value) || 0)
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "发放方" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+								className: "mt-1",
+								list: "pay-sources",
+								value: source,
+								placeholder: "如：五冶条钢-钻孔切割8月请款",
+								onChange: (e) => setSource(e.target.value)
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("datalist", {
+								id: "pay-sources",
+								children: sources.map((n) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: n }, n))
+							})
+						] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "备注" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "mt-1",
+							value: remark,
+							onChange: (e) => setRemark(e.target.value)
+						})] }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "md:col-span-3",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								type: "submit",
+								children: "添加发放"
+							})
+						})
+					]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap items-center gap-3",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "max-w-xs",
+							placeholder: "搜索实际收款人 / 收款人",
+							value: q,
+							onChange: (e) => setQ(e.target.value)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							className: "field-select w-auto max-w-xs",
+							value: batch,
+							onChange: (e) => setBatch(e.target.value),
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+								value: "all",
+								children: "全部发放方"
+							}), batches.map((b) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+								value: b,
+								children: b
+							}, b))]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "flex rounded-full border border-line p-0.5 text-xs",
+							children: [
+								["all", "全部"],
+								["pending", `待发放${pendingCount ? ` ${pendingCount}` : ""}`],
+								["paid", "已发放"]
+							].map(([k, label]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: `h-8 rounded-full px-3 ${status === k ? "bg-accent text-accent-fg" : "text-muted"}`,
+								onClick: () => setStatus(k),
+								children: label
+							}, k))
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "text-sm text-muted",
+							children: [
+								filtered.length,
+								" 笔 · 合计 ¥",
+								money(total),
+								status === "all" ? ` · 待发放 ¥${money(pendingAmt)}` : "",
+								status === "paid" ? ` · 已发 ¥${money(paidAmt)}` : "",
+								"· 代收 ",
+								proxyCount,
+								" 笔"
+							]
+						}),
+						selected.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-wrap items-center gap-2",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+									type: "date",
+									className: "w-40",
+									value: fillDate,
+									onChange: (e) => setFillDate(e.target.value)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+									size: "sm",
+									type: "button",
+									onClick: () => applyDate(selected, fillDate),
+									children: [
+										"给所选补日期（",
+										selected.length,
+										"）"
+									]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
+									variant: "danger",
+									size: "sm",
+									type: "button",
+									onClick: () => dropIds(selected, `已删除 ${selected.length} 笔发放`),
+									children: [
+										"删除所选（",
+										selected.length,
+										"）"
+									]
+								})
+							]
+						}) : null
+					]
+				}),
+				byOwner.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "overflow-x-auto rounded-xl border border-line bg-surface",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "border-b border-line px-4 py-2 text-xs text-muted",
+						children: "按实际收款人入账（只计已填日期的；待发放不算已发）"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "w-full text-left text-sm",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
+							className: "text-xs text-muted",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "p-3",
+								children: "实际收款人"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "p-3",
+								children: "已入账金额"
+							})] })
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: byOwner.slice(0, 12).map(([name, amt]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+							className: "border-t border-line",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "p-3",
+								children: name
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+								className: "p-3 text-right tabular-nums",
+								children: ["¥", money(amt)]
+							})]
+						}, name)) })]
+					})]
+				}) : null,
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WideTable, {
+					id: "payments",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "wide-table text-sm",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
+							className: "border-b border-line text-xs text-muted",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "w-10 p-3",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+										type: "checkbox",
+										className: "size-4",
+										checked: allChecked,
+										onChange: (e) => setSelected(e.target.checked ? filtered.map((p) => p.id) : []),
+										"aria-label": "全选发放记录"
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
+									children: "序号"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
+									children: "实际收款人"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
+									children: "发放日期"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
+									children: "发放金额（元）"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
+									children: "发放方"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
+									children: "收款人"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+									className: "p-3",
+									children: "备注"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3" })
+							] })
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [filtered.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+							colSpan: 9,
+							className: "p-8 text-center text-muted",
+							children: "暂无发放记录"
+						}) }) : null, filtered.map((p, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+							className: `group border-b border-line last:border-0 hover:bg-accent-soft ${editing?.id === p.id || selected.includes(p.id) ? "bg-accent-soft" : ""}`,
+							onClick: () => setSelected((s) => toggleSel(s, p.id, !s.includes(p.id))),
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "p-3",
+									onClick: (e) => e.stopPropagation(),
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+										type: "checkbox",
+										className: "size-4",
+										checked: selected.includes(p.id),
+										onChange: (e) => setSelected((s) => toggleSel(s, p.id, e.target.checked)),
+										"aria-label": `选择 ${p.owner} ${p.date}`
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "p-3 tabular-nums text-muted",
+									children: i + 1
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "p-3 font-medium",
+									children: p.owner
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "p-3",
+									children: p.date || /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+										tone: "warn",
+										children: "待发放"
+									})
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									className: "p-3 tabular-nums",
+									children: ["¥", money(p.amount)]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "p-3 text-muted",
+									children: p.source
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									className: "p-3",
+									children: [p.receiver, p.owner !== p.receiver ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+										tone: "warn",
+										className: "ml-2",
+										children: "代收"
+									}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+										className: "ml-2",
+										children: "本人"
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "p-3 text-muted",
+									children: p.remark
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "p-3",
+									onClick: (e) => e.stopPropagation(),
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex flex-wrap gap-1",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+												variant: "outline",
+												size: "sm",
+												type: "button",
+												onClick: () => setEditing(p),
+												children: "更改"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+												variant: "ghost",
+												size: "sm",
+												type: "button",
+												onClick: () => dropIds([p.id], "已删除 1 笔发放"),
+												children: "删除"
+											})
+										]
+									})
+								})
+							]
+						}, p.id))] })]
+					})
+				}),
+				editing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PaymentEditor, {
+					draft: editing,
+					ownerNames,
+					receiverNames,
+					sources,
+					onCancel: () => setEditing(null),
+					onSave: (row) => {
+						patchPayments([row.id], {
+							owner: row.owner,
+							receiver: row.receiver,
+							date: row.date,
+							amount: row.amount,
+							source: row.source,
+							remark: row.remark
+						});
+						setEditing(row);
+						toast.success("发放已保存");
+					},
+					onDelete: () => {
+						dropIds([editing.id], "已删除 1 笔发放");
+						setEditing(null);
+					}
+				}) : null
+			]
+		})
+	});
+}
+function PaymentEditor({ draft, ownerNames, receiverNames, sources, onCancel, onSave, onDelete }) {
+	const [c, setC] = (0, import_react.useState)(() => ({ ...draft }));
+	(0, import_react.useEffect)(() => {
+		const onKey = (e) => {
+			if (e.key === "Escape") onCancel();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [onCancel]);
+	(0, import_react.useEffect)(() => {
+		setC({ ...draft });
+	}, [draft.id]);
+	function patch(key, value) {
+		setC((prev) => {
+			const next = { ...prev, [key]: value };
+			if (key === "owner" && (!prev.receiver || prev.receiver === prev.owner)) next.receiver = value;
+			return next;
+		});
+	}
+	function save() {
+		const who = (c.owner || "").trim();
+		if (!who || !(Number(c.amount) > 0)) {
+			toast.error("请填写实际收款人和金额");
+			return;
+		}
+		const recv = (c.receiver || "").trim() || who;
+		const date = parseDateYmd(c.date) || (c.date || "").trim();
+		const next = {
+			...c,
+			owner: who,
+			receiver: recv,
+			date,
+			amount: Number(c.amount) || 0,
+			source: (c.source || "").trim(),
+			remark: (c.remark || "").trim()
+		};
+		const lines = [];
+		if (next.owner !== draft.owner) lines.push(`实际收款人：「${draft.owner}」→「${next.owner}」`);
+		if (next.receiver !== (draft.receiver || "")) lines.push(`收款人：「${draft.receiver || ""}」→「${next.receiver}」`);
+		if ((next.date || "") !== (draft.date || "")) lines.push(`发放日期：「${draft.date || "待发放"}」→「${next.date || "待发放"}」`);
+		if (Number(next.amount) !== Number(draft.amount)) lines.push(`金额：${draft.amount} → ${next.amount}`);
+		if (next.source !== (draft.source || "")) lines.push(`发放方：「${draft.source || ""}」→「${next.source}」`);
+		if (next.remark !== (draft.remark || "")) lines.push("备注已改");
+		if (!lines.length) {
+			toast.success("没有改动");
+			return;
+		}
+		if (!confirm(`确认保存这些修改？\n${lines.join("\n")}`)) return;
+		onSave(next);
+	}
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+		id: "payment-editor",
+		className: "space-y-4 rounded-xl border border-accent bg-surface p-5",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-wrap items-center justify-between gap-2",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+						className: "font-semibold",
+						children: c.owner ? `编辑发放 · ${c.owner}` : "编辑发放"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "btn-row",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "outline", type: "button", onClick: onCancel, children: "关闭" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { variant: "danger", type: "button", onClick: onDelete, children: "删除" }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, { type: "button", onClick: save, children: "保存发放信息" })
+						]
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "grid gap-3 md:grid-cols-3",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "实际收款人（入账）" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "mt-1",
+							list: "pay-edit-owners",
+							value: c.owner,
+							onChange: (e) => patch("owner", e.target.value)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("datalist", {
+							id: "pay-edit-owners",
+							children: ownerNames.map((n) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: n }, n))
+						})
+					] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "收款人（代收可填别人）" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "mt-1",
+							list: "pay-edit-receivers",
+							value: c.receiver,
+							onChange: (e) => patch("receiver", e.target.value)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("datalist", {
+							id: "pay-edit-receivers",
+							children: receiverNames.map((n) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: n }, n))
+						})
+					] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "发放日期（空=待发放）" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "mt-1",
+							type: "date",
+							value: parseDateYmd(c.date) || c.date || "",
+							onChange: (e) => patch("date", e.target.value)
+						})
+					] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "发放金额（元）" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "mt-1",
+							type: "number",
+							value: c.amount || "",
+							onChange: (e) => patch("amount", Number(e.target.value) || 0)
+						})
+					] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "发放方" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "mt-1",
+							list: "pay-edit-sources",
+							value: c.source,
+							onChange: (e) => patch("source", e.target.value)
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("datalist", {
+							id: "pay-edit-sources",
+							children: sources.map((n) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: n }, n))
+						})
+					] }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "备注" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
+							className: "mt-1",
+							value: c.remark,
+							onChange: (e) => patch("remark", e.target.value)
+						})
+					] })
+				]
+			})
+		]
+	});
+}
+export { PaymentsPage as component };
