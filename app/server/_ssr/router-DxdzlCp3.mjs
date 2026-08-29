@@ -2515,12 +2515,14 @@ var useApp = create()(persist((set, get) => ({
 			voucherFileName: row.voucherFileName || "",
 			claimant: row.claimant || "",
 			forWhom: row.forWhom || "",
-			payAccount: row.payAccount || "",
+			payBank: row.payBank || "",
+			payCardNo: row.payCardNo || "",
+			payAccount: [row.payBank, row.payCardNo].map((s) => (s || "").trim()).filter(Boolean).join(" ") || row.payAccount || "",
 			payoutId: row.payoutId || "",
 			payoutFileName: row.payoutFileName || "",
-			payoutDate: row.payoutDate || "",
+			payoutDate: row.status === "已报销" ? row.payoutDate || "" : "",
 			payoutMethod: row.payoutMethod || "",
-			reimbursedAt: row.status === "已报销" ? row.reimbursedAt || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) : ""
+			reimbursedAt: row.status === "已报销" ? row.reimbursedAt || row.payoutDate || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) : ""
 		};
 		if (i >= 0) {
 			const copy = list.slice();

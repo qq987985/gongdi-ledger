@@ -42,6 +42,8 @@ function emptyExpense(year) {
 		claimant: "",
 		forWhom: "",
 		payAccount: "",
+		payBank: "",
+		payCardNo: "",
 		payoutId: "",
 		payoutFileName: "",
 		payoutDate: "",
@@ -58,7 +60,7 @@ function voucherBase(items) {
 }
 function payoutBase(items) {
 	if (!items.length) return "报销打款";
-	const who = safeBase(items[0].claimant || items[0].forWhom || "报销");
+	const who = safeBase(items[0].forWhom || items[0].claimant || "收款");
 	const acc = safeBase(items[0].payAccount || "账户");
 	const total = round2(items.reduce((s, e) => s + (e.amount || 0), 0));
 	const n = items.length > 1 ? `${who}-${acc}-${total}等${items.length}笔` : `${who}-${acc}-${total}`;
@@ -72,9 +74,44 @@ function uniqueNames(people, expenses) {
 	for (const p of people || []) if (p.name) s.add(p.name);
 	for (const e of expenses || []) {
 		if (e.claimant) s.add(e.claimant);
-		if (e.forWhom) s.add(e.forWhom);
 	}
 	return [...s];
+}
+function formatPayAccount(bank, card) {
+	return [bank, card].map((s) => (s || "").trim()).filter(Boolean).join(" ");
+}
+function accountOf(e) {
+	return formatPayAccount(e?.payBank, e?.payCardNo) || (e?.payAccount || "");
+}
+function listPayees(expenses) {
+	const map = /* @__PURE__ */ new Map();
+	const rows = (expenses || []).slice().sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.payoutDate || "").localeCompare(b.payoutDate || ""));
+	for (const e of rows) {
+		const name = (e.forWhom || "").trim();
+		if (!name) continue;
+		map.set(name, {
+			name,
+			bank: (e.payBank || "").trim(),
+			card: (e.payCardNo || "").trim()
+		});
+	}
+	return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "zh"));
+}
+function applyPayee(row, payees, name) {
+	const n = (name || "").trim();
+	const hit = (payees || []).find((p) => p.name === n);
+	if (!hit) return {
+		...row,
+		forWhom: name,
+		payAccount: formatPayAccount(row.payBank, row.payCardNo)
+	};
+	return {
+		...row,
+		forWhom: name,
+		payBank: hit.bank || row.payBank || "",
+		payCardNo: hit.card || row.payCardNo || "",
+		payAccount: formatPayAccount(hit.bank || row.payBank, hit.card || row.payCardNo)
+	};
 }
 function Field({ label, children, className }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
@@ -114,10 +151,10 @@ function NameInput({ value, onChange, names, listId, placeholder }) {
 }
 
 
-function VoucherSlot({ title, hint, id, kind, fileName, optional, onFile, onDeleted }) {
+function VoucherSlot({ title, hint, id, kind, fileName, optional, extra, onFile, onDeleted }) {
 	const ref = (0, import_react.useRef)(null);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-2 rounded-md border border-dashed border-line bg-bg p-3",
+		className: "flex flex-wrap items-center gap-1.5 py-1.5",
 		onDragOver: (e) => e.preventDefault(),
 		onDrop: (e) => {
 			e.preventDefault();
@@ -125,20 +162,21 @@ function VoucherSlot({ title, hint, id, kind, fileName, optional, onFile, onDele
 			if (f) onFile(f);
 		},
 		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex items-center justify-between gap-2",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs font-medium text-muted", children: title }),
-					fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "ok", children: "已上传" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: optional ? "选填" : "待上传" })
-				]
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+				className: "w-14 shrink-0 text-xs font-medium",
+				children: title
 			}),
-			fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-				className: "truncate text-xs",
-				title: fileName,
-				children: fileName
-			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-				className: "text-[11px] text-muted",
-				children: hint || "点上传，或把文件拖到这里"
+			fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+				tone: "ok",
+				children: "已传"
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
+				children: optional ? "选填" : "待传"
+			}),
+			extra || null,
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+				className: "min-w-0 flex-1 truncate text-[11px] text-muted",
+				title: fileName || hint,
+				children: fileName || hint || "点上传，或把文件拖到这一行"
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 				ref,
@@ -151,25 +189,18 @@ function VoucherSlot({ title, hint, id, kind, fileName, optional, onFile, onDele
 					if (f) onFile(f);
 				}
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-wrap items-center gap-1",
-				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						type: "button",
-						className: "btn inline-flex items-center rounded-sm bg-accent text-xs font-medium text-accent-fg hover:opacity-90",
-						onClick: () => ref.current?.click(),
-						children: fileName ? "更换" : "上传"
-					}),
-					fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
-						id: id || "pending",
-						kind,
-						fileName,
-						suggest: "",
-						taken: [],
-						onDeleted
-					}) : null
-				]
-			})
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				type: "button",
+				className: "btn inline-flex items-center rounded-sm bg-accent text-xs font-medium text-accent-fg hover:opacity-90",
+				onClick: () => ref.current?.click(),
+				children: fileName ? "更换" : "上传"
+			}),
+			fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
+				id: id || "pending",
+				kind,
+				fileName,
+				onDeleted
+			}) : null
 		]
 	});
 }
@@ -178,6 +209,7 @@ function ExpensesPage() {
 	const { year, expenses, upsertExpense, removeExpenses, people } = useApp();
 	const list = expenses || [];
 	const names = uniqueNames(people, list);
+	const payees = listPayees(list);
 	const [q, setQ] = (0, import_react.useState)("");
 	const [status, setStatus] = (0, import_react.useState)("all");
 	const [claimant, setClaimant] = (0, import_react.useState)("all");
@@ -193,7 +225,9 @@ function ExpensesPage() {
 		claimant: "",
 		forWhom: "",
 		payAccount: "",
-		payoutDate: todayYmd(),
+		payBank: "",
+		payCardNo: "",
+		payoutDate: "",
 		payoutMethod: "转账",
 		payoutId: "",
 		payoutFileName: ""
@@ -215,8 +249,10 @@ function ExpensesPage() {
 			...prev,
 			claimant: same("claimant") ? first.claimant || prev.claimant : prev.claimant,
 			forWhom: same("forWhom") ? first.forWhom || prev.forWhom : "",
+			payBank: same("payBank") ? first.payBank || prev.payBank : prev.payBank,
+			payCardNo: same("payCardNo") ? first.payCardNo || prev.payCardNo : prev.payCardNo,
 			payAccount: same("payAccount") ? first.payAccount || prev.payAccount : prev.payAccount,
-			payoutDate: same("payoutDate") ? first.payoutDate || prev.payoutDate || todayYmd() : prev.payoutDate,
+			payoutDate: same("payoutDate") ? first.payoutDate || prev.payoutDate : prev.payoutDate,
 			payoutMethod: same("payoutMethod") ? first.payoutMethod || prev.payoutMethod : prev.payoutMethod,
 			payoutId: same("payoutId") ? first.payoutId || "" : "",
 			payoutFileName: same("payoutId") && first.payoutId ? first.payoutFileName || "" : ""
@@ -229,7 +265,7 @@ function ExpensesPage() {
 		if (claimant !== "all") rows = rows.filter((e) => (e.claimant || "") === claimant);
 		if (q.trim()) {
 			const s = q.trim();
-			rows = rows.filter((e) => [e.name, e.period, e.remark, e.payMethod, e.claimant, e.forWhom, e.payAccount, e.payoutFileName, e.voucherFileName].some((x) => (x || "").includes(s)));
+			rows = rows.filter((e) => [e.name, e.period, e.remark, e.payMethod, e.claimant, e.forWhom, e.payAccount, e.payBank, e.payCardNo, e.payoutFileName, e.voucherFileName].some((x) => (x || "").includes(s)));
 		}
 		return rows.slice().sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id));
 	}, [list, year, scope, status, claimant, q]);
@@ -293,20 +329,27 @@ function ExpensesPage() {
 			toast.error("报销人必填：这几笔是谁来报的");
 			return;
 		}
-		if (!batch.payAccount.trim()) {
-			toast.error("打款账户必填：钱打到哪个里");
+		if (!batch.forWhom.trim()) {
+			toast.error("收款人必填：钱打给谁");
+			return;
+		}
+		if (!(batch.payBank || "").trim() || !(batch.payCardNo || "").trim()) {
+			toast.error("开户行和打款账户都要填");
 			return;
 		}
 		if (markDone && needsVoucher(batch.payoutMethod) && !batch.payoutFileName && !confirm("打款不是现金，还没上传打款凭证。仍要记为已报销？")) return;
 		const pid = batch.payoutId || uid();
-		const day = batch.payoutDate || todayYmd();
+		const acc = formatPayAccount(batch.payBank, batch.payCardNo);
+		const day = markDone ? batch.payoutDate || todayYmd() : "";
 		for (const e of batchRows) {
 			saveOne(e, {
 				claimant: batch.claimant.trim(),
-				forWhom: (batch.forWhom || e.forWhom || batch.claimant).trim(),
-				payAccount: batch.payAccount.trim(),
+				forWhom: (batch.forWhom || e.forWhom).trim(),
+				payBank: batch.payBank.trim(),
+				payCardNo: batch.payCardNo.trim(),
+				payAccount: acc,
 				payoutMethod: batch.payoutMethod || "转账",
-				payoutDate: day,
+				payoutDate: markDone ? day : e.status === "已报销" ? e.payoutDate : "",
 				payoutId: pid,
 				payoutFileName: batch.payoutFileName || e.payoutFileName || "",
 				status: markDone ? "已报销" : e.status,
@@ -325,15 +368,18 @@ function ExpensesPage() {
 			toast.error("先勾选要一起报销的几笔");
 			return;
 		}
-		if (!batch.claimant.trim() || !batch.payAccount.trim()) {
-			toast.error("先填报销人和打款账户，打款凭证按这个命名");
+		if (!batch.claimant.trim() || !batch.forWhom.trim() || !(batch.payBank || "").trim() || !(batch.payCardNo || "").trim()) {
+			toast.error("先填报销人、收款人、开户行和打款账户，打款凭证按这个命名");
 			return;
 		}
+		const acc = formatPayAccount(batch.payBank, batch.payCardNo);
 		const group = batchRows.map((e) => ({
 			...e,
 			claimant: batch.claimant,
 			forWhom: batch.forWhom || e.forWhom,
-			payAccount: batch.payAccount
+			payBank: batch.payBank,
+			payCardNo: batch.payCardNo,
+			payAccount: acc
 		}));
 		const pid = batch.payoutId || uid();
 		const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".pdf";
@@ -350,9 +396,11 @@ function ExpensesPage() {
 		for (const e of batchRows) saveOne(e, {
 			claimant: batch.claimant.trim(),
 			forWhom: (batch.forWhom || e.forWhom || batch.claimant).trim(),
-			payAccount: batch.payAccount.trim(),
+			payBank: batch.payBank.trim(),
+			payCardNo: batch.payCardNo.trim(),
+			payAccount: acc,
 			payoutMethod: batch.payoutMethod || "转账",
-			payoutDate: batch.payoutDate || todayYmd(),
+			payoutDate: e.status === "已报销" ? e.payoutDate || batch.payoutDate : "",
 			payoutId: pid,
 			payoutFileName: saved
 		});
@@ -374,7 +422,7 @@ function ExpensesPage() {
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 									className: "mt-1 max-w-2xl text-sm text-muted",
-									children: "每笔记下报销人、给谁报、打到哪个账户。几笔一起报就勾选后填打款，共用一张打款凭证。搜索报销人/账户就能查到这批。"
+									children: "每笔记下报销人、收款人、开户行和打款账户。几笔一起报就勾选后填打款，共用一张打款凭证。收款人填过一次下次能选，不跟人员名单挂钩。"
 								})
 							] }),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -452,7 +500,7 @@ function ExpensesPage() {
 										className: "mt-1",
 										value: q,
 										onChange: (e) => setQ(e.target.value),
-										placeholder: "项目 / 报销人 / 给谁 / 打款账户 / 凭证"
+										placeholder: "项目 / 报销人 / 收款人 / 开户行 / 打款账户 / 凭证"
 									})
 								]
 							}),
@@ -505,33 +553,41 @@ function ExpensesPage() {
 											names,
 											listId: "exp-claimant",
 											placeholder: "人员名单里选，也可手填",
-											onChange: (v) => setBatch((b) => ({
-												...b,
-												claimant: v,
-												forWhom: !b.forWhom || b.forWhom === b.claimant ? v : b.forWhom
-											}))
+											onChange: (v) => setBatch((b) => ({ ...b, claimant: v }))
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-										label: "给谁报销",
+										label: "收款人 *（打到谁的账户）",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(NameInput, {
 											value: batch.forWhom,
-											names,
-											listId: "exp-for",
-											placeholder: "空则同报销人",
-											onChange: (v) => setBatch((b) => ({ ...b, forWhom: v }))
+											names: payees.map((p) => p.name),
+											listId: "exp-payee",
+											placeholder: "填过的可下拉选，不跟人员名单关联",
+											onChange: (v) => setBatch((b) => applyPayee(b, payees, v))
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-										label: "打款账户 *（打到哪个里）",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
-											value: batch.payAccount,
-											placeholder: "如 张三工商尾号1234 / 微信",
-											onChange: (e) => setBatch((b) => ({ ...b, payAccount: e.target.value }))
+										label: "开户行 *",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(NameInput, {
+											value: batch.payBank,
+											names: [...new Set(payees.map((p) => p.bank).filter(Boolean))],
+											listId: "exp-bank",
+											placeholder: "如 工商银行XX支行",
+											onChange: (v) => setBatch((b) => ({ ...b, payBank: v, payAccount: formatPayAccount(v, b.payCardNo) }))
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-										label: "打款日期",
+										label: "打款账户 *",
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(NameInput, {
+											value: batch.payCardNo,
+											names: [...new Set(payees.map((p) => p.card).filter(Boolean))],
+											listId: "exp-card",
+											placeholder: "银行卡号，填过可下拉选",
+											onChange: (v) => setBatch((b) => ({ ...b, payCardNo: v, payAccount: formatPayAccount(b.payBank, v) }))
+										})
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+										label: "打款日期（记为已报销后填）",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
 											type: "date",
 											value: batch.payoutDate,
@@ -671,7 +727,7 @@ function ExpensesPage() {
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "购买时间" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "金额" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "报销人" }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "给谁" }),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "收款人" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "打款账户" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "状态" }),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "购买凭证" }),
@@ -711,8 +767,8 @@ function ExpensesPage() {
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2", children: e.period || e.date }),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2 text-right tabular-nums font-medium", children: money(e.amount) }),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2", children: e.claimant || "—" }),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2", children: e.forWhom || e.claimant || "—" }),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2 text-xs", children: e.payAccount || "—" }),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2", children: e.forWhom || "—" }),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-2 text-xs", children: accountOf(e) || "—" }),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 													className: "p-2",
 													children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
@@ -740,6 +796,7 @@ function ExpensesPage() {
 						draft: editing,
 						creating,
 						all: list,
+						payees,
 						selectedIds: selected,
 						names,
 						onCancel: () => {
@@ -764,8 +821,13 @@ function ExpensesPage() {
 	});
 }
 
-function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onSave, onDelete }) {
-	const [c, setC] = (0, import_react.useState)(draft);
+function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCancel, onSave, onDelete }) {
+	const [c, setC] = (0, import_react.useState)(() => ({
+		...draft,
+		payBank: draft.payBank || (!draft.payCardNo ? draft.payAccount : "") || "",
+		payCardNo: draft.payCardNo || "",
+		payoutDate: draft.status === "已报销" ? draft.payoutDate || "" : ""
+	}));
 	(0, import_react.useEffect)(() => {
 		const onKey = (e) => {
 			if (e.key === "Escape") onCancel();
@@ -777,7 +839,22 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 		setC((prev) => {
 			const next = { ...prev, [key]: value };
 			if (key === "qty" || key === "price") next.amount = round2((key === "qty" ? value : next.qty) * (key === "price" ? value : next.price));
-			if (key === "claimant" && (!prev.forWhom || prev.forWhom === prev.claimant)) next.forWhom = value;
+			if (key === "forWhom") {
+				const filled = applyPayee(next, payees, value);
+				next.payBank = filled.payBank;
+				next.payCardNo = filled.payCardNo;
+				next.payAccount = filled.payAccount;
+			}
+			if (key === "payBank" || key === "payCardNo") next.payAccount = formatPayAccount(next.payBank, next.payCardNo);
+			if (key === "status") {
+				if (value === "已报销") {
+					next.payoutDate = prev.payoutDate || todayYmd();
+					next.reimbursedAt = prev.reimbursedAt || next.payoutDate;
+				} else {
+					next.payoutDate = "";
+					next.reimbursedAt = "";
+				}
+			}
 			return next;
 		});
 	}
@@ -824,8 +901,8 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 	}
 	async function uploadPayout(file) {
 		if (!file) return;
-		if (!c.claimant.trim() || !c.payAccount.trim()) {
-			toast.error("先填报销人和打款账户");
+		if (!c.claimant.trim() || !(c.forWhom || "").trim() || !(c.payBank || "").trim() || !(c.payCardNo || "").trim()) {
+			toast.error("先填报销人、收款人、开户行和打款账户");
 			return;
 		}
 		const group = siblings.length > 1 ? siblings.map((e) => e.id === c.id ? c : e) : [c];
@@ -841,7 +918,7 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 			id: c.id || uid(),
 			payoutId: pid,
 			payoutFileName: savedPay,
-			payoutDate: c.payoutDate || todayYmd()
+			payoutDate: c.status === "已报销" ? c.payoutDate || todayYmd() : ""
 		};
 		setC(next);
 		onSave(next);
@@ -879,11 +956,16 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 										toast.error("项目名称必填");
 										return;
 									}
+									if (c.status === "已报销" && (!(c.forWhom || "").trim() || !(c.payBank || "").trim() || !(c.payCardNo || "").trim())) {
+										toast.error("已报销要填收款人、开户行和打款账户");
+										return;
+									}
 									if (needsVoucher(c.payMethod) && !c.voucherFileName && !confirm("购买不是现金，还没上传凭证。仍要保存？")) return;
 									onSave({
 										...c,
 										id: c.id || uid(),
-										forWhom: c.forWhom || c.claimant,
+										payAccount: formatPayAccount(c.payBank, c.payCardNo),
+										payoutDate: c.status === "已报销" ? c.payoutDate || todayYmd() : "",
 										amount: round2(c.amount || c.qty * c.price)
 									});
 								},
@@ -938,21 +1020,33 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-						label: "给谁报销",
+						label: "收款人（打到谁的账户）",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(NameInput, {
 							value: c.forWhom,
-							names,
-							listId: "ed-for",
-							placeholder: "空则同报销人",
+							names: (payees || []).map((p) => p.name),
+							listId: "ed-payee",
+							placeholder: "填过的可下拉选，不跟人员名单关联",
 							onChange: (v) => patch("forWhom", v)
 						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-						label: "打款账户（打到哪个里）",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
-							value: c.payAccount || "",
-							placeholder: "如 张三工商尾号1234 / 微信",
-							onChange: (e) => patch("payAccount", e.target.value)
+						label: "开户行",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(NameInput, {
+							value: c.payBank || "",
+							names: [...new Set((payees || []).map((p) => p.bank).filter(Boolean))],
+							listId: "ed-bank",
+							placeholder: "选收款人会带出上次账户，也可手填",
+							onChange: (v) => patch("payBank", v)
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
+						label: "打款账户",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(NameInput, {
+							value: c.payCardNo || "",
+							names: [...new Set((payees || []).map((p) => p.card).filter(Boolean))],
+							listId: "ed-card",
+							placeholder: "银行卡号，填过可下拉选",
+							onChange: (v) => patch("payCardNo", v)
 						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
@@ -965,10 +1059,11 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Field, {
-						label: "打款日期",
+						label: c.status === "已报销" ? "打款日期" : "打款日期（未报销为空）",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
 							type: "date",
-							value: c.payoutDate || "",
+							value: c.status === "已报销" ? c.payoutDate || "" : "",
+							disabled: c.status !== "已报销",
 							onChange: (e) => patch("payoutDate", e.target.value)
 						})
 					}),
@@ -992,103 +1087,83 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid gap-3 sm:grid-cols-2",
+				className: "divide-y divide-line rounded-md border border-line bg-bg-elevated px-3",
 				children: [
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "space-y-2",
-						children: [
-							existingVouchers.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-								className: "block text-sm",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs text-muted", children: "挂到已有购买凭证" }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-										className: "field-select mt-1 w-full",
-										value: c.voucherId || "",
-										onChange: (e) => {
-											const id = e.target.value;
-											if (!id) {
-												patch("voucherId", "");
-												patch("voucherFileName", "");
-												return;
-											}
-											const hit = existingVouchers.find((x) => x.voucherId === id);
-											setC((prev) => ({ ...prev, voucherId: id, voucherFileName: hit?.voucherFileName || prev.voucherFileName }));
-										},
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "不挂，单独上传" }),
-											existingVouchers.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: e.voucherId, children: e.voucherFileName }, e.voucherId))
-										]
-									})
-								]
-							}) : null,
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(VoucherSlot, {
-								title: "购买凭证",
-								hint: "现金也可以传。文件名「项目名称-金额」。",
-								id: c.voucherId || c.id,
-								kind: "expense",
-								fileName: c.voucherFileName,
-								optional: c.payMethod === "现金",
-								onFile: uploadVoucher,
-								onDeleted: () => {
-									const next = { ...c, voucherFileName: "", voucherId: "" };
-									setC(next);
-									onSave(next);
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(VoucherSlot, {
+						title: "购买凭证",
+						hint: "现金也可以传。文件名「项目名称-金额」。",
+						id: c.voucherId || c.id,
+						kind: "expense",
+						fileName: c.voucherFileName,
+						optional: c.payMethod === "现金",
+						extra: existingVouchers.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							className: "h-8 max-w-40 rounded-sm border border-line bg-surface px-2 text-[11px]",
+							value: c.voucherId || "",
+							onChange: (e) => {
+								const id = e.target.value;
+								if (!id) {
+									patch("voucherId", "");
+									patch("voucherFileName", "");
+									return;
 								}
-							})
-						]
+								const hit = existingVouchers.find((x) => x.voucherId === id);
+								setC((prev) => ({ ...prev, voucherId: id, voucherFileName: hit?.voucherFileName || prev.voucherFileName }));
+							},
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "单独上传" }),
+								existingVouchers.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: e.voucherId, children: e.voucherFileName }, e.voucherId))
+							]
+						}) : null,
+						onFile: uploadVoucher,
+						onDeleted: () => {
+							const next = { ...c, voucherFileName: "", voucherId: "" };
+							setC(next);
+							onSave(next);
+						}
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "space-y-2",
-						children: [
-							existingPayouts.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-								className: "block text-sm",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs text-muted", children: "挂到已有打款" }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-										className: "field-select mt-1 w-full",
-										value: c.payoutId || "",
-										onChange: (e) => {
-											const id = e.target.value;
-											if (!id) {
-												setC((prev) => ({ ...prev, payoutId: "", payoutFileName: "" }));
-												return;
-											}
-											const hit = existingPayouts.find((x) => x.payoutId === id);
-											setC((prev) => ({
-												...prev,
-												payoutId: id,
-												payoutFileName: hit?.payoutFileName || prev.payoutFileName,
-												claimant: prev.claimant || hit?.claimant || "",
-												forWhom: prev.forWhom || hit?.forWhom || "",
-												payAccount: prev.payAccount || hit?.payAccount || "",
-												payoutMethod: prev.payoutMethod || hit?.payoutMethod || "转账",
-												payoutDate: prev.payoutDate || hit?.payoutDate || ""
-											}));
-										},
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "不挂，单独上传" }),
-											existingPayouts.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-												value: e.payoutId,
-												children: `${e.payoutFileName}（${e.claimant || "未填人"} → ${e.payAccount || "未填账户"}）`
-											}, e.payoutId))
-										]
-									})
-								]
-							}) : null,
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(VoucherSlot, {
-								title: "打款凭证",
-								hint: siblings.length > 1 ? `同批 ${siblings.length} 笔共用` : "几笔一起报时共用一张。",
-								id: c.payoutId || c.id,
-								kind: "payout",
-								fileName: c.payoutFileName,
-								optional: (c.payoutMethod || "转账") === "现金",
-								onFile: uploadPayout,
-								onDeleted: () => {
-									setC((prev) => ({ ...prev, payoutFileName: "" }));
-									onSave({ ...c, payoutFileName: "" });
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(VoucherSlot, {
+						title: "打款凭证",
+						hint: siblings.length > 1 ? `同批 ${siblings.length} 笔共用` : "几笔一起报时共用一张。",
+						id: c.payoutId || c.id,
+						kind: "payout",
+						fileName: c.payoutFileName,
+						optional: (c.payoutMethod || "转账") === "现金",
+						extra: existingPayouts.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+							className: "h-8 max-w-40 rounded-sm border border-line bg-surface px-2 text-[11px]",
+							value: c.payoutId || "",
+							onChange: (e) => {
+								const id = e.target.value;
+								if (!id) {
+									setC((prev) => ({ ...prev, payoutId: "", payoutFileName: "" }));
+									return;
 								}
-							})
-						]
+								const hit = existingPayouts.find((x) => x.payoutId === id);
+								setC((prev) => ({
+									...prev,
+									payoutId: id,
+									payoutFileName: hit?.payoutFileName || prev.payoutFileName,
+									claimant: prev.claimant || hit?.claimant || "",
+									forWhom: prev.forWhom || hit?.forWhom || "",
+									payBank: prev.payBank || hit?.payBank || "",
+									payCardNo: prev.payCardNo || hit?.payCardNo || "",
+									payAccount: prev.payAccount || hit?.payAccount || "",
+									payoutMethod: prev.payoutMethod || hit?.payoutMethod || "转账",
+									payoutDate: prev.status === "已报销" ? prev.payoutDate || hit?.payoutDate || "" : ""
+								}));
+							},
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "单独上传" }),
+								existingPayouts.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+									value: e.payoutId,
+									children: `${e.payoutFileName}（${e.claimant || "未填人"}）`
+								}, e.payoutId))
+							]
+						}) : null,
+						onFile: uploadPayout,
+						onDeleted: () => {
+							setC((prev) => ({ ...prev, payoutFileName: "" }));
+							onSave({ ...c, payoutFileName: "" });
+						}
 					})
 				]
 			})
@@ -1101,8 +1176,9 @@ function ExpenseSheets({ rows, withImages }) {
 	const today = todayYmd();
 	const total = rows.reduce((s, e) => s + (e.amount || 0), 0);
 	const claimants = [...new Set(rows.map((e) => e.claimant).filter(Boolean))];
-	const forWhoms = [...new Set(rows.map((e) => e.forWhom || e.claimant).filter(Boolean))];
-	const accounts = [...new Set(rows.map((e) => e.payAccount).filter(Boolean))];
+	const forWhoms = [...new Set(rows.map((e) => e.forWhom).filter(Boolean))];
+	const banks = [...new Set(rows.map((e) => (e.payBank || "").trim()).filter(Boolean))];
+	const cards = [...new Set(rows.map((e) => (e.payCardNo || "").trim()).filter(Boolean))];
 	const images = [];
 	if (withImages) {
 		const seenV = /* @__PURE__ */ new Set();
@@ -1131,18 +1207,28 @@ function ExpenseSheets({ rows, withImages }) {
 							children: "报销单"
 						})
 					}),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-						className: "mt-2 text-left text-xs",
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "mt-2 w-full border-collapse text-center text-xs",
 						children: [
-							"报销人：", claimants.join("、") || "—",
-							"　给谁：", forWhoms.join("、") || "—",
-							"　打款账户：", accounts.join("、") || "—"
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: ["报销人", "收款人", "开户行", "打款账户"].map((col) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "border border-black px-1 py-1 font-medium",
+								children: col
+							}, col)) }) }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: [
+								claimants.join("、") || "—",
+								forWhoms.join("、") || "—",
+								banks.join("、") || "—",
+								cards.join("、") || "—"
+							].map((v, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: v
+							}, i)) }) })
 						]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-						className: "mt-3 w-full border-collapse text-center text-xs",
+						className: "mt-2 w-full border-collapse text-center text-xs",
 						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: ["序号", "项目", "购买时间", "金额", "报销人", "给谁", "打款账户", "备注", "票据"].map((col) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: ["序号", "项目", "购买时间", "金额", "备注", "票据"].map((col) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 								className: "border border-black px-1 py-1 font-medium",
 								children: col
 							}, col)) }) }),
@@ -1152,16 +1238,13 @@ function ExpenseSheets({ rows, withImages }) {
 									e.name,
 									e.period || e.date,
 									money(e.amount),
-									e.claimant || "—",
-									e.forWhom || e.claimant || "—",
-									e.payAccount || "—",
 									e.remark || "",
 									e.voucherFileName || (e.payMethod === "现金" ? "现金" : "—")
 								].map((v, k) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 									className: "border border-black px-1 py-1",
 									children: v
 								}, k)) }, e.id)),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: ["合计", "", "", money(total), "", "", "", "", ""].map((v, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: ["合计", "", "", money(total), "", ""].map((v, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 									className: "border border-black px-1 py-1 font-medium",
 									children: v
 								}, i)) })
