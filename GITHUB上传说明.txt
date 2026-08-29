@@ -1,0 +1,26 @@
+把本包覆盖上传到 GitHub 仓库 qq987985/gongdi-ledger
+================================================
+
+网页一次最多 100 个文件，本包超过 100 个。请用 GitHub Desktop，
+或先传 app/ 并 Commit，再传其余文件。
+
+.github 文件夹解压后经常看不见。请打开仓库 → Actions → 新建工作流，
+把 docker-workflow.yml 全文粘贴保存为 .github/workflows/docker.yml
+
+不要上传：
+  data/                 真实台账、账号、照片、合同扫描件
+  node/                 Windows 自带的 node.exe
+  任何 zip 安装包
+  办公室原来的人员表、考勤表、合同表（真实名单）
+  data/templates/       运行时目录；空白模板在 app/public/templates/，那个要上传
+
+要上传：
+  app/ 整份（含 app/public/templates 空白导入模板）
+  Dockerfile、compose、脚本、VERSION.txt、win/、README 和说明文档
+
+推到 main 后看 Actions 是否全绿。
+然后 GitHub → Packages → gongdi-ledger → 改成 Public。
+
+飞牛上：
+  本机构建   ./一键部署.sh
+  拉镜像     ./一键拉取.sh

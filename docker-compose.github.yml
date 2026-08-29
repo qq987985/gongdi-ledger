@@ -1,0 +1,27 @@
+# 从 GitHub 拉镜像时用：
+#   ./一键拉取.sh
+# 或：
+#   docker compose -f docker-compose.github.yml pull
+#   docker compose -f docker-compose.github.yml up -d
+#
+# 前提：Actions 已成功，Packages 里 gongdi-ledger 为 Public。
+# 只挂 data，不要挂 VERSION.txt。
+services:
+  attendance:
+    image: ghcr.1ms.run/qq987985/gongdi-ledger:latest
+    container_name: attendance-app
+    restart: unless-stopped
+    ports:
+      - "8501:8080"
+    volumes:
+      - /vol1/1000/docker/attendance/data:/data
+    environment:
+      DATA_DIR: /data
+      PHOTO_DIR: /data/photos
+      PHOTO_ID_DIR: /data/photos/id
+      PHOTO_BANK_DIR: /data/photos/bank
+      PHOTO_IC_DIR: /data/photos/ic
+      NITRO_HOST: 0.0.0.0
+      NITRO_PORT: "8080"
+      HOST: 0.0.0.0
+      PORT: "8080"
