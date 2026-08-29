@@ -2679,7 +2679,7 @@ function parseChangelog(text) {
 //#region node_modules/.nitro/vite/services/ssr/assets/button-Ku4MoRaK.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
-var buttonVariants = cva("inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm text-sm font-medium transition-opacity duration-150 disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2", {
+var buttonVariants = cva("btn inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-sm text-xs font-medium transition-opacity duration-150 disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2", {
 	variants: {
 		variant: {
 			default: "bg-accent text-accent-fg hover:opacity-90",
@@ -2688,10 +2688,10 @@ var buttonVariants = cva("inline-flex items-center justify-center gap-2 whitespa
 			danger: "bg-danger text-danger-fg hover:opacity-90"
 		},
 		size: {
-			default: "h-10 px-4",
-			sm: "h-9 px-3 text-xs",
-			lg: "h-11 px-5",
-			icon: "size-10"
+			default: "",
+			sm: "btn-sm",
+			lg: "btn-lg",
+			icon: "btn-icon"
 		}
 	},
 	defaultVariants: {
@@ -4076,7 +4076,7 @@ function SetupScreen({ onOk }) {
 					]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-					className: "mt-5 h-11 w-full",
+					className: "btn-lg mt-5 w-full",
 					type: "submit",
 					disabled: busy,
 					children: "创建并进入"
@@ -4100,7 +4100,7 @@ function NoBookScreen({ onOut }) {
 					children: "这个账户没有自己的台账。请让管理员在「设置 → 这套台账的成员」里把你加进去。"
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-					className: "mt-5 h-11 w-full",
+					className: "btn-lg mt-5 w-full",
 					type: "button",
 					variant: "outline",
 					onClick: () => {
@@ -4166,7 +4166,7 @@ function AcctLogin({ onOk }) {
 					})]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-					className: "mt-5 h-11 w-full",
+					className: "btn-lg mt-5 w-full",
 					type: "submit",
 					disabled: busy || !username || !pwd,
 					children: "登录"
@@ -4234,7 +4234,7 @@ function LoginScreen({ accessHash, onOk }) {
 					}), "本机记住，下次不用再输"]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-					className: "mt-5 h-11 w-full",
+					className: "btn-lg mt-5 w-full",
 					type: "submit",
 					disabled: busy || !pwd,
 					children: "进入"
@@ -4296,7 +4296,7 @@ function NavLink({ to, label, icon: Icon, active, onClick }) {
 		to,
 		onClick,
 		preload: false,
-		className: cn("flex h-11 items-center gap-2 rounded-sm px-3 text-sm transition-colors duration-150 md:h-10", active ? "bg-accent text-accent-fg" : "text-muted hover:bg-accent-soft hover:text-ink"),
+		className: cn("flex h-9 items-center gap-1 rounded-sm px-2.5 text-xs transition-colors duration-150 md:h-8", active ? "bg-accent text-accent-fg" : "text-muted hover:bg-accent-soft hover:text-ink"),
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "size-4" }), label]
 	});
 }
@@ -4543,10 +4543,10 @@ var Route$10 = createFileRoute("/api/doc")({ server: { handlers: {
 		if (!id || !kind || !(file instanceof File)) return Response.json({ ok: false }, { status: 400 });
 		const buf = Buffer.from(await file.arrayBuffer());
 		return withTenant(request, async () => {
-			await saveDoc(id, kind, buf, file.name);
+			const saved = await saveDoc(id, kind, buf, file.name);
 			return Response.json({
 				ok: true,
-				fileName: file.name
+				fileName: saved || file.name
 			});
 		}, "files.edit");
 	},

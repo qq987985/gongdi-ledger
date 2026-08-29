@@ -8,7 +8,7 @@ var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function ExcelBtn({ label, onFile }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-		className: "inline-flex h-10 cursor-pointer items-center rounded-sm border border-line px-4 text-sm hover:bg-accent-soft",
+		className: "btn inline-flex cursor-pointer items-center rounded-sm border border-line text-xs hover:bg-accent-soft",
 		children: [label, /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 			type: "file",
 			accept: ".xlsx,.xls",
@@ -22,7 +22,7 @@ function ExcelBtn({ label, onFile }) {
 }
 function TplLink({ href, filename, label = "下载模板" }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-		className: "inline-flex h-10 items-center rounded-sm border border-line px-4 text-sm hover:bg-accent-soft",
+		className: "btn inline-flex items-center rounded-sm border border-line text-xs hover:bg-accent-soft",
 		href,
 		download: filename,
 		children: label

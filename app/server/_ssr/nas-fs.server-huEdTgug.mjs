@@ -407,9 +407,12 @@ async function savePhoto(name, kind, dataUrl) {
 	const mime = m[1];
 	const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("bmp") ? "bmp" : "jpg";
 	const dir = kindDir(kind);
-	const files = existsSync(dir) ? await readdir(dir) : [];
-	for (const f of files) if (photoFileMatches(f, n, kind, false)) await rm(join(dir, f), { force: true });
-	await writeFile(join(dir, `${n}-${labelOf(kind)}.${ext}`), Buffer.from(m[2], "base64"));
+	const destName = `${n}-${labelOf(kind)}.${ext}`;
+	const dest = join(dir, destName);
+	const hit = await findPhotoHit(n, kind);
+	if (hit && join(hit.dir, hit.file) !== dest) await rm(join(hit.dir, hit.file), { force: true });
+	await mkdir(dir, { recursive: true });
+	await writeFile(dest, Buffer.from(m[2], "base64"));
 }
 async function removePhoto(name, kind) {
 	if (!persistOn()) return;
@@ -535,30 +538,57 @@ async function readPointerName(dir, sid) {
 		return "";
 	}
 }
+async function otherPointersUse(dir, sid, fileName) {
+	if (!fileName) return false;
+	const files = await listDirSafe(dir);
+	for (const f of files) {
+		if (!f.endsWith(".name.txt") || f === `${sid}.name.txt`) continue;
+		try {
+			if ((await readFile(join(dir, f), "utf8")).trim() === fileName) return true;
+		} catch {}
+	}
+	return false;
+}
+function uniqueFileName(dir, orig, allow) {
+	if (!orig) return orig;
+	if (!existsSync(dir) || orig === allow) return orig;
+	if (!existsSync(join(dir, orig))) return orig;
+	const ext = extname(orig);
+	const stem = ext ? orig.slice(0, orig.length - ext.length) : orig;
+	let i = 2;
+	while (existsSync(join(dir, `${stem}-${i}${ext}`))) i += 1;
+	return `${stem}-${i}${ext}`;
+}
 async function sweepDocFiles(kind, sid) {
 	for (const d of docSearchDirs(kind)) {
 		const files = await listDirSafe(d);
 		const prev = await readPointerName(d, sid);
+		const shared = prev ? await otherPointersUse(d, sid, prev) : false;
 		for (const f of files) {
-			if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt` || prev && f === prev) await rm(join(d, f), { force: true });
+			if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt`) await rm(join(d, f), { force: true });
+			else if (prev && f === prev && !shared) await rm(join(d, f), { force: true });
 		}
 	}
 }
 async function saveDoc(id, kind, buf, fileName) {
-	if (!persistOn()) return;
+	if (!persistOn()) return fileName || "";
 	await ensureDirs();
 	const dir = docsDir(kind);
-	if (!dir) return;
+	if (!dir) return fileName || "";
 	await mkdir(dir, { recursive: true });
 	const sid = safeId(id);
-	if (!sid) return;
+	if (!sid) return fileName || "";
 	const ext = extname(fileName || "").slice(0, 8) || ".bin";
-	const orig = (fileName || `file${ext}`).replace(/[\\/]/g, "");
+	let orig = (fileName || `file${ext}`).replace(/[\\/]/g, "");
+	const prev = await readPointerName(dir, sid);
+	const sharedPrev = prev ? await otherPointersUse(dir, sid, prev) : false;
+	orig = uniqueFileName(dir, orig, prev && !sharedPrev ? prev : "");
 	await sweepDocFiles(kind, sid);
 	if (kind === "contract" || kind === "expense" || kind === "payout") {
 		await writeFile(join(dir, orig), buf);
 		await writeFile(join(dir, `${sid}.name.txt`), orig, "utf8");
 	} else await writeFile(join(dir, `${sid}--${orig}`), buf);
+	return orig;
 }
 async function removeDocFile(id, kind) {
 	if (!persistOn()) return;

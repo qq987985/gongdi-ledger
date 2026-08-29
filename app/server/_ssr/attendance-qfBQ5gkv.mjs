@@ -753,13 +753,13 @@ function MonthFiles({ year, month }) {
 						for (const file of files) {
 							const id = uid();
 							const named = renameFile(file, uniqueBase(attendanceBase(year, month), taken));
-							taken.push(named.name);
-							await setDoc(id, "attendance", named);
+							const saved = await setDoc(id, "attendance", named) || named.name;
+							taken.push(saved);
 							add({
 								id,
 								year,
 								month,
-								fileName: named.name,
+								fileName: saved,
 								remark
 							});
 						}

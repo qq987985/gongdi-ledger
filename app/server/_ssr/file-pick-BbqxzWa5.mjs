@@ -65,7 +65,7 @@ function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, com
 		type: "button",
 		disabled,
 		title: hint,
-		className: "inline-flex h-10 items-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50",
+		className: "btn inline-flex items-center gap-1 rounded-sm bg-accent text-xs font-medium text-accent-fg hover:opacity-90 disabled:opacity-50",
 		onClick: () => ref.current?.click(),
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "size-4" }), label]
 	});
@@ -97,7 +97,7 @@ function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, com
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 				type: "button",
 				disabled,
-				className: "inline-flex h-11 items-center gap-2 rounded-sm bg-accent px-4 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50",
+				className: "btn inline-flex items-center gap-1 rounded-sm bg-accent text-xs font-medium text-accent-fg hover:opacity-90 disabled:opacity-50",
 				onClick: () => ref.current?.click(),
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "size-4" }), label]
 			}),

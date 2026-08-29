@@ -378,13 +378,13 @@ function ContractsPage() {
 						className: "flex flex-wrap gap-2",
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-								className: "inline-flex h-10 items-center rounded-sm border border-line px-4 text-sm",
+								className: "btn inline-flex items-center rounded-sm border border-line text-xs",
 								href: "/api/file/contract-template",
 								children: "下载模板"
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ContractImport, {}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-								className: "inline-flex h-10 items-center rounded-sm border border-line px-4 text-sm",
+								className: "btn inline-flex items-center rounded-sm border border-line text-xs",
 								href: `/api/file/contract-export?year=${year}`,
 								children: [
 									"导出 ",
@@ -393,7 +393,7 @@ function ContractsPage() {
 								]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-								className: "inline-flex h-10 items-center rounded-sm border border-line px-4 text-sm",
+								className: "btn inline-flex items-center rounded-sm border border-line text-xs",
 								href: "/api/file/contract-export",
 								children: "导出全部合同"
 							}),
@@ -879,7 +879,7 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 					className: "font-semibold",
 					children: creating ? "新增合同" : c.name || "编辑合同"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-wrap items-center gap-2",
+					className: "btn-row",
 					children: [
 						c.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
 							tone: "ok",
@@ -1223,8 +1223,8 @@ function DocPick({ label, fileName, disabled, onFile }) {
 async function attachNamed(id, kind, file, base, taken) {
 	if (!file) return "";
 	const named = renameFile(file, uniqueBase(base, taken));
-	await setDoc(id, kind, named);
-	return named.name;
+	const saved = await setDoc(id, kind, named) || named.name;
+	return saved;
 }
 function useTakenNames() {
 	const entries = useApp((s) => s.contractEntries);
@@ -1750,9 +1750,9 @@ function ContractScanBox({ contract, onFileName }) {
 						type: file.type,
 						lastModified: file.lastModified
 					});
-					await setDoc(contract.id, "contract", named);
-					onFileName(named.name);
-					toast.success(`已保存 ${named.name}`);
+					const saved = await setDoc(contract.id, "contract", named) || named.name;
+					onFileName(saved);
+					toast.success(`已保存 ${saved}`);
 				}
 			}),
 			contract.scanFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {

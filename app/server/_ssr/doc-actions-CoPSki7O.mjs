@@ -62,16 +62,23 @@ async function idbDel(id, kind) {
 }
 async function setDoc(id, kind, file) {
 	await idbSet(id, kind, file, file.name);
-	if (!nasEnabled()) return;
+	if (!nasEnabled()) return file.name;
 	const body = new FormData();
 	body.set("id", id);
 	body.set("kind", kind);
 	body.set("file", file, file.name);
-	await fetch("/api/doc", {
+	const res = await fetch("/api/doc", {
 		method: "PUT",
 		credentials: "include",
 		body
 	});
+	let name = file.name;
+	try {
+		const j = await res.json();
+		if (j?.fileName) name = j.fileName;
+	} catch {}
+	if (name !== file.name) await idbSet(id, kind, file, name);
+	return name;
 }
 async function removeDoc(id, kind) {
 	await idbDel(id, kind);
@@ -190,7 +197,7 @@ function DocActions({ id, kind, fileName, suggest, taken = [], onDeleted, onRepl
 			fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 					type: "button",
-					className: "rounded-sm border border-line px-2 py-1 text-[11px] hover:border-accent",
+					className: "rounded-sm border border-line px-1.5 py-0.5 text-[11px] hover:border-accent",
 					onClick: async () => {
 						if (!await openDoc(id, kind, fileName)) toast.error("文件不在，可能还没上传成功");
 					},
@@ -198,7 +205,7 @@ function DocActions({ id, kind, fileName, suggest, taken = [], onDeleted, onRepl
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 					type: "button",
-					className: "rounded-sm border border-line px-2 py-1 text-[11px] hover:border-accent",
+					className: "rounded-sm border border-line px-1.5 py-0.5 text-[11px] hover:border-accent",
 					onClick: async () => {
 						if (await downloadDoc(id, kind, fileName)) toast.success(`已下载 ${fileName}`);
 						else toast.error("下载失败");
@@ -207,7 +214,7 @@ function DocActions({ id, kind, fileName, suggest, taken = [], onDeleted, onRepl
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 					type: "button",
-					className: "rounded-sm border border-line px-2 py-1 text-[11px] hover:border-accent",
+					className: "rounded-sm border border-line px-1.5 py-0.5 text-[11px] hover:border-accent",
 					onClick: async () => {
 						const r = await copyDoc(id, kind, fileName);
 						if (r === "image") toast.success("图片已复制，可粘贴到微信/QQ");
@@ -232,19 +239,19 @@ function DocActions({ id, kind, fileName, suggest, taken = [], onDeleted, onRepl
 					const tip = fileName ? `用「${f.name}」替换影像资料「${fileName}」？` : `上传影像资料「${f.name}」？`;
 					if (!confirm(tip)) return;
 					const named = suggest ? renameFile(f, uniqueBase(suggest, taken.filter((n) => n !== fileName))) : f;
-					await setDoc(id, kind, named);
-					onReplaced(named.name);
-					toast.success(fileName ? `已替换为 ${named.name}` : `已上传 ${named.name}`);
+					const saved = await setDoc(id, kind, named) || named.name;
+					onReplaced(saved);
+					toast.success(fileName ? `已替换为 ${saved}` : `已上传 ${saved}`);
 				}
 			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 				type: "button",
-				className: "rounded-sm border border-line px-2 py-1 text-[11px] hover:border-accent",
+				className: "rounded-sm border border-line px-1.5 py-0.5 text-[11px] hover:border-accent",
 				onClick: () => ref.current?.click(),
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pencil, { className: "mr-1 inline size-3" }), fileName ? "替换" : "上传"]
 			})] }) : null,
 			onDeleted && fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 				type: "button",
-				className: "rounded-sm border border-line px-2 py-1 text-[11px] text-muted hover:text-danger",
+				className: "rounded-sm border border-line px-1.5 py-0.5 text-[11px] text-muted hover:text-danger",
 				onClick: async () => {
 					if (!confirm(`确认删除影像资料「${fileName}」？删除后无法从这里找回。`)) return;
 					await removeDoc(id, kind);
@@ -257,4 +264,4 @@ function DocActions({ id, kind, fileName, suggest, taken = [], onDeleted, onRepl
 	});
 }
 //#endregion
-export { receiptSubBase as a, renameFile as c, uniqueBase as d, invoiceBase as i, reportBase as l, DocActions as n, receiptWorkerBase as o, attendanceBase as r, removeDoc as s, DOC_KIND_LABEL as t, setDoc as u };
+export { receiptSubBase as a, renameFile as c, uniqueBase as d, getDocBlob as g, invoiceBase as i, reportBase as l, DocActions as n, receiptWorkerBase as o, attendanceBase as r, removeDoc as s, DOC_KIND_LABEL as t, setDoc as u };

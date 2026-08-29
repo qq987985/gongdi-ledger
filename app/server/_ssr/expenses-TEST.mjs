@@ -5,7 +5,6 @@ import { n as toast } from "../_libs/sonner.mjs";
 import { a as Input, f as Button, ft as confirmBatchDelete, gt as uid, ht as toggleSel, mt as money, o as Label, y as useApp } from "./router-DxdzlCp3.mjs";
 import { n as DocActions, u as setDoc } from "./doc-actions-CoPSki7O.mjs";
 import { n as WideTable } from "./wide-table-D8rPvj0E.mjs";
-import { n as FilePick } from "./file-pick-BbqxzWa5.mjs";
 import { n as Need } from "./can-gkGWV5bu.mjs";
 import { t as Badge } from "./badge-U3vNDWCk.mjs";
 var import_react = /* @__PURE__ */ __toESM(require_react());
@@ -114,12 +113,74 @@ function NameInput({ value, onChange, names, listId, placeholder }) {
 	] });
 }
 
+
+function VoucherSlot({ title, hint, id, kind, fileName, optional, onFile, onDeleted }) {
+	const ref = (0, import_react.useRef)(null);
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-2 rounded-md border border-dashed border-line bg-bg p-3",
+		onDragOver: (e) => e.preventDefault(),
+		onDrop: (e) => {
+			e.preventDefault();
+			const f = e.dataTransfer.files?.[0];
+			if (f) onFile(f);
+		},
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center justify-between gap-2",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs font-medium text-muted", children: title }),
+					fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "ok", children: "已上传" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: optional ? "选填" : "待上传" })
+				]
+			}),
+			fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "truncate text-xs",
+				title: fileName,
+				children: fileName
+			}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "text-[11px] text-muted",
+				children: hint || "点上传，或把文件拖到这里"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+				ref,
+				type: "file",
+				accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
+				className: "sr-only",
+				onChange: (e) => {
+					const f = e.target.files?.[0];
+					e.target.value = "";
+					if (f) onFile(f);
+				}
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-wrap items-center gap-1",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "btn inline-flex items-center rounded-sm bg-accent text-xs font-medium text-accent-fg hover:opacity-90",
+						onClick: () => ref.current?.click(),
+						children: fileName ? "更换" : "上传"
+					}),
+					fileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
+						id: id || "pending",
+						kind,
+						fileName,
+						suggest: "",
+						taken: [],
+						onDeleted
+					}) : null
+				]
+			})
+		]
+	});
+}
+
 function ExpensesPage() {
 	const { year, expenses, upsertExpense, removeExpenses, people } = useApp();
 	const list = expenses || [];
 	const names = uniqueNames(people, list);
 	const [q, setQ] = (0, import_react.useState)("");
 	const [status, setStatus] = (0, import_react.useState)("all");
+	const [claimant, setClaimant] = (0, import_react.useState)("all");
 	const [scope, setScope] = (0, import_react.useState)("year");
 	const [selected, setSelected] = (0, import_react.useState)([]);
 	const [editing, setEditing] = (0, import_react.useState)(null);
@@ -165,12 +226,14 @@ function ExpensesPage() {
 		let rows = list;
 		if (scope === "year") rows = rows.filter((e) => e.year === year);
 		if (status !== "all") rows = rows.filter((e) => e.status === status);
+		if (claimant !== "all") rows = rows.filter((e) => (e.claimant || "") === claimant);
 		if (q.trim()) {
 			const s = q.trim();
 			rows = rows.filter((e) => [e.name, e.period, e.remark, e.payMethod, e.claimant, e.forWhom, e.payAccount, e.payoutFileName, e.voucherFileName].some((x) => (x || "").includes(s)));
 		}
 		return rows.slice().sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id));
-	}, [list, year, scope, status, q]);
+	}, [list, year, scope, status, claimant, q]);
+	const claimantOpts = [...new Set((list || []).map((e) => e.claimant).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh"));
 	const allChecked = shown.length > 0 && shown.every((e) => selected.includes(e.id));
 	const totals = shown.reduce((s, e) => {
 		s.amount += e.amount || 0;
@@ -278,11 +341,11 @@ function ExpensesPage() {
 			type: file.type,
 			lastModified: file.lastModified
 		});
-		await setDoc(pid, "payout", named);
+		const saved = await setDoc(pid, "payout", named) || named.name;
 		setBatch((b) => ({
 			...b,
 			payoutId: pid,
-			payoutFileName: named.name
+			payoutFileName: saved
 		}));
 		for (const e of batchRows) saveOne(e, {
 			claimant: batch.claimant.trim(),
@@ -291,7 +354,7 @@ function ExpensesPage() {
 			payoutMethod: batch.payoutMethod || "转账",
 			payoutDate: batch.payoutDate || todayYmd(),
 			payoutId: pid,
-			payoutFileName: named.name
+			payoutFileName: saved
 		});
 		toast.success(`已保存打款凭证，挂到勾选的 ${batchRows.length} 笔`);
 	}
@@ -362,6 +425,21 @@ function ExpensesPage() {
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "all", children: "全部" }),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "未报销", children: "未报销" }),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "已报销", children: "已报销" })
+										]
+									})
+								]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "text-sm",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs text-muted", children: "报销人" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+										className: "field-select mt-1 w-auto",
+										value: claimant,
+										onChange: (e) => setClaimant(e.target.value),
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "all", children: "全部" }),
+											claimantOpts.map((n) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: n, children: n }, n))
 										]
 									})
 								]
@@ -481,24 +559,10 @@ function ExpensesPage() {
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilePick, {
-								kind: "file",
-								accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
-								label: batch.payoutFileName ? "更换打款凭证" : "上传打款凭证",
-								hint: batch.payoutMethod === "现金" ? "现金打款可以不传。" : batch.payoutFileName ? `已选：${batch.payoutFileName}` : "转账/微信等请上传回单，几笔共用这一张。存在 data/photos/报销打款/",
-								onFile: uploadPayout
-							}),
-							batch.payoutFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
-								id: batch.payoutId,
-								kind: "payout",
-								fileName: batch.payoutFileName,
-								suggest: payoutBase(batchRows.map((e) => ({ ...e, ...batch }))),
-								taken: [],
-								onDeleted: () => {
-									setBatch((b) => ({ ...b, payoutFileName: "" }));
-									for (const e of batchRows) if (e.payoutId === batch.payoutId) saveOne(e, { payoutFileName: "" });
-								}
-							}) : null
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-xs text-muted",
+								children: batch.payoutFileName ? `已挂打款凭证：${batch.payoutFileName}。要换图，点开其中一笔，在下面「打款凭证」上传，勾选的几笔共用。` : "打款凭证请点开其中一笔，在下面「打款凭证」上传。勾选的几笔共用一张。"
+							})
 						]
 					}) : null,
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -748,15 +812,15 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 			type: file.type,
 			lastModified: file.lastModified
 		});
-		await setDoc(vid, "expense", named);
-		const next = { ...c, id: c.id || uid(), voucherId: vid, voucherFileName: named.name };
+		const saved = await setDoc(vid, "expense", named) || named.name;
+		const next = { ...c, id: c.id || uid(), voucherId: vid, voucherFileName: saved };
 		setC(next);
 		onSave(next);
 		for (const e of group) {
 			if (e.id === next.id) continue;
-			onSave({ ...e, voucherId: vid, voucherFileName: named.name });
+			onSave({ ...e, voucherId: vid, voucherFileName: saved });
 		}
-		toast.success(group.length > 1 ? `已保存购买凭证，并挂到勾选的 ${group.length} 笔` : `已保存 ${named.name}`);
+		toast.success(group.length > 1 ? `已保存购买凭证，并挂到勾选的 ${group.length} 笔` : `已保存 ${saved}`);
 	}
 	async function uploadPayout(file) {
 		if (!file) return;
@@ -771,21 +835,21 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 			type: file.type,
 			lastModified: file.lastModified
 		});
-		await setDoc(pid, "payout", named);
+		const savedPay = await setDoc(pid, "payout", named) || named.name;
 		const next = {
 			...c,
 			id: c.id || uid(),
 			payoutId: pid,
-			payoutFileName: named.name,
+			payoutFileName: savedPay,
 			payoutDate: c.payoutDate || todayYmd()
 		};
 		setC(next);
 		onSave(next);
 		for (const e of group) {
 			if (e.id === next.id) continue;
-			onSave({ ...e, payoutId: pid, payoutFileName: named.name });
+			onSave({ ...e, payoutId: pid, payoutFileName: savedPay });
 		}
-		toast.success(group.length > 1 ? `已保存打款凭证，同批 ${group.length} 笔共用` : `已保存 ${named.name}`);
+		toast.success(group.length > 1 ? `已保存打款凭证，同批 ${group.length} 笔共用` : `已保存 ${savedPay}`);
 	}
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 		id: "expense-editor",
@@ -799,7 +863,7 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 						children: creating ? "新增报销" : c.name || "编辑报销"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "flex flex-wrap items-center gap-2",
+						className: "btn-row",
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
 								tone: c.status === "已报销" ? "ok" : "warn",
@@ -928,142 +992,104 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, onCancel, onS
 				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "rounded-lg border-2 border-dashed border-accent bg-accent-soft p-4",
+				className: "grid gap-3 sm:grid-cols-2",
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "mb-2 flex flex-wrap items-center justify-between gap-2",
+						className: "space-y-2",
 						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "text-sm font-semibold", children: "购买凭证" }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-									className: "mt-0.5 text-xs text-muted",
-									children: "现金也可以传，不强制。勾选多笔再上传会共用这一张。文件名「项目名称-金额」。"
-								})
-							] }),
-							c.voucherFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "ok", children: "已有凭证" }) : c.payMethod === "现金" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: "未传（选填）" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "warn", children: "缺凭证" })
-						]
-					}),
-					existingVouchers.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-						className: "mb-2 block text-sm",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs text-muted", children: "挂到已有购买凭证" }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-								className: "field-select mt-1 w-full",
-								value: c.voucherId || "",
-								onChange: (e) => {
-									const id = e.target.value;
-									if (!id) {
-										patch("voucherId", "");
-										patch("voucherFileName", "");
-										return;
-									}
-									const hit = existingVouchers.find((x) => x.voucherId === id);
-									setC((prev) => ({ ...prev, voucherId: id, voucherFileName: hit?.voucherFileName || prev.voucherFileName }));
-								},
+							existingVouchers.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "block text-sm",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "不挂，单独上传" }),
-									existingVouchers.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: e.voucherId, children: e.voucherFileName }, e.voucherId))
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs text-muted", children: "挂到已有购买凭证" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+										className: "field-select mt-1 w-full",
+										value: c.voucherId || "",
+										onChange: (e) => {
+											const id = e.target.value;
+											if (!id) {
+												patch("voucherId", "");
+												patch("voucherFileName", "");
+												return;
+											}
+											const hit = existingVouchers.find((x) => x.voucherId === id);
+											setC((prev) => ({ ...prev, voucherId: id, voucherFileName: hit?.voucherFileName || prev.voucherFileName }));
+										},
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "不挂，单独上传" }),
+											existingVouchers.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: e.voucherId, children: e.voucherFileName }, e.voucherId))
+										]
+									})
 								]
+							}) : null,
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(VoucherSlot, {
+								title: "购买凭证",
+								hint: "现金也可以传。文件名「项目名称-金额」。",
+								id: c.voucherId || c.id,
+								kind: "expense",
+								fileName: c.voucherFileName,
+								optional: c.payMethod === "现金",
+								onFile: uploadVoucher,
+								onDeleted: () => {
+									const next = { ...c, voucherFileName: "", voucherId: "" };
+									setC(next);
+									onSave(next);
+								}
 							})
 						]
-					}) : null,
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilePick, {
-						kind: "file",
-						accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
-						label: c.voucherFileName ? "更换购买凭证" : "上传购买凭证",
-						hint: c.voucherFileName ? `已选：${c.voucherFileName}` : shareTargets.length > 1 ? `将挂到勾选的 ${shareTargets.length} 笔` : "支持 PDF、照片",
-						onFile: uploadVoucher
 					}),
-					c.voucherFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "mt-2",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
-							id: c.voucherId || c.id,
-							kind: "expense",
-							fileName: c.voucherFileName,
-							suggest: voucherBase([c]),
-							taken: [],
-							onDeleted: () => {
-								const next = { ...c, voucherFileName: "", voucherId: "" };
-								setC(next);
-								onSave(next);
-							}
-						})
-					}) : null
-				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "rounded-lg border-2 border-dashed border-line bg-bg-elevated p-4",
-				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "mb-2 flex flex-wrap items-center justify-between gap-2",
+						className: "space-y-2",
 						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "text-sm font-semibold", children: "打款凭证" }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-									className: "mt-0.5 text-xs text-muted",
-									children: "公司把钱打给报销人/给谁的那张回单。同批几笔共用一张。现金可不传。"
-								})
-							] }),
-							(c.payoutMethod || "转账") === "现金" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: "现金无需凭证" }) : c.payoutFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "ok", children: "已有打款" }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { tone: "warn", children: "缺打款" })
-						]
-					}),
-					existingPayouts.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-						className: "mb-2 block text-sm",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs text-muted", children: "挂到已有打款（几笔一起报销）" }),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-								className: "field-select mt-1 w-full",
-								value: c.payoutId || "",
-								onChange: (e) => {
-									const id = e.target.value;
-									if (!id) {
-										setC((prev) => ({ ...prev, payoutId: "", payoutFileName: "" }));
-										return;
-									}
-									const hit = existingPayouts.find((x) => x.payoutId === id);
-									setC((prev) => ({
-										...prev,
-										payoutId: id,
-										payoutFileName: hit?.payoutFileName || prev.payoutFileName,
-										claimant: prev.claimant || hit?.claimant || "",
-										forWhom: prev.forWhom || hit?.forWhom || "",
-										payAccount: prev.payAccount || hit?.payAccount || "",
-										payoutMethod: prev.payoutMethod || hit?.payoutMethod || "转账",
-										payoutDate: prev.payoutDate || hit?.payoutDate || ""
-									}));
-								},
+							existingPayouts.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+								className: "block text-sm",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "不挂，单独上传" }),
-									existingPayouts.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
-										value: e.payoutId,
-										children: `${e.payoutFileName}（${e.claimant || "未填人"} → ${e.payAccount || "未填账户"}）`
-									}, e.payoutId))
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs text-muted", children: "挂到已有打款" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
+										className: "field-select mt-1 w-full",
+										value: c.payoutId || "",
+										onChange: (e) => {
+											const id = e.target.value;
+											if (!id) {
+												setC((prev) => ({ ...prev, payoutId: "", payoutFileName: "" }));
+												return;
+											}
+											const hit = existingPayouts.find((x) => x.payoutId === id);
+											setC((prev) => ({
+												...prev,
+												payoutId: id,
+												payoutFileName: hit?.payoutFileName || prev.payoutFileName,
+												claimant: prev.claimant || hit?.claimant || "",
+												forWhom: prev.forWhom || hit?.forWhom || "",
+												payAccount: prev.payAccount || hit?.payAccount || "",
+												payoutMethod: prev.payoutMethod || hit?.payoutMethod || "转账",
+												payoutDate: prev.payoutDate || hit?.payoutDate || ""
+											}));
+										},
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: "不挂，单独上传" }),
+											existingPayouts.map((e) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
+												value: e.payoutId,
+												children: `${e.payoutFileName}（${e.claimant || "未填人"} → ${e.payAccount || "未填账户"}）`
+											}, e.payoutId))
+										]
+									})
 								]
+							}) : null,
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(VoucherSlot, {
+								title: "打款凭证",
+								hint: siblings.length > 1 ? `同批 ${siblings.length} 笔共用` : "几笔一起报时共用一张。",
+								id: c.payoutId || c.id,
+								kind: "payout",
+								fileName: c.payoutFileName,
+								optional: (c.payoutMethod || "转账") === "现金",
+								onFile: uploadPayout,
+								onDeleted: () => {
+									setC((prev) => ({ ...prev, payoutFileName: "" }));
+									onSave({ ...c, payoutFileName: "" });
+								}
 							})
 						]
-					}) : null,
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilePick, {
-						kind: "file",
-						accept: ".pdf,.ofd,.jpg,.jpeg,.png,.webp",
-						label: c.payoutFileName ? "更换打款凭证" : "上传打款凭证",
-						hint: c.payoutFileName ? `已选：${c.payoutFileName}` : "存在 data/photos/报销打款/",
-						onFile: uploadPayout
-					}),
-					c.payoutFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "mt-2",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
-							id: c.payoutId || c.id,
-							kind: "payout",
-							fileName: c.payoutFileName,
-							suggest: payoutBase([c]),
-							taken: [],
-							onDeleted: () => {
-								const next = { ...c, payoutFileName: "", payoutId: c.payoutId };
-								setC({ ...next, payoutFileName: "" });
-								onSave({ ...c, payoutFileName: "" });
-							}
-						})
-					}) : null
+					})
 				]
 			})
 		]

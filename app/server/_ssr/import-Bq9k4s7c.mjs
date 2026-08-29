@@ -33,7 +33,7 @@ function ImportPage() {
 							className: "mt-4 flex flex-wrap gap-2",
 							children: [
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-									className: "inline-flex h-10 items-center rounded-sm bg-accent px-4 text-sm text-accent-fg hover:opacity-90",
+									className: "btn inline-flex items-center rounded-sm bg-accent text-xs text-accent-fg hover:opacity-90",
 									href: `/api/file/export?year=${store.year}`,
 									children: [
 										"导出 ",
@@ -42,7 +42,7 @@ function ImportPage() {
 									]
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-									className: "inline-flex h-10 items-center rounded-sm border border-line-strong bg-surface px-4 text-sm hover:bg-accent-soft",
+									className: "btn inline-flex items-center rounded-sm border border-line-strong bg-surface text-xs hover:bg-accent-soft",
 									href: `/api/file/contract-export?year=${store.year}`,
 									children: [
 										"导出 ",
@@ -51,7 +51,7 @@ function ImportPage() {
 									]
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-									className: "inline-flex h-10 items-center rounded-sm border border-line-strong bg-surface px-4 text-sm hover:bg-accent-soft",
+									className: "btn inline-flex items-center rounded-sm border border-line-strong bg-surface text-xs hover:bg-accent-soft",
 									href: "/api/file/contract-export",
 									children: "导出全部年份合同"
 								})
