@@ -14,8 +14,9 @@ function ExcelBtn({ label, onFile }) {
 			accept: ".xlsx,.xls",
 			className: "hidden",
 			onChange: (e) => {
-				onFile(e.target.files?.[0]);
+				const f = e.target.files?.[0];
 				e.target.value = "";
+				if (f && confirm(`确认上传「${f.name}」？`)) onFile(f);
 			}
 		})]
 	});

@@ -137,8 +137,9 @@ function IdCardSlot({ name, compact, onChanged }) {
 				className: "hidden",
 				disabled: !name || busy,
 				onChange: (e) => {
-					onFile(e.target.files?.[0], "id");
+					const f = e.target.files?.[0];
 					e.target.value = "";
+					if (f && confirm(`确认上传「${f.name}」？`)) onFile(f, "id");
 				}
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
@@ -148,8 +149,9 @@ function IdCardSlot({ name, compact, onChanged }) {
 				className: "hidden",
 				disabled: !name || busy,
 				onChange: (e) => {
-					onFile(e.target.files?.[0], "idBack");
+					const f = e.target.files?.[0];
 					e.target.value = "";
+					if (f && confirm(`确认上传「${f.name}」？`)) onFile(f, "idBack");
 				}
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -352,8 +354,9 @@ function PhotoSlotPlain({ name, kind, compact, onChanged }) {
 					className: "hidden",
 					disabled: !name || busy,
 					onChange: (e) => {
-						onFile(e.target.files?.[0]);
+						const f = e.target.files?.[0];
 						e.target.value = "";
+						if (f && confirm(`确认上传「${f.name}」？`)) onFile(f);
 					}
 				}), src ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",

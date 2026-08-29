@@ -3652,11 +3652,14 @@ function VersionLog() {
 			if (d?.current) setLog(d);
 		}).catch(() => void 0);
 	}, []);
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 		type: "button",
-		className: "mt-2 block text-[11px] tracking-wide text-subtle underline-offset-2 hover:text-ink hover:underline",
+		className: "text-xs text-muted hover:text-ink",
 		onClick: () => setOpen(true),
-		children: formatVersion(log.current)
+		children: ["版本号：", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+			className: "tabular-nums",
+			children: formatVersion(log.current)
+		})]
 	}), open ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 		className: "fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4",
 		onClick: () => setOpen(false),
@@ -3912,7 +3915,7 @@ function AppShell() {
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(LogOut, { className: "size-3.5" }), "退出登录"]
 					}) : null,
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "mt-auto",
+						className: "mt-6",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(VersionLog, {})
 					})
 				]
@@ -3973,9 +3976,15 @@ function AppShell() {
 							}) : null
 						]
 					}) : null,
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("main", {
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", {
 						className: "px-3 py-4 md:px-8 md:py-8",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {})
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Outlet, {}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "no-print mt-10 md:hidden",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(VersionLog, {})
+							})
+						]
 					})
 				]
 			})]

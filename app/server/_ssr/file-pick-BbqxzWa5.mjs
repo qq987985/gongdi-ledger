@@ -21,12 +21,20 @@ function pickFiles(list, accept, multiple = false) {
 	const files = (list ? [...list] : []).filter((f) => acceptMatch(f, accept));
 	return multiple ? files : files.slice(0, 1);
 }
-function DropSurface({ accept = "", multiple, disabled, className, activeClassName = "border-accent bg-accent-soft", onFiles, children }) {
+function confirmUpload(files) {
+	const list = !files ? [] : files instanceof File ? [files] : [...files].filter(Boolean);
+	if (!list.length) return false;
+	const names = list.map((f) => f.name).join("、");
+	return confirm(list.length > 1 ? `确认上传这 ${list.length} 个文件？\n${names}` : `确认上传「${names}」？`);
+}
+function DropSurface({ accept = "", multiple, disabled, className, activeClassName = "border-accent bg-accent-soft", confirmDrop = true, onFiles, children }) {
 	const [over, setOver] = (0, import_react.useState)(false);
 	function give(list) {
 		if (disabled) return;
 		const files = pickFiles(list, accept, multiple);
-		if (files.length) onFiles(files);
+		if (!files.length) return;
+		if (confirmDrop && !confirmUpload(files)) return;
+		onFiles(files);
 	}
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 		className: cn(className, over && !disabled && activeClassName),
@@ -56,6 +64,7 @@ function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, com
 	const Icon = kind === "image" ? ImagePlus : kind === "file" ? Paperclip : FileSpreadsheet;
 	function take(files) {
 		if (!files.length || disabled) return;
+		if (!confirmUpload(files)) return;
 		setName(files.map((f) => f.name).join("、"));
 		onFiles?.(files);
 		onFile?.(files[0]);
@@ -82,6 +91,7 @@ function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, com
 		accept,
 		multiple,
 		disabled,
+		confirmDrop: false,
 		onFiles: take,
 		className: cn("inline-flex", disabled && "opacity-50"),
 		children: [input, btn]
@@ -90,6 +100,7 @@ function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, com
 		accept,
 		multiple,
 		disabled,
+		confirmDrop: false,
 		onFiles: take,
 		className: cn("rounded-lg border border-dashed transition-colors duration-150", compact ? "px-3 py-2" : "px-4 py-4", disabled ? "opacity-50" : "border-line-strong bg-bg-elevated"),
 		children: [
@@ -109,4 +120,4 @@ function FilePick({ accept, label, hint, kind = "excel", multiple, disabled, com
 	});
 }
 //#endregion
-export { FilePick as n, DropSurface as t };
+export { FilePick as n, DropSurface as t, confirmUpload as a };

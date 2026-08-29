@@ -157,7 +157,7 @@ function VoucherSlot({ title, hint, id, kind, fileName, optional, extra, onFile,
 		onDrop: (e) => {
 			e.preventDefault();
 			const f = e.dataTransfer.files?.[0];
-			if (f) onFile(f);
+			if (f && confirm(`确认上传「${f.name}」？`)) onFile(f);
 		},
 		children: [
 			/* @__PURE__ */ (0, R.jsx)("span", {
@@ -184,7 +184,7 @@ function VoucherSlot({ title, hint, id, kind, fileName, optional, extra, onFile,
 				onChange: (e) => {
 					const f = e.target.files?.[0];
 					e.target.value = "";
-					if (f) onFile(f);
+					if (f && confirm(`确认上传「${f.name}」？`)) onFile(f);
 				}
 			}),
 			/* @__PURE__ */ (0, R.jsx)("button", {
@@ -269,8 +269,11 @@ function ExpensesPage() {
 	}, [list, year, scope, status, claimant, q]);
 	const claimantOpts = [...new Set((list || []).map((e) => e.claimant).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh"));
 	const allChecked = shown.length > 0 && shown.every((e) => selected.includes(e.id));
-	const totals = shown.reduce((s, e) => {
+	const picked = shown.filter((e) => selected.includes(e.id));
+	const sumRows = picked.length ? picked : shown;
+	const totals = sumRows.reduce((s, e) => {
 		s.amount += e.amount || 0;
+		s.count += 1;
 		if (e.status === "未报销") s.open += e.amount || 0;
 		else s.done += e.amount || 0;
 		if (needsVoucher(e.payMethod) && !e.voucherFileName) s.missing += 1;
@@ -278,11 +281,13 @@ function ExpensesPage() {
 		return s;
 	}, {
 		amount: 0,
+		count: 0,
 		open: 0,
 		done: 0,
 		missing: 0,
 		missPay: 0
 	});
+	const sumTip = picked.length ? `已选 ${picked.length} 笔` : `本表 ${shown.length} 笔`;
 	const printRows = (0, L.useMemo)(() => {
 		let rows = selected.length ? list.filter((e) => selected.includes(e.id)) : shown;
 		if (printStatus !== "all") rows = rows.filter((e) => e.status === printStatus);
@@ -692,7 +697,7 @@ function ExpensesPage() {
 					/* @__PURE__ */ (0, R.jsxs)("section", {
 						className: "grid gap-3 sm:grid-cols-2 lg:grid-cols-4",
 						children: [
-							/* @__PURE__ */ (0, R.jsx)(Mini, { label: "本表合计", value: totals.amount }),
+							/* @__PURE__ */ (0, R.jsx)(Mini, { label: picked.length ? "已选合计" : "本表合计", hint: sumTip, value: totals.amount }),
 							/* @__PURE__ */ (0, R.jsx)(Mini, { label: "未报销", value: totals.open }),
 							/* @__PURE__ */ (0, R.jsx)(Mini, { label: "已报销", value: totals.done }),
 							/* @__PURE__ */ (0, R.jsx)(Mini, {
@@ -786,7 +791,28 @@ function ExpensesPage() {
 											]
 										}, e.id);
 									})
-								] })
+								] }),
+								shown.length ? /* @__PURE__ */ (0, R.jsx)("tfoot", {
+									children: /* @__PURE__ */ (0, R.jsxs)("tr", {
+										className: "border-t-2 border-ink bg-bg-elevated text-sm font-medium",
+										children: [
+											/* @__PURE__ */ (0, R.jsx)("td", {
+												className: "p-2",
+												colSpan: 4,
+												children: `合计（${sumTip}）`
+											}),
+											/* @__PURE__ */ (0, R.jsx)("td", {
+												className: "p-2 text-right tabular-nums",
+												children: money(totals.amount)
+											}),
+											/* @__PURE__ */ (0, R.jsx)("td", {
+												className: "p-2 text-xs font-normal text-muted",
+												colSpan: 7,
+												children: `未报销 ¥${money(totals.open)}　已报销 ¥${money(totals.done)}`
+											})
+										]
+									})
+								}) : null
 							]
 						})
 					}),
