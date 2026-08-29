@@ -3,7 +3,7 @@
 services:
   attendance:
     build: .
-    image: gongdi-ledger:1.2.3
+    image: gongdi-ledger:1.2.5
     container_name: attendance-app
     restart: unless-stopped
     ports:
