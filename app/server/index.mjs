@@ -70,9 +70,9 @@ var public_assets_data_default = {
 	},
 	"/assets/contracts-DXZapWfC.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"102a3-0K7r0cWz4ghNb8LgaClxirTCVAA\"",
-		"mtime": "2026-08-29T09:53:04.000Z",
-		"size": 66211,
+		"etag": "\"103aa-PH9c6B939f764GhHdwif+PMEWpo\"",
+		"mtime": "2026-08-29T12:14:42.000Z",
+		"size": 66474,
 		"path": "../public/assets/contracts-DXZapWfC.js"
 	},
 
@@ -108,9 +108,9 @@ var public_assets_data_default = {
 
 	"/assets/expenses-TEST.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"d4db-LtBD2kb/Sa/jgSe++ie/2SbOr5M\"",
-		"mtime": "2026-08-29T09:53:04.000Z",
-		"size": 54491,
+		"etag": "\"d46c-oBVqem+ElPKbRnyUHgNCCKOyjeE\"",
+		"mtime": "2026-08-29T12:14:42.000Z",
+		"size": 54380,
 		"path": "../public/assets/expenses-TEST.js"
 	},
 
@@ -161,9 +161,9 @@ var public_assets_data_default = {
 	},
 	"/assets/payments-BBP-7-1d.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"6305-mMRxP3pWouiN5ucfMjx4mw9ec7o\"",
-		"mtime": "2026-08-29T09:53:04.000Z",
-		"size": 25349,
+		"etag": "\"6311-c9Bt5taUZN7ecGXxclKTAu8UpHo\"",
+		"mtime": "2026-08-29T12:14:42.000Z",
+		"size": 25361,
 		"path": "../public/assets/payments-BBP-7-1d.js"
 	},
 

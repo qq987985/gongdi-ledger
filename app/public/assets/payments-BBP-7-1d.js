@@ -148,7 +148,7 @@ function PaymentsPage() {
 						children: "发放记录"
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-1 max-w-xl text-sm text-muted",
-						children: "点「新增发放」或行里「更改」才出编辑。点一行是勾选。待发放没有日期，会一直显示在列表里。"
+						children: "点「更改」弹出编辑。点一行是勾选。点遮罩或 Esc 关闭。"
 					})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex flex-wrap gap-2",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TplLink, {
@@ -159,7 +159,6 @@ function PaymentsPage() {
 							onClick: () => {
 								setCreating(true);
 								setEditing(emptyPayment());
-								queueMicrotask(() => document.getElementById("payment-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 							},
 							children: "新增发放"
 						})]
@@ -281,48 +280,6 @@ function PaymentsPage() {
 						}) : null
 					]
 				}),
-				editing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PaymentEditor, {
-					draft: editing,
-					creating,
-					ownerNames,
-					receiverNames,
-					sources,
-					onCancel: () => {
-						setEditing(null);
-						setCreating(false);
-					},
-					onSave: (row) => {
-						if (creating) {
-							addPayment({
-								owner: row.owner,
-								receiver: row.receiver,
-								date: row.date,
-								amount: row.amount,
-								source: row.source,
-								remark: row.remark
-							});
-							toast.success(row.date ? row.receiver !== row.owner ? `已记到 ${row.owner} 头上，${row.receiver} 代收` : `已记到 ${row.owner} 头上` : `已上报 ${row.owner}，待发放`);
-							setEditing(null);
-							setCreating(false);
-							return;
-						}
-						patchPayments([row.id], {
-							owner: row.owner,
-							receiver: row.receiver,
-							date: row.date,
-							amount: row.amount,
-							source: row.source,
-							remark: row.remark
-						});
-						setEditing(row);
-						toast.success("发放已保存");
-					},
-					onDelete: () => {
-						dropIds([editing.id], "已删除 1 笔发放");
-						setEditing(null);
-						setCreating(false);
-					}
-				}) : null,
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WideTable, {
 					id: "payments",
 					pager,
@@ -409,7 +366,6 @@ function PaymentsPage() {
 												onClick: () => {
 													setCreating(false);
 													setEditing(p);
-													queueMicrotask(() => document.getElementById("payment-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 												},
 												children: "更改"
 											}),
@@ -465,6 +421,48 @@ function PaymentsPage() {
 						}, p.id))] })]
 					})
 				}),
+				editing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PaymentEditor, {
+					draft: editing,
+					creating,
+					ownerNames,
+					receiverNames,
+					sources,
+					onCancel: () => {
+						setEditing(null);
+						setCreating(false);
+					},
+					onSave: (row) => {
+						if (creating) {
+							addPayment({
+								owner: row.owner,
+								receiver: row.receiver,
+								date: row.date,
+								amount: row.amount,
+								source: row.source,
+								remark: row.remark
+							});
+							toast.success(row.date ? row.receiver !== row.owner ? `已记到 ${row.owner} 头上，${row.receiver} 代收` : `已记到 ${row.owner} 头上` : `已上报 ${row.owner}，待发放`);
+							setEditing(null);
+							setCreating(false);
+							return;
+						}
+						patchPayments([row.id], {
+							owner: row.owner,
+							receiver: row.receiver,
+							date: row.date,
+							amount: row.amount,
+							source: row.source,
+							remark: row.remark
+						});
+						setEditing(row);
+						toast.success("发放已保存");
+					},
+					onDelete: () => {
+						dropIds([editing.id], "已删除 1 笔发放");
+						setEditing(null);
+						setCreating(false);
+					}
+				}, editing.id || "new") : null,
 				byOwner.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "overflow-x-auto rounded-xl border border-line bg-surface",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -552,9 +550,13 @@ function PaymentEditor({ draft, creating, ownerNames, receiverNames, sources, on
 		if (!confirm(`确认保存这些修改？\n${lines.join("\n")}`)) return;
 		onSave(next);
 	}
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+		className: "fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6",
+		onClick: onCancel,
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 		id: "payment-editor",
-		className: "space-y-4 rounded-xl border border-accent bg-surface p-5",
+		className: "max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-5 shadow-panel md:rounded-xl",
+		onClick: (e) => e.stopPropagation(),
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "flex flex-wrap items-center justify-between gap-2",
@@ -647,6 +649,7 @@ function PaymentEditor({ draft, creating, ownerNames, receiverNames, sources, on
 				]
 			})
 		]
+	})
 	});
 }
 export { PaymentsPage as component };

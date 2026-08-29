@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.2.10**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.2.13**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -24,6 +24,18 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.2.13
+
+- 报销 / 发放 / 合同更改改为和人员一样的弹窗
+
+### 1.2.12
+
+- 报销 / 发放 / 合同点更改，编辑框出现在本行下面
+
+### 1.2.11
+
+- 发放记录点更改，页面滚到表下面编辑，和报销单一样
 
 ### 1.2.10
 
@@ -144,7 +156,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 ./一键部署.sh
 ```
 
-打开 `http://NAS的IP:8501`，左下角应显示 **1.2.10**。
+打开 `http://NAS的IP:8501`，左下角应显示 **1.2.13**。
 
 拉 GitHub 镜像（Actions 全绿，并且 Packages 里 `gongdi-ledger` 已设 Public）：
 
@@ -155,7 +167,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 国内镜像：`ghcr.1ms.run/qq987985/gongdi-ledger:latest`  
 compose **只挂 data**，不要再挂 `VERSION.txt`。
 
-本机构建镜像名：`gongdi-ledger:1.2.10`，端口 `8501:8080`。
+本机构建镜像名：`gongdi-ledger:1.2.13`，端口 `8501:8080`。
 
 ---
 

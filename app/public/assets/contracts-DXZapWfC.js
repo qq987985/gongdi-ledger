@@ -343,9 +343,9 @@ function ContractsPage() {
 	]);
 	(0, import_react.useEffect)(() => {
 		if (!editing) return;
-		const t = window.setTimeout(() => (document.getElementById("contract-scan") || document.getElementById("contract-editor"))?.scrollIntoView({
+		const t = window.setTimeout(() => document.getElementById("contract-scan")?.scrollIntoView({
 			behavior: "smooth",
-			block: "start"
+			block: "nearest"
 		}), 50);
 		return () => window.clearTimeout(t);
 	}, [editing?.id]);
@@ -891,9 +891,13 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 			[key]: value
 		}));
 	}
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+		className: "fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6",
+		onClick: onCancel,
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 		id: "contract-editor",
-		className: "space-y-4 rounded-xl border border-accent bg-surface p-5",
+		className: "max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-5 shadow-panel md:rounded-xl",
+		onClick: (e) => e.stopPropagation(),
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "flex flex-wrap items-center justify-between gap-2",
@@ -1220,6 +1224,7 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 				children: "先保存合同信息，才能记报量、开票、收款。"
 			}) : null
 		]
+	})
 	});
 }
 function Field({ label, children, className }) {

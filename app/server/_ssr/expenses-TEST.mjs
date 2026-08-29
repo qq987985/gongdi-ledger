@@ -233,14 +233,6 @@ function ExpensesPage() {
 		payoutFileName: ""
 	});
 	(0, import_react.useEffect)(() => {
-		if (!editing) return;
-		const t = window.setTimeout(() => document.getElementById("expense-editor")?.scrollIntoView({
-			behavior: "smooth",
-			block: "start"
-		}), 50);
-		return () => window.clearTimeout(t);
-	}, [editing && editing.id]);
-	(0, import_react.useEffect)(() => {
 		const rows = list.filter((e) => selected.includes(e.id));
 		if (!rows.length) return;
 		const first = rows[0];
@@ -800,7 +792,6 @@ function ExpensesPage() {
 														onClick: () => {
 															setCreating(false);
 															setEditing(e);
-															queueMicrotask(() => document.getElementById("expense-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 														},
 														children: "更改"
 													})
@@ -973,9 +964,13 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCan
 		}
 		toast.success(group.length > 1 ? `已保存打款凭证，同批 ${group.length} 笔共用` : `已保存 ${savedPay}`);
 	}
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+		className: "fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6",
+		onClick: onCancel,
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 		id: "expense-editor",
-		className: "space-y-4 rounded-xl border border-accent bg-surface p-5",
+		className: "max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-5 shadow-panel md:rounded-xl",
+		onClick: (e) => e.stopPropagation(),
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "flex flex-wrap items-center justify-between gap-2",
@@ -1213,6 +1208,7 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCan
 				]
 			})
 		]
+	})
 	});
 }
 
