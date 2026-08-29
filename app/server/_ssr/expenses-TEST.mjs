@@ -730,16 +730,9 @@ function ExpensesPage() {
 						},
 						onDelete: () => del([editing.id])
 					}, editing.id) : null,
-					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PageBar, {
-						size: pager.size,
-						onSize: pager.setSize,
-						page: pager.page,
-						onPage: pager.setPage,
-						pages: pager.pages,
-						total: pager.total
-					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WideTable, {
 						id: "expenses",
+						pager,
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
 							className: "wide-table text-sm",
 							children: [
@@ -807,6 +800,7 @@ function ExpensesPage() {
 														onClick: () => {
 															setCreating(false);
 															setEditing(e);
+															queueMicrotask(() => document.getElementById("expense-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 														},
 														children: "更改"
 													})

@@ -159,6 +159,7 @@ function PaymentsPage() {
 							onClick: () => {
 								setCreating(true);
 								setEditing(emptyPayment());
+								queueMicrotask(() => document.getElementById("payment-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 							},
 							children: "新增发放"
 						})]
@@ -280,34 +281,6 @@ function PaymentsPage() {
 						}) : null
 					]
 				}),
-				byOwner.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "overflow-x-auto rounded-xl border border-line bg-surface",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "border-b border-line px-4 py-2 text-xs text-muted",
-						children: "按实际收款人入账（只计已填日期的；待发放不算已发）"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-						className: "w-full text-left text-sm",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
-							className: "text-xs text-muted",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "p-3",
-								children: "实际收款人"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-								className: "p-3",
-								children: "已入账金额"
-							})] })
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: byOwner.slice(0, 12).map(([name, amt]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-							className: "border-t border-line",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								className: "p-3",
-								children: name
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-								className: "p-3 text-right tabular-nums",
-								children: ["¥", money(amt)]
-							})]
-						}, name)) })]
-					})]
-				}) : null,
 				editing ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PaymentEditor, {
 					draft: editing,
 					creating,
@@ -350,16 +323,9 @@ function PaymentsPage() {
 						setCreating(false);
 					}
 				}) : null,
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PageBar, {
-					size: pager.size,
-					onSize: pager.setSize,
-					page: pager.page,
-					onPage: pager.setPage,
-					pages: pager.pages,
-					total: pager.total
-				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WideTable, {
 					id: "payments",
+					pager,
 					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
 						className: "wide-table text-sm",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
@@ -443,6 +409,7 @@ function PaymentsPage() {
 												onClick: () => {
 													setCreating(false);
 													setEditing(p);
+													queueMicrotask(() => document.getElementById("payment-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }));
 												},
 												children: "更改"
 											}),
@@ -497,7 +464,35 @@ function PaymentsPage() {
 							]
 						}, p.id))] })]
 					})
-				})
+				}),
+				byOwner.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "overflow-x-auto rounded-xl border border-line bg-surface",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "border-b border-line px-4 py-2 text-xs text-muted",
+						children: "按实际收款人入账（只计已填日期的；待发放不算已发）"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "w-full text-left text-sm",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
+							className: "text-xs text-muted",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "p-3",
+								children: "实际收款人"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "p-3",
+								children: "已入账金额"
+							})] })
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: byOwner.slice(0, 12).map(([name, amt]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+							className: "border-t border-line",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "p-3",
+								children: name
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+								className: "p-3 text-right tabular-nums",
+								children: ["¥", money(amt)]
+							})]
+						}, name)) })]
+					})]
+				}) : null,
 			]
 		})
 	});

@@ -44,48 +44,54 @@ function usePager(id, list, resetKey) {
 }
 function PageBar({ size, onSize, page, onPage, pages, total }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "flex flex-wrap items-center gap-2",
+		className: "flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-				className: "flex items-center gap-1.5 text-sm text-muted",
+				className: "flex items-center gap-1.5 text-sm",
 				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-xs text-muted",
+						children: "每页"
+					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-						className: "field-select w-auto min-w-[4.5rem]",
+						className: "field-select w-auto min-w-[7rem]",
 						value: size,
 						onChange: (e) => onSize(Number(e.target.value)),
 						"aria-label": "每页条数",
 						children: PAGE_SIZES.map((n) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
 							value: n,
-							children: n
+							children: `${n} 条/页`
 						}, n))
-					}),
-					"条/页"
+					})
 				]
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-				className: "text-xs tabular-nums text-muted",
-				children: ["共 ", total, " 条"]
-			}),
-			pages > 1 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					type: "button",
-					className: "btn",
-					disabled: page <= 1,
-					onClick: () => onPage(page - 1),
-					children: "上一页"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-					className: "text-xs tabular-nums text-muted",
-					children: [page, " / ", pages]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					type: "button",
-					className: "btn",
-					disabled: page >= pages,
-					onClick: () => onPage(page + 1),
-					children: "下一页"
-				})
-			] }) : null
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-wrap items-center gap-2",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+						className: "text-xs tabular-nums text-muted",
+						children: ["共 ", total, " 条"]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "btn",
+						disabled: page <= 1,
+						onClick: () => onPage(Math.max(1, page - 1)),
+						children: "上一页"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+						className: "text-xs tabular-nums text-muted",
+						children: [page, " / ", Math.max(1, pages)]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						className: "btn",
+						disabled: page >= pages,
+						onClick: () => onPage(page + 1),
+						children: "下一页"
+					})
+				]
+			})
 		]
 	});
 }
@@ -142,7 +148,7 @@ function ThHint({ children, hint, className }) {
 		}) : null]
 	});
 }
-function WideTable({ id, children, className }) {
+function WideTable({ id, children, className, pager }) {
 	const ref = (0, import_react.useRef)(null);
 	(0, import_react.useEffect)(() => {
 		const node = ref.current;
@@ -184,7 +190,17 @@ function WideTable({ id, children, className }) {
 			host.removeEventListener("dblclick", dbl);
 		};
 	}, [id]);
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-2",
+		children: [
+		pager ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PageBar, {
+			size: pager.size,
+			onSize: pager.setSize,
+			page: pager.page,
+			onPage: pager.setPage,
+			pages: pager.pages,
+			total: pager.total
+		}) : null,
 		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "mb-1 hidden text-[11px] text-muted md:block",
 			children: "底部左右滑动；拖表头右边线调列宽，双击收至最窄。调完会记住。"
@@ -197,8 +213,17 @@ function WideTable({ id, children, className }) {
 			ref,
 			className: cn("wide-scroll overflow-x-scroll rounded-xl border border-line bg-surface", className),
 			children
-		})
-	] });
+		}),
+		pager ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PageBar, {
+			size: pager.size,
+			onSize: pager.setSize,
+			page: pager.page,
+			onPage: pager.setPage,
+			pages: pager.pages,
+			total: pager.total
+		}) : null
+		]
+	});
 }
 //#endregion
 export { WideTable as n, ThHint as t, PageBar as a, usePager as o };

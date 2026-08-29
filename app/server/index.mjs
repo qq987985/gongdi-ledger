@@ -70,9 +70,9 @@ var public_assets_data_default = {
 	},
 	"/assets/contracts-DXZapWfC.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"10371-5/682FpiZXPXljll7cCMe+q7rjI\"",
-		"mtime": "2026-08-29T08:18:09.000Z",
-		"size": 66417,
+		"etag": "\"102a3-0K7r0cWz4ghNb8LgaClxirTCVAA\"",
+		"mtime": "2026-08-29T09:53:04.000Z",
+		"size": 66211,
 		"path": "../public/assets/contracts-DXZapWfC.js"
 	},
 
@@ -108,9 +108,9 @@ var public_assets_data_default = {
 
 	"/assets/expenses-TEST.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"d517-vPLg1mxnnOmoyRYPVphUrmPeh1o\"",
-		"mtime": "2026-08-29T08:18:09.000Z",
-		"size": 54551,
+		"etag": "\"d4db-LtBD2kb/Sa/jgSe++ie/2SbOr5M\"",
+		"mtime": "2026-08-29T09:53:04.000Z",
+		"size": 54491,
 		"path": "../public/assets/expenses-TEST.js"
 	},
 
@@ -161,17 +161,17 @@ var public_assets_data_default = {
 	},
 	"/assets/payments-BBP-7-1d.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"62cb-QaPJ963sbz+EGeMHc3iwq7Gzv2w\"",
-		"mtime": "2026-08-29T08:18:09.000Z",
-		"size": 25291,
+		"etag": "\"6305-mMRxP3pWouiN5ucfMjx4mw9ec7o\"",
+		"mtime": "2026-08-29T09:53:04.000Z",
+		"size": 25349,
 		"path": "../public/assets/payments-BBP-7-1d.js"
 	},
 
 	"/assets/people-CUFknR2e.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"6e3f-FMLbI+q4LRako6XEvbCnLbHWsFM\"",
-		"mtime": "2026-08-29T08:18:09.000Z",
-		"size": 28223,
+		"etag": "\"6d71-m3F7kDjn9PtRv3nhAu3Efg8woqY\"",
+		"mtime": "2026-08-29T09:53:04.000Z",
+		"size": 28017,
 		"path": "../public/assets/people-CUFknR2e.js"
 	},
 
@@ -242,9 +242,9 @@ var public_assets_data_default = {
 	},
 	"/assets/wide-table-BtpzsvMP.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"1981-AxPeK8c1f26gtZcVpd9VQBuulzw\"",
-		"mtime": "2026-08-29T08:18:09.000Z",
-		"size": 6529,
+		"etag": "\"1c56-KDpeJaFU4kgQ7CC4eEkZDiMao5g\"",
+		"mtime": "2026-08-29T09:53:04.000Z",
+		"size": 7254,
 		"path": "../public/assets/wide-table-BtpzsvMP.js"
 	},
 

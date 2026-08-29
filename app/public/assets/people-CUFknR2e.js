@@ -151,16 +151,9 @@ function PeoplePage() {
 						})
 					]
 				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PageBar, {
-					size: pager.size,
-					onSize: pager.setSize,
-					page: pager.page,
-					onPage: pager.setPage,
-					pages: pager.pages,
-					total: pager.total
-				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WideTable, {
 					id: "people",
+					pager,
 					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
 						className: "wide-table text-sm",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
