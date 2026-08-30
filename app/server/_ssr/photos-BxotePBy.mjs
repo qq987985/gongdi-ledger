@@ -1,10 +1,9 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { B as require_react, z as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { a as Input, y as useApp } from "./router-DxdzlCp3.mjs";
+import { a as Input, f as Button, y as useApp } from "./router-DxdzlCp3.mjs";
 import { n as Need } from "./can-gkGWV5bu.mjs";
 import { t as Badge } from "./badge-U3vNDWCk.mjs";
 import { i as usePhotoFlags, n as PhotoSlot, r as ScanPhotosButton, t as PhotoFlag } from "./photo-slot--a6wKkGX.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/photos-BxotePBy.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function PhotosPage() {
@@ -36,13 +35,16 @@ function PhotosPage() {
 		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "space-y-5",
 			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
-					className: "font-display text-2xl font-semibold",
-					children: "照片管理"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-1 text-sm text-muted",
-					children: "人员和合同影像都在 data/photos。人员照片：张三-身份证-正面.jpg、张三-身份证-反面.jpg。显示正面，点「查看反面」。"
-				})] }),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+						className: "font-display text-2xl font-semibold",
+						children: "照片管理"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-1 text-sm text-muted",
+						children: "点「更改」弹出编辑。点遮罩或 Esc 关闭。人员照片：张三-身份证-正面.jpg、张三-身份证-反面.jpg。"
+					})
+				] }),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex flex-wrap gap-2",
 					children: [
@@ -75,114 +77,132 @@ function PhotosPage() {
 					className: "overflow-x-auto rounded-xl border border-line bg-surface",
 					children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
 						className: "w-full min-w-ledger text-left text-sm",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
-							className: "border-b border-line text-xs text-muted",
-							children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
-									children: "姓名"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
-									children: "班组"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
-									children: "身份证正面"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
-									children: "身份证反面"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
-									children: "银行卡"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-									className: "p-3",
-									children: "IC卡"
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", {
+								className: "border-b border-line text-xs text-muted",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "操作" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "姓名" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "班组" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "身份证正面" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "身份证反面" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "银行卡" }),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "IC卡" })
+								] })
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [
+								filtered.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									colSpan: 7,
+									className: "p-8 text-center text-muted",
+									children: "没有匹配的人员"
+								}) }) : null,
+								filtered.map((p) => {
+									const f = flags[p.name] || {
+										id: false,
+										idBack: false,
+										bank: false,
+										ic: false
+									};
+									const on = picked === p.name;
+									return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
+										className: `border-b border-line last:border-0 hover:bg-accent-soft ${on ? "bg-accent-soft" : ""}`,
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+												className: "p-3",
+												children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+													variant: "outline",
+													size: "sm",
+													type: "button",
+													onClick: () => setPicked(p.name),
+													children: "更改"
+												})
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-3 font-medium", children: p.name }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-3 text-muted", children: p.team }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-3", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.id }) }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-3", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.idBack }) }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-3", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.bank }) }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "p-3", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.ic }) })
+										]
+									}, p.id);
 								})
 							] })
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [filtered.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 6,
-							className: "p-8 text-center text-muted",
-							children: "没有匹配的人员"
-						}) }) : null, filtered.map((p) => {
-							const f = flags[p.name] || {
-								id: false,
-								idBack: false,
-								bank: false,
-								ic: false
-							};
-							const on = picked === p.name;
-							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-								className: `cursor-pointer border-b border-line last:border-0 ${on ? "bg-accent-soft" : "hover:bg-bg-elevated"}`,
-								onClick: () => setPicked((s) => s === p.name ? null : p.name),
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-3 font-medium",
-										children: p.name
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-3 text-muted",
-										children: p.team
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-3",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.id })
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-3",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.idBack })
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-3",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.bank })
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-3",
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.ic })
-									})
-								]
-							}, p.id);
-						})] })]
+						]
 					})
 				}),
-				pickedPerson ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-					className: "rounded-xl border border-line bg-surface p-4",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "mb-3 flex items-center gap-2",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-							className: "font-semibold",
-							children: pickedPerson.name
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: pickedPerson.team })]
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "grid gap-4 md:grid-cols-3",
-						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoSlot, {
-								name: pickedPerson.name,
-								kind: "id",
-								onChanged: () => setTick((n) => n + 1)
-							}, `id-${tick}`),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoSlot, {
-								name: pickedPerson.name,
-								kind: "bank",
-								onChanged: () => setTick((n) => n + 1)
-							}, `bank-${tick}`),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoSlot, {
-								name: pickedPerson.name,
-								kind: "ic",
-								onChanged: () => setTick((n) => n + 1)
-							}, `ic-${tick}`)
-						]
-					})]
-				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "text-sm text-muted",
-					children: "点选表格中的姓名，查看或上传照片。"
+				pickedPerson ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoEditor, {
+					person: pickedPerson,
+					tick,
+					onClose: () => setPicked(null),
+					onChanged: () => setTick((n) => n + 1)
+				}) : null
+			]
+		})
+	});
+}
+function PhotoEditor({ person, tick, onClose, onChanged }) {
+	(0, import_react.useEffect)(() => {
+		const onKey = (e) => {
+			if (e.key !== "Escape") return;
+			if (document.querySelector("[data-modal]")) return;
+			onClose();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [onClose]);
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+		className: "fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6",
+		onClick: onClose,
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+			className: "max-h-screen w-full max-w-5xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-6 shadow-panel md:rounded-xl",
+			onClick: (e) => e.stopPropagation(),
+			children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap items-center justify-between gap-3 border-b border-line py-3",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-wrap items-center gap-2",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+									className: "font-display text-lg font-semibold",
+									children: `编辑照片 · ${person.name}`
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, { children: person.team })
+							]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "btn-row",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								variant: "outline",
+								type: "button",
+								onClick: onClose,
+								children: "关闭"
+							})
+						})
+					]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "mt-6 grid gap-4 md:grid-cols-3",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoSlot, {
+							name: person.name,
+							kind: "id",
+							onChanged
+						}, `id-${tick}`),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoSlot, {
+							name: person.name,
+							kind: "bank",
+							onChanged
+						}, `bank-${tick}`),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PhotoSlot, {
+							name: person.name,
+							kind: "ic",
+							onChanged
+						}, `ic-${tick}`)
+					]
 				})
 			]
 		})
 	});
 }
-//#endregion
 export { PhotosPage as component };

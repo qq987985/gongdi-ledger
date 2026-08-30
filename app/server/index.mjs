@@ -192,9 +192,9 @@ var public_assets_data_default = {
 	},
 	"/assets/photos-Dvrk1SxO.js": {
 		"type": "text/javascript; charset=utf-8",
-		"etag": "\"fda-1/nim4GBJj8Qby/wFnrENb7fTbg\"",
-		"mtime": "2026-08-28T01:32:09.000Z",
-		"size": 4058,
+		"etag": "\"2014-3sJlLptCsKY/fhH7Bcc9W2lV550\"",
+		"mtime": "2026-08-30T03:54:18.000Z",
+		"size": 8212,
 		"path": "../public/assets/photos-Dvrk1SxO.js"
 	},
 	"/assets/query-B0ed1tcP.js": {

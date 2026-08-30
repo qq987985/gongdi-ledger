@@ -1,1 +1,208 @@
-import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";import{r as t}from"./audit-K39-jiKA.js";import{t as n}from"./jsx-runtime-DREnUpxT.js";import{i as r,n as i,r as a,t as o}from"./photo-slot-D71m3Ysb.js";import{g as s,y as c}from"./index-ghxum7yZ.js";import{n as l}from"./can-9AzYldNF.js";import{t as u}from"./badge-_ctqz85I.js";var d=e(t()),f=n();function p(){let e=c(e=>e.people),[t,n]=(0,d.useState)(``),[p,m]=(0,d.useState)(`all`),[h,g]=(0,d.useState)(null),[_,v]=(0,d.useState)(0),y=(0,d.useMemo)(()=>e.map(e=>e.name),[e]),b=r(y,_),x=e.filter(e=>{if(t&&!e.name.includes(t)&&!e.team.includes(t))return!1;let n=b[e.name]||{id:!1,idBack:!1,bank:!1,ic:!1};return p===`missing`?!(n.id&&n.idBack&&n.bank&&n.ic):p===`id`?!n.id:p===`idBack`?!n.idBack:p===`bank`?!n.bank:p!==`ic`||!n.ic}),S=e.find(e=>e.name===h);return(0,f.jsx)(l,{perm:`photos.view`,children:(0,f.jsxs)(`div`,{className:`space-y-5`,children:[(0,f.jsxs)(`header`,{children:[(0,f.jsx)(`h1`,{className:`font-display text-2xl font-semibold`,children:`照片管理`}),(0,f.jsx)(`p`,{className:`mt-1 text-sm text-muted`,children:`人员和合同影像都在 data/photos。账号在 data/accounts，台账数字在 data/books。备份在 data/backups，模板在 data/templates。人员照片：张三-身份证-正面.jpg、张三-身份证-反面.jpg。显示正面，点「查看反面」。`})]}),(0,f.jsxs)(`div`,{className:`flex flex-wrap gap-2`,children:[(0,f.jsx)(s,{className:`max-w-sm`,placeholder:`筛选姓名或班组`,value:t,onChange:e=>n(e.target.value)}),(0,f.jsx)(a,{names:y,onDone:()=>v(e=>e+1)}),[[`all`,`全部`],[`missing`,`缺任意`],[`id`,`缺正面`],[`idBack`,`缺反面`],[`bank`,`缺银行卡`],[`ic`,`缺IC卡`]].map(([e,t])=>(0,f.jsx)(`button`,{type:`button`,onClick:()=>m(e),className:`h-11 rounded-full border px-3 text-sm ${p===e?`border-accent bg-accent text-accent-fg`:`border-line bg-surface text-muted`}`,children:t},e))]}),(0,f.jsx)(`div`,{className:`overflow-x-auto rounded-xl border border-line bg-surface`,children:(0,f.jsxs)(`table`,{className:`w-full min-w-ledger text-left text-sm`,children:[(0,f.jsx)(`thead`,{className:`border-b border-line text-xs text-muted`,children:(0,f.jsxs)(`tr`,{children:[(0,f.jsx)(`th`,{className:`p-3`,children:`姓名`}),(0,f.jsx)(`th`,{className:`p-3`,children:`班组`}),(0,f.jsx)(`th`,{className:`p-3`,children:`身份证正面`}),(0,f.jsx)(`th`,{className:`p-3`,children:`身份证反面`}),(0,f.jsx)(`th`,{className:`p-3`,children:`银行卡`}),(0,f.jsx)(`th`,{className:`p-3`,children:`IC卡`})]})}),(0,f.jsxs)(`tbody`,{children:[x.length===0?(0,f.jsx)(`tr`,{children:(0,f.jsx)(`td`,{colSpan:6,className:`p-8 text-center text-muted`,children:`没有匹配的人员`})}):null,x.map(e=>{let t=b[e.name]||{id:!1,idBack:!1,bank:!1,ic:!1},n=h===e.name;return(0,f.jsxs)(`tr`,{className:`cursor-pointer border-b border-line last:border-0 ${n?`bg-accent-soft`:`hover:bg-bg-elevated`}`,onClick:()=>g(t=>t===e.name?null:e.name),children:[(0,f.jsx)(`td`,{className:`p-3 font-medium`,children:e.name}),(0,f.jsx)(`td`,{className:`p-3 text-muted`,children:e.team}),(0,f.jsx)(`td`,{className:`p-3`,children:(0,f.jsx)(o,{ok:t.id})}),(0,f.jsx)(`td`,{className:`p-3`,children:(0,f.jsx)(o,{ok:t.idBack})}),(0,f.jsx)(`td`,{className:`p-3`,children:(0,f.jsx)(o,{ok:t.bank})}),(0,f.jsx)(`td`,{className:`p-3`,children:(0,f.jsx)(o,{ok:t.ic})})]},e.id)})]})]})}),S?(0,f.jsxs)(`section`,{className:`rounded-xl border border-line bg-surface p-4`,children:[(0,f.jsxs)(`div`,{className:`mb-3 flex items-center gap-2`,children:[(0,f.jsx)(`h2`,{className:`font-semibold`,children:S.name}),(0,f.jsx)(u,{children:S.team})]}),(0,f.jsxs)(`div`,{className:`grid gap-4 md:grid-cols-3`,children:[(0,f.jsx)(i,{name:S.name,kind:`id`,onChanged:()=>v(e=>e+1)},`id-${_}`),(0,f.jsx)(i,{name:S.name,kind:`bank`,onChanged:()=>v(e=>e+1)},`bank-${_}`),(0,f.jsx)(i,{name:S.name,kind:`ic`,onChanged:()=>v(e=>e+1)},`ic-${_}`)]})]}):(0,f.jsx)(`p`,{className:`text-sm text-muted`,children:`点选表格中的姓名，查看或上传照片。`})]})})}export{p as component};
+import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";
+import{r as t}from"./audit-K39-jiKA.js";
+import{t as n}from"./jsx-runtime-DREnUpxT.js";
+import{i as usePhotoFlags,n as PhotoSlot,r as ScanPhotosButton,t as PhotoFlag}from"./photo-slot-D71m3Ysb.js";
+import{g as Input,v as Button,y as useApp}from"./index-ghxum7yZ.js";
+import{n as Need}from"./can-9AzYldNF.js";
+import{t as Badge}from"./badge-_ctqz85I.js";
+var import_react=e(t()),import_jsx_runtime=n();
+function PhotosPage() {
+	const people = useApp((s) => s.people);
+	const [q, setQ] = (0, import_react.useState)("");
+	const [filter, setFilter] = (0, import_react.useState)("all");
+	const [picked, setPicked] = (0, import_react.useState)(null);
+	const [tick, setTick] = (0, import_react.useState)(0);
+	const names = (0, import_react.useMemo)(() => people.map((p) => p.name), [people]);
+	const flags = usePhotoFlags(names, tick);
+	const filtered = people.filter((p) => {
+		if (q && !p.name.includes(q) && !p.team.includes(q)) return false;
+		const f = flags[p.name] || {
+			id: false,
+			idBack: false,
+			bank: false,
+			ic: false
+		};
+		if (filter === "missing") return !(f.id && f.idBack && f.bank && f.ic);
+		if (filter === "id") return !f.id;
+		if (filter === "idBack") return !f.idBack;
+		if (filter === "bank") return !f.bank;
+		if (filter === "ic") return !f.ic;
+		return true;
+	});
+	const pickedPerson = people.find((p) => p.name === picked);
+	return (0, import_jsx_runtime.jsx)(Need, {
+		perm: "photos.view",
+		children: (0, import_jsx_runtime.jsxs)("div", {
+			className: "space-y-5",
+			children: [
+				(0, import_jsx_runtime.jsxs)("header", { children: [
+					(0, import_jsx_runtime.jsx)("h1", {
+						className: "font-display text-2xl font-semibold",
+						children: "照片管理"
+					}),
+					(0, import_jsx_runtime.jsx)("p", {
+						className: "mt-1 text-sm text-muted",
+						children: "点「更改」弹出编辑。点遮罩或 Esc 关闭。人员照片：张三-身份证-正面.jpg、张三-身份证-反面.jpg。"
+					})
+				] }),
+				(0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap gap-2",
+					children: [
+						(0, import_jsx_runtime.jsx)(Input, {
+							className: "max-w-sm",
+							placeholder: "筛选姓名或班组",
+							value: q,
+							onChange: (e) => setQ(e.target.value)
+						}),
+						(0, import_jsx_runtime.jsx)(ScanPhotosButton, {
+							names,
+							onDone: () => setTick((n) => n + 1)
+						}),
+						[
+							["all", "全部"],
+							["missing", "缺任意"],
+							["id", "缺正面"],
+							["idBack", "缺反面"],
+							["bank", "缺银行卡"],
+							["ic", "缺IC卡"]
+						].map(([k, label]) => (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							onClick: () => setFilter(k),
+							className: `h-11 rounded-full border px-3 text-sm ${filter === k ? "border-accent bg-accent text-accent-fg" : "border-line bg-surface text-muted"}`,
+							children: label
+						}, k))
+					]
+				}),
+				(0, import_jsx_runtime.jsx)("div", {
+					className: "overflow-x-auto rounded-xl border border-line bg-surface",
+					children: (0, import_jsx_runtime.jsxs)("table", {
+						className: "w-full min-w-ledger text-left text-sm",
+						children: [
+							(0, import_jsx_runtime.jsx)("thead", {
+								className: "border-b border-line text-xs text-muted",
+								children: (0, import_jsx_runtime.jsxs)("tr", { children: [
+									(0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "操作" }),
+									(0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "姓名" }),
+									(0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "班组" }),
+									(0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "身份证正面" }),
+									(0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "身份证反面" }),
+									(0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "银行卡" }),
+									(0, import_jsx_runtime.jsx)("th", { className: "p-3", children: "IC卡" })
+								] })
+							}),
+							(0, import_jsx_runtime.jsxs)("tbody", { children: [
+								filtered.length === 0 ? (0, import_jsx_runtime.jsx)("tr", { children: (0, import_jsx_runtime.jsx)("td", {
+									colSpan: 7,
+									className: "p-8 text-center text-muted",
+									children: "没有匹配的人员"
+								}) }) : null,
+								filtered.map((p) => {
+									const f = flags[p.name] || {
+										id: false,
+										idBack: false,
+										bank: false,
+										ic: false
+									};
+									const on = picked === p.name;
+									return (0, import_jsx_runtime.jsxs)("tr", {
+										className: `border-b border-line last:border-0 hover:bg-accent-soft ${on ? "bg-accent-soft" : ""}`,
+										children: [
+											(0, import_jsx_runtime.jsx)("td", {
+												className: "p-3",
+												children: (0, import_jsx_runtime.jsx)(Button, {
+													variant: "outline",
+													size: "sm",
+													type: "button",
+													onClick: () => setPicked(p.name),
+													children: "更改"
+												})
+											}),
+											(0, import_jsx_runtime.jsx)("td", { className: "p-3 font-medium", children: p.name }),
+											(0, import_jsx_runtime.jsx)("td", { className: "p-3 text-muted", children: p.team }),
+											(0, import_jsx_runtime.jsx)("td", { className: "p-3", children: (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.id }) }),
+											(0, import_jsx_runtime.jsx)("td", { className: "p-3", children: (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.idBack }) }),
+											(0, import_jsx_runtime.jsx)("td", { className: "p-3", children: (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.bank }) }),
+											(0, import_jsx_runtime.jsx)("td", { className: "p-3", children: (0, import_jsx_runtime.jsx)(PhotoFlag, { ok: f.ic }) })
+										]
+									}, p.id);
+								})
+							] })
+						]
+					})
+				}),
+				pickedPerson ? (0, import_jsx_runtime.jsx)(PhotoEditor, {
+					person: pickedPerson,
+					tick,
+					onClose: () => setPicked(null),
+					onChanged: () => setTick((n) => n + 1)
+				}) : null
+			]
+		})
+	});
+}
+function PhotoEditor({ person, tick, onClose, onChanged }) {
+	(0, import_react.useEffect)(() => {
+		const onKey = (e) => {
+			if (e.key !== "Escape") return;
+			if (document.querySelector("[data-modal]")) return;
+			onClose();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [onClose]);
+	return (0, import_jsx_runtime.jsx)("div", {
+		className: "fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6",
+		onClick: onClose,
+		children: (0, import_jsx_runtime.jsxs)("section", {
+			className: "max-h-screen w-full max-w-5xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-6 shadow-panel md:rounded-xl",
+			onClick: (e) => e.stopPropagation(),
+			children: [
+				(0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap items-center justify-between gap-3 border-b border-line py-3",
+					children: [
+						(0, import_jsx_runtime.jsxs)("div", {
+							className: "flex flex-wrap items-center gap-2",
+							children: [
+								(0, import_jsx_runtime.jsx)("h2", {
+									className: "font-display text-lg font-semibold",
+									children: `编辑照片 · ${person.name}`
+								}),
+								(0, import_jsx_runtime.jsx)(Badge, { children: person.team })
+							]
+						}),
+						(0, import_jsx_runtime.jsx)("div", {
+							className: "btn-row",
+							children: (0, import_jsx_runtime.jsx)(Button, {
+								variant: "outline",
+								type: "button",
+								onClick: onClose,
+								children: "关闭"
+							})
+						})
+					]
+				}),
+				(0, import_jsx_runtime.jsxs)("div", {
+					className: "mt-6 grid gap-4 md:grid-cols-3",
+					children: [
+						(0, import_jsx_runtime.jsx)(PhotoSlot, {
+							name: person.name,
+							kind: "id",
+							onChanged
+						}, `id-${tick}`),
+						(0, import_jsx_runtime.jsx)(PhotoSlot, {
+							name: person.name,
+							kind: "bank",
+							onChanged
+						}, `bank-${tick}`),
+						(0, import_jsx_runtime.jsx)(PhotoSlot, {
+							name: person.name,
+							kind: "ic",
+							onChanged
+						}, `ic-${tick}`)
+					]
+				})
+			]
+		})
+	});
+}
+export { PhotosPage as component };
