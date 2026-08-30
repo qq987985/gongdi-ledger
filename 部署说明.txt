@@ -1,0 +1,77 @@
+================================================
+工地台账  1.2.15
+================================================
+
+两种 Docker 用法：
+  本机构建（推荐）  ./一键部署.sh
+  拉 GitHub 镜像    ./一键拉取.sh   （Actions 绿了、Packages 为 Public 后再用）
+
+永远不要删 data。
+
+
+一、飞牛目录应该长这样
+
+/vol1/1000/docker/attendance/
+  data/                 ← 现有台账，不要动
+  app/
+  Dockerfile
+  docker-compose.yml
+  docker-compose.build.yml
+  docker-compose.github.yml
+  一键部署.sh
+  一键拉取.sh
+  初始化目录.sh
+  VERSION.txt
+  部署说明.txt
+  使用说明.md
+  目录结构.txt
+
+
+二、本机构建（推荐）
+
+把 Docker-NAS 解压到 /vol1/1000/docker/attendance/
+确认和 data 平级，然后：
+
+  cd /vol1/1000/docker/attendance
+  chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
+  ./一键部署.sh
+
+打开 http://NAS的IP:8501
+左下角应显示 1.2.15
+
+
+三、拉 GitHub 镜像（可选）
+
+仓库 qq987985/gongdi-ledger 推送成功、Actions 全绿、
+Packages 里 gongdi-ledger 已设 Public 之后：
+
+  ./一键拉取.sh
+
+国内镜像：ghcr.1ms.run/qq987985/gongdi-ledger:latest
+compose 只挂 data，不要挂 VERSION.txt。
+
+
+四、data 必须有的文件夹
+
+accounts  books  backups  templates
+photos/id  photos/bank  photos/ic
+photos/报量单  photos/发票  photos/收款回单  photos/考勤影像  photos/合同扫描件
+
+脚本会自动建。也可先跑：./初始化目录.sh
+
+
+五、身份证和合同扫描件
+
+身份证两个文件，都放 photos/id：
+  张三-身份证-正面.jpg
+  张三-身份证-反面.jpg
+人员页只显示正面，点「查看反面」。
+
+合同原件上传到 photos/合同扫描件，文件名是「项目名称-合同电子版」，例如 某某住宅-合同电子版.pdf。
+有文件就是有合同，没传就是无合同；原因写在备注。
+
+
+六、以后升级
+
+只覆盖软件文件，再执行一键部署或一键拉取。
+永远不要删 data。
