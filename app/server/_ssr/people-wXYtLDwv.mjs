@@ -98,6 +98,11 @@ function PeoplePage() {
 								href: "/api/file/people-template",
 								filename: "人员导入模板.xlsx"
 							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "btn inline-flex items-center rounded-sm border border-line text-xs hover:bg-accent-soft",
+								href: "/api/file/people-export",
+								children: "导出人员名单"
+							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Can, {
 								perm: "import.use",
 								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PeopleImport, {})

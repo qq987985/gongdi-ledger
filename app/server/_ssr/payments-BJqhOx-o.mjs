@@ -152,6 +152,10 @@ function PaymentsPage() {
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TplLink, {
 							href: "/api/file/payment-template",
 							filename: "发放记录导入模板.xlsx"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+							className: "btn inline-flex items-center rounded-sm border border-line text-xs hover:bg-accent-soft",
+							href: "/api/file/payment-export",
+							children: "导出全部发放"
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PaymentImport, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 							type: "button",
 							onClick: () => {
@@ -553,14 +557,14 @@ function PaymentEditor({ draft, creating, ownerNames, receiverNames, sources, on
 		onClick: onCancel,
 		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 		id: "payment-editor",
-		className: "max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-5 shadow-panel md:rounded-xl",
+		className: "max-h-screen w-full max-w-5xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-6 shadow-panel md:rounded-xl",
 		onClick: (e) => e.stopPropagation(),
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "sticky top-0 z-10 -mx-5 -mt-5 mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-5 py-3",
+				className: "flex flex-wrap items-center justify-between gap-3 border-b border-line py-3",
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-						className: "font-semibold",
+						className: "font-display text-lg font-semibold",
 						children: creating ? "新增发放" : c.owner ? `编辑发放 · ${c.owner}` : "编辑发放"
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -574,12 +578,12 @@ function PaymentEditor({ draft, creating, ownerNames, receiverNames, sources, on
 				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "grid gap-3 md:grid-cols-3",
+				className: "mt-6 grid gap-4 md:grid-cols-2",
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "实际收款人（入账）" }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
-							className: "mt-1",
+							className: "mt-2 h-11",
 							list: "pay-edit-owners",
 							value: c.owner,
 							placeholder: "工资记在谁头上",
@@ -593,7 +597,7 @@ function PaymentEditor({ draft, creating, ownerNames, receiverNames, sources, on
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "收款人（代收可填别人）" }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
-							className: "mt-1",
+							className: "mt-2 h-11",
 							list: "pay-edit-receivers",
 							value: c.receiver,
 							placeholder: "空则同实际收款人",
@@ -607,7 +611,7 @@ function PaymentEditor({ draft, creating, ownerNames, receiverNames, sources, on
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "发放日期（空=待发放）" }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
-							className: "mt-1",
+							className: "mt-2 h-11",
 							type: "date",
 							value: parseDateYmd(c.date) || c.date || "",
 							onChange: (e) => patch("date", e.target.value)
@@ -616,16 +620,18 @@ function PaymentEditor({ draft, creating, ownerNames, receiverNames, sources, on
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "发放金额（元）" }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
-							className: "mt-1",
+							className: "mt-2 h-11",
 							type: "number",
 							value: c.amount || "",
 							onChange: (e) => patch("amount", Number(e.target.value) || 0)
 						})
 					] }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "md:col-span-2",
+						children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "发放方" }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
-							className: "mt-1",
+							className: "mt-2 h-11",
 							list: "pay-edit-sources",
 							value: c.source,
 							placeholder: "如：五冶条钢-钻孔切割8月请款",
@@ -636,10 +642,12 @@ function PaymentEditor({ draft, creating, ownerNames, receiverNames, sources, on
 							children: sources.map((n) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: n }, n))
 						})
 					] }),
-					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "md:col-span-2",
+						children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Label, { children: "备注" }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Input, {
-							className: "mt-1",
+							className: "mt-2 h-11",
 							value: c.remark,
 							onChange: (e) => patch("remark", e.target.value)
 						})

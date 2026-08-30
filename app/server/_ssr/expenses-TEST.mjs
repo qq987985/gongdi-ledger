@@ -7,6 +7,7 @@ import { n as DocActions, u as setDoc } from "./doc-actions-CoPSki7O.mjs";
 import { n as WideTable, a as PageBar, o as usePager } from "./wide-table-D8rPvj0E.mjs";
 import { n as Need } from "./can-gkGWV5bu.mjs";
 import { t as Badge } from "./badge-U3vNDWCk.mjs";
+import { e as ExpenseImport, o as TplLink } from "./excel-import-BfyfwtjF.mjs";
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 
@@ -427,6 +428,16 @@ function ExpensesPage() {
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "flex flex-wrap gap-2",
 								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TplLink, {
+										href: "/api/file/expense-template",
+										filename: "报销单导入模板.xlsx"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExpenseImport, {}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+										className: "btn inline-flex items-center rounded-sm border border-line text-xs hover:bg-accent-soft",
+										href: "/api/file/expense-export",
+										children: "导出全部报销"
+									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
 										type: "button",
 										onClick: () => {

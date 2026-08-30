@@ -1,7 +1,7 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { B as require_react, z as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
 import { n as toast } from "../_libs/sonner.mjs";
-import { A as parsePeopleSheet, D as parseAttendanceSheet, O as parseContractWorkbook, a as Input, f as Button, gt as uid, k as parsePaymentSheet, y as useApp } from "./router-DxdzlCp3.mjs";
+import { A as parsePeopleSheet, D as parseAttendanceSheet, O as parseContractWorkbook, a as Input, f as Button, gt as uid, k as parsePaymentSheet, kt as parseExpenseSheet, y as useApp } from "./router-DxdzlCp3.mjs";
 import { n as FilePick } from "./file-pick-BbqxzWa5.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/excel-import-BfyfwtjF.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
@@ -319,18 +319,35 @@ function ContractImport() {
 		onFile
 	});
 }
+function ExpenseImport() {
+	const store = useApp();
+	async function onFile(file) {
+		if (!file) return;
+		const rows = parseExpenseSheet(await file.arrayBuffer(), store.year);
+		if (!rows.length) {
+			toast.error("没有读到报销。需要「项目名称」列。");
+			return;
+		}
+		store.replaceExpenses([...(store.expenses || []), ...rows]);
+		toast.success(`已追加 ${rows.length} 条报销`);
+	}
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExcelBtn, {
+		label: "导入报销",
+		onFile
+	});
+}
 function FullBookImport() {
 	const store = useApp();
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FilePick, {
 		accept: ".xlsx,.xls",
-		label: "选择整本考勤表",
-		hint: "原来的「考勤表.xlsx」，含人员、12 个月、发放",
+		label: "选择整本台账",
+		hint: "含人员、12 个月考勤、发放、报销",
 		onFile: async (file) => {
 			if (!file) return;
 			const { parseFullAttendanceWorkbook } = await import("../_libs/_2.mjs").then((n) => n.a);
 			const parsed = parseFullAttendanceWorkbook(await file.arrayBuffer(), store.year);
-			if (!parsed.people.length && !parsed.attendance.length) {
-				toast.error("没有读到人员或考勤");
+			if (!parsed.people.length && !parsed.attendance.length && !parsed.payments.length && !(parsed.expenses || []).length) {
+				toast.error("没有读到人员、考勤、发放或报销");
 				return;
 			}
 			const byName = Object.fromEntries(store.people.map((p) => [p.name, p]));
@@ -345,6 +362,7 @@ function FullBookImport() {
 			}
 			if (added) store.replacePeople(merged);
 			if (parsed.payments.length) store.replacePayments([...store.payments, ...parsed.payments]);
+			if (parsed.expenses && parsed.expenses.length) store.replaceExpenses([...(store.expenses || []), ...parsed.expenses]);
 			if (parsed.attendance.length) {
 				store.addYear(parsed.year || store.year);
 				const names = new Set(parsed.attendance.map((a) => a.name + a.year + a.month));
@@ -355,9 +373,9 @@ function FullBookImport() {
 				}))]);
 				store.setYear(parsed.year || store.year);
 			}
-			toast.success(`整本导入完成：人员新增 ${added}，考勤 ${parsed.attendance.length} 条`);
+			toast.success(`整本导入完成：人员新增 ${added}，考勤 ${parsed.attendance.length} 条，发放 ${parsed.payments.length} 条，报销 ${(parsed.expenses || []).length} 条`);
 		}
 	});
 }
 //#endregion
-export { PeopleImport as a, PaymentImport as i, ContractImport as n, TplLink as o, FullBookImport as r, AttendanceImport as t };
+export { PeopleImport as a, PaymentImport as i, ContractImport as n, TplLink as o, FullBookImport as r, AttendanceImport as t, ExpenseImport as e };

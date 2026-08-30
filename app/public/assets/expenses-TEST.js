@@ -7,6 +7,7 @@ import{S as Plus,_ as Label,g as Input,h as toast,v as Button,y as useApp}from".
 import{n as WideTable,a as PageBar,o as usePager}from"./wide-table-BtpzsvMP.js";
 import{n as Need}from"./can-9AzYldNF.js";
 import{t as Badge}from"./badge-_ctqz85I.js";
+import{e as ExpenseImport,o as TplLink}from"./excel-import-CV73N9jL.js";
 var L=e(t()),R=n();
 var PAY_METHODS = ["现金", "转账", "微信", "支付宝", "对公", "其他"];
 
@@ -425,6 +426,16 @@ function ExpensesPage() {
 							/* @__PURE__ */ (0, R.jsxs)("div", {
 								className: "flex flex-wrap gap-2",
 								children: [
+									/* @__PURE__ */ (0, R.jsx)(TplLink, {
+										href: "/api/file/expense-template",
+										filename: "报销单导入模板.xlsx"
+									}),
+									/* @__PURE__ */ (0, R.jsx)(ExpenseImport, {}),
+									/* @__PURE__ */ (0, R.jsx)("a", {
+										className: "btn inline-flex items-center rounded-sm border border-line text-xs hover:bg-accent-soft",
+										href: "/api/file/expense-export",
+										children: "导出全部报销"
+									}),
 									/* @__PURE__ */ (0, R.jsxs)(Button, {
 										type: "button",
 										onClick: () => {

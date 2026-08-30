@@ -779,6 +779,7 @@ var excel_exports = /* @__PURE__ */ __exportAll({
 var SKIP_SHEETS = /* @__PURE__ */ new Set([
 	"人员信息",
 	"发放记录",
+	"报销单",
 	"汇总",
 	"个人查询",
 	"年度",
@@ -1032,11 +1033,13 @@ function parseFullAttendanceWorkbook(buf, fallbackYear) {
 		}
 	}
 	const payName = wb.SheetNames.find((n) => n.includes("发放"));
+	const expName = wb.SheetNames.find((n) => n.includes("报销"));
 	return {
 		year,
 		people,
 		attendance,
-		payments: payName ? sheetRecords(wb.Sheets[payName]).map(rowToPayment).filter((x) => x !== null) : []
+		payments: payName ? sheetRecords(wb.Sheets[payName]).map(rowToPayment).filter((x) => x !== null) : [],
+		expenses: expName ? sheetRecords(wb.Sheets[expName]).map((row) => rowToExpense(row, year)).filter((x) => x !== null) : []
 	};
 }
 var DEMO_PEOPLE = [
@@ -1057,6 +1060,9 @@ var DEMO_PEOPLE = [
 		"开户行",
 		"银行卡号",
 		"户籍地址",
+		"民族",
+		"籍贯",
+		"实际居住地",
 		"备注"
 	],
 	[
@@ -1076,6 +1082,9 @@ var DEMO_PEOPLE = [
 		"中国工商银行北京分行",
 		"6222021234567890123",
 		"北京市东城区示例路1号",
+		"汉",
+		"北京",
+		"",
 		"示例数据，导入前请改成自己的人"
 	],
 	[
@@ -1095,6 +1104,9 @@ var DEMO_PEOPLE = [
 		"中国农业银行上海分行",
 		"6228481234567890123",
 		"上海市浦东新区示例路8号",
+		"汉",
+		"上海",
+		"",
 		"示例数据，导入前请改成自己的人"
 	]
 ];
@@ -1244,28 +1256,84 @@ function paymentTemplateWb() {
 	]), "填写说明");
 	return wb;
 }
-function buildFullWorkbook(args) {
-	const { year, people, attendance, payments } = args;
+function rowToExpense(row, fallbackYear) {
+	const name = pick(row, ["项目名称", "名称", "name"]);
+	if (!name || name === "合计") return null;
+	const amount = numPick(row, ["金额", "amount"]) || 0;
+	const year = Number(pick(row, ["年份"])) || fallbackYear || (/* @__PURE__ */ new Date()).getFullYear();
+	const qty = numPick(row, ["数量", "qty"]) || 1;
+	const price = numPick(row, ["单价", "price"]) || amount;
+	return {
+		id: uid(),
+		year,
+		name,
+		period: pick(row, ["期间", "购买时间", "日期"]) || "",
+		date: normalizeDate(pick(row, ["购买时间", "日期"])) || "",
+		unit: pick(row, ["单位"]) || "项",
+		qty,
+		price,
+		amount: amount || qty * price,
+		remark: pick(row, ["备注"]),
+		payMethod: pick(row, ["支付方式"]) || "现金",
+		status: /已报销/.test(pick(row, ["状态"])) ? "已报销" : "未报销",
+		reimbursedAt: pick(row, ["打款日期"]) || "",
+		voucherId: "",
+		voucherFileName: pick(row, ["凭证文件"]),
+		claimant: pick(row, ["报销人"]),
+		forWhom: pick(row, ["收款人"]),
+		payAccount: pick(row, ["打款账户", "开户行"]),
+		payBank: pick(row, ["开户行"]),
+		payCardNo: pick(row, ["打款账户", "卡号"]),
+		payoutId: "",
+		payoutFileName: pick(row, ["打款凭证"]),
+		payoutDate: pick(row, ["打款日期"]),
+		payoutMethod: pick(row, ["打款方式"]) || pick(row, ["支付方式"]) || "转账"
+	};
+}
+function parseExpenseSheet(buf, fallbackYear) {
+	const wb = readWb(buf);
+	const preferred = wb.SheetNames.find((n) => n.includes("报销")) || wb.SheetNames[0];
+	return sheetRecords(wb.Sheets[preferred]).map((row) => rowToExpense(row, fallbackYear)).filter((x) => x !== null);
+}
+function expenseTemplateWb() {
 	const wb = utils.book_new();
-	const yearPays = paymentsInYear(payments, year, year);
+	utils.book_append_sheet(wb, titledSheet("报销单导入模板", [[
+		"年份", "项目名称", "购买时间", "期间", "单位", "数量", "单价", "金额", "支付方式", "打款方式", "状态", "报销人", "收款人", "开户行", "打款账户", "打款日期", "备注"
+	], [
+		2026, "示例材料", "2026-04-01", "2026-04-01", "项", 1, 100, 100, "现金", "转账", "未报销", "张三", "张三", "", "", "", "示例，导入前请改"
+	]]), "报销单");
+	utils.book_append_sheet(wb, noteSheet([
+		"填写说明（此表不会导入）",
+		"项目名称、金额必填。状态填「未报销」或「已报销」。",
+		"凭证文件名只作对照，原件仍在 data/photos。"
+	]), "填写说明");
+	return wb;
+}
+function peopleSheetAoa(people) {
 	const peopleAoa = [["人员信息表"], [
 		"序号",
 		"姓名",
 		"班组",
+		"IC卡号",
+		"批单号",
+		"联系电话",
 		"计薪方式",
 		"日工资",
 		"月工资",
-		"计算加班规则",
+		"加班规则",
 		"性别",
 		"年龄",
 		"生日",
 		"身份证号",
+		"身份证签发机关",
 		"身份证有效期开始",
 		"身份证有效期结束",
-		"户籍地地址",
-		"身份证签发机关",
 		"开户行",
-		"卡号",
+		"银行卡号",
+		"户籍地址",
+		"民族",
+		"籍贯",
+		"实际居住地",
 		"备注"
 	]];
 	people.forEach((p, i) => {
@@ -1273,24 +1341,124 @@ function buildFullWorkbook(args) {
 			i + 1,
 			p.name,
 			p.team,
+			p.personNo || "",
+			p.batchNo || "",
+			p.phone || "",
 			p.payType === "month" ? "按月" : "按工天",
 			p.dailyWage || "",
 			p.monthWage || "",
-			p.otRule,
-			p.gender,
+			p.otRule || "",
+			p.gender || "",
 			p.age ?? "",
-			p.birthday,
-			p.idCard,
-			p.idValidFrom,
-			p.idValidTo,
-			p.address,
-			p.idIssuer,
-			p.bank,
-			p.cardNo,
+			p.birthday || "",
+			p.idCard || "",
+			p.idIssuer || "",
+			p.idValidFrom || "",
+			p.idValidTo || "",
+			p.bank || "",
+			p.cardNo || "",
+			p.address || "",
+			p.nation || "",
+			p.nativePlace || "",
+			p.livePlace || "",
+			p.remark || ""
+		]);
+	});
+	return peopleAoa;
+}
+function paymentSheetAoa(payments) {
+	const payAoa = [["发放记录表"], [
+		"序号",
+		"实际收款人",
+		"发放日期",
+		"发放金额(元)",
+		"发放方",
+		"收款人",
+		"备注"
+	]];
+	const payRows = [...payments].sort((a, b) => (a.date || "9").localeCompare(b.date || "9"));
+	payRows.forEach((p, i) => {
+		payAoa.push([
+			i + 1,
+			p.owner,
+			p.date,
+			p.amount,
+			p.source,
+			p.receiver,
 			p.remark
 		]);
 	});
-	utils.book_append_sheet(wb, sheetFromAoa(peopleAoa), "人员信息");
+	return payAoa;
+}
+function expenseSheetAoa(expenses) {
+	const expAoa = [["报销单"], [
+		"序号",
+		"年份",
+		"项目名称",
+		"购买时间",
+		"期间",
+		"单位",
+		"数量",
+		"单价",
+		"金额",
+		"支付方式",
+		"打款方式",
+		"状态",
+		"报销人",
+		"收款人",
+		"开户行",
+		"打款账户",
+		"打款日期",
+		"备注",
+		"凭证文件",
+		"打款凭证"
+	]];
+	[...expenses].sort((a, b) => String(a.date || a.period || "").localeCompare(String(b.date || b.period || ""))).forEach((e, i) => {
+		expAoa.push([
+			i + 1,
+			e.year || "",
+			e.name || "",
+			e.date || "",
+			e.period || "",
+			e.unit || "",
+			e.qty || "",
+			e.price || "",
+			e.amount || "",
+			e.payMethod || "",
+			e.payoutMethod || "",
+			e.status || "",
+			e.claimant || "",
+			e.forWhom || "",
+			e.payBank || "",
+			e.payCardNo || e.payAccount || "",
+			e.payoutDate || "",
+			e.remark || "",
+			e.voucherFileName || "",
+			e.payoutFileName || ""
+		]);
+	});
+	return expAoa;
+}
+function buildPeopleWorkbook(people) {
+	const wb = utils.book_new();
+	utils.book_append_sheet(wb, sheetFromAoa(peopleSheetAoa(people || [])), "人员信息");
+	return wb;
+}
+function buildPaymentWorkbook(payments) {
+	const wb = utils.book_new();
+	utils.book_append_sheet(wb, sheetFromAoa(paymentSheetAoa(payments || [])), "发放记录");
+	return wb;
+}
+function buildExpenseWorkbook(expenses) {
+	const wb = utils.book_new();
+	utils.book_append_sheet(wb, sheetFromAoa(expenseSheetAoa(expenses || [])), "报销单");
+	return wb;
+}
+function buildFullWorkbook(args) {
+	const { year, people, attendance, payments, expenses = [] } = args;
+	const wb = utils.book_new();
+	const yearPays = paymentsInYear(payments, year, year);
+	utils.book_append_sheet(wb, sheetFromAoa(peopleSheetAoa(people)), "人员信息");
 	for (let m = 1; m <= 12; m++) {
 		const monthRows = attendance.filter((a) => a.year === year && a.month === m && a.name.trim() && hasWork(a));
 		const aoa = [[`${year}年${m}月考勤`], [
@@ -1329,27 +1497,8 @@ function buildFullWorkbook(args) {
 		});
 		utils.book_append_sheet(wb, sheetFromAoa(aoa), `${m}月考勤`);
 	}
-	const payAoa = [["发放记录表"], [
-		"序号",
-		"实际收款人",
-		"发放日期",
-		"发放金额(元)",
-		"发放方",
-		"收款人",
-		"备注"
-	]];
-	yearPays.forEach((p, i) => {
-		payAoa.push([
-			i + 1,
-			p.owner,
-			p.date,
-			p.amount,
-			p.source,
-			p.receiver,
-			p.remark
-		]);
-	});
-	utils.book_append_sheet(wb, sheetFromAoa(payAoa), "发放记录");
+	utils.book_append_sheet(wb, sheetFromAoa(paymentSheetAoa(payments)), "发放记录");
+	utils.book_append_sheet(wb, sheetFromAoa(expenseSheetAoa(expenses)), "报销单");
 	const sumAoa = [[`${year}年度工资汇总表`], [
 		"序号",
 		"姓名",
@@ -4813,8 +4962,9 @@ var Route = createFileRoute("/api/file/$kind")({ server: { handlers: { GET: asyn
 	if (kind === "people-template") return xlsxFile(peopleTemplateWb(), "人员导入模板.xlsx");
 	if (kind === "attendance-template") return xlsxFile(attendanceTemplateWb(year), `${year}年考勤导入模板.xlsx`);
 	if (kind === "payment-template") return xlsxFile(paymentTemplateWb(), "发放记录导入模板.xlsx");
+	if (kind === "expense-template") return xlsxFile(expenseTemplateWb(), "报销单导入模板.xlsx");
 	if (kind === "contract-template") return xlsxFile(contractTemplateWb(), "合同导入模板.xlsx");
-	if (kind === "contract-export" || kind === "export") {
+	if (kind === "contract-export" || kind === "export" || kind === "payment-export" || kind === "expense-export" || kind === "people-export") {
 		const { persistOn, readLedger } = await import("./nas-fs.server-huEdTgug.mjs");
 		const { withTenant } = await import("./accounts.server-DNyKCx-M.mjs");
 		const run = async () => {
@@ -4839,12 +4989,17 @@ var Route = createFileRoute("/api/file/$kind")({ server: { handlers: { GET: asyn
 			const people = rec.people || [];
 			const attendance = rec.attendance || [];
 			const payments = rec.payments || [];
+			const expenses = rec.expenses || [];
+			if (kind === "payment-export") return xlsxFile(buildPaymentWorkbook(payments), "发放记录.xlsx");
+			if (kind === "expense-export") return xlsxFile(buildExpenseWorkbook(expenses), "报销单.xlsx");
+			if (kind === "people-export") return xlsxFile(buildPeopleWorkbook(people), "人员名单.xlsx");
 			return xlsxFile(buildFullWorkbook({
 				year,
 				people,
 				attendance,
-				payments
-			}), `${year}年考勤表.xlsx`);
+				payments,
+				expenses
+			}), `${year}年台账.xlsx`);
 		};
 		if (persistOn()) return withTenant(request, run);
 		return run();
@@ -4994,4 +5149,4 @@ function getRouter() {
 	});
 }
 //#endregion
-export { wageLabel as $, parsePeopleSheet as A, hasWork as B, buildContractWorkbook as C, parseAttendanceSheet as D, excel_exports as E, contractRollup as F, normalizeIdDate as G, monthStatus as H, dateYear as I, parseIdCard as J, overAgeLabel as K, derivedYears as L, peopleTemplateWb as M, CONTRACT_STATUSES as N, parseContractWorkbook as O, confirmRemoveYear as P, splitTax as Q, emptyContract as R, attendanceTemplateWb as S, contractTemplateWb as T, nextYear as U, monthPay as V, normalizeEntry as W, paymentsInYear as X, parseOtRule as Y, round2 as Z, isNewerVersion as _, Input as a, canWriteLedger as at, fetchAudit as b, detectNas as c, perms_exports as ct, pushNasBackup as d, cn as dt, ALL_PERMS as et, Button as f, confirmBatchDelete as ft, unlockGate as g, uid as gt, lockGate as h, toggleSel as ht, authStatus as i, can as it, paymentTemplateWb as j, parsePaymentSheet as k, nasEnabled as l, setLivePerms as lt, hashPassword as m, money as mt, WinUpdate as n, PERM_GROUPS as nt, Label as o, hasPerm as ot, startNasSync as p, copyText as pt, parseDateYmd as q, authOp as r, PRESETS as rt, writeCenteredXlsx as s, livePerms as st, router_exports as t, NAV_PERM as tt, pullNasLedger as u, subscribePerms as ut, parseChangelog as v, buildFullWorkbook as w, logOp as x, useApp as y, encodeOtRule as z };
+export { wageLabel as $, parsePeopleSheet as A, hasWork as B, buildContractWorkbook as C, parseAttendanceSheet as D, excel_exports as E, contractRollup as F, normalizeIdDate as G, monthStatus as H, dateYear as I, parseIdCard as J, overAgeLabel as K, derivedYears as L, peopleTemplateWb as M, CONTRACT_STATUSES as N, parseContractWorkbook as O, confirmRemoveYear as P, splitTax as Q, emptyContract as R, attendanceTemplateWb as S, contractTemplateWb as T, nextYear as U, monthPay as V, normalizeEntry as W, paymentsInYear as X, parseOtRule as Y, round2 as Z, isNewerVersion as _, Input as a, canWriteLedger as at, fetchAudit as b, detectNas as c, perms_exports as ct, pushNasBackup as d, cn as dt, ALL_PERMS as et, Button as f, confirmBatchDelete as ft, unlockGate as g, uid as gt, lockGate as h, toggleSel as ht, authStatus as i, can as it, paymentTemplateWb as j, parsePaymentSheet as k, parseExpenseSheet as kt, nasEnabled as l, setLivePerms as lt, hashPassword as m, money as mt, WinUpdate as n, PERM_GROUPS as nt, Label as o, hasPerm as ot, startNasSync as p, copyText as pt, parseDateYmd as q, authOp as r, PRESETS as rt, writeCenteredXlsx as s, livePerms as st, router_exports as t, NAV_PERM as tt, pullNasLedger as u, subscribePerms as ut, parseChangelog as v, buildFullWorkbook as w, logOp as x, useApp as y, encodeOtRule as z };
