@@ -1,13 +1,39 @@
-import { z as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
-import { y as useApp } from "./router-DxdzlCp3.mjs";
+import { o as __toESM } from "../_runtime.mjs";
+import { B as require_react, z as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
+import { L as derivedYears, y as useApp } from "./router-DxdzlCp3.mjs";
 import { a as PeopleImport, i as PaymentImport, n as ContractImport, o as TplLink, r as FullBookImport, t as AttendanceImport, e as ExpenseImport } from "./excel-import-BfyfwtjF.mjs";
 import { t as Can } from "./can-gkGWV5bu.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/import-Bq9k4s7c.js
+import { t as YmPick } from "./ym-pick-CSdNMXnF.mjs";
+var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var outline = "btn inline-flex items-center rounded-sm border border-line-strong bg-surface text-xs hover:bg-accent-soft";
 var primary = "btn inline-flex items-center rounded-sm bg-accent text-xs text-accent-fg hover:opacity-90";
+function exportHref(kind, scope, year, fromY, fromM, toY, toM) {
+	const p = new URLSearchParams();
+	p.set("scope", scope);
+	if (scope === "year") p.set("year", String(year));
+	if (scope === "range") {
+		p.set("fromY", String(fromY));
+		p.set("fromM", String(fromM));
+		p.set("toY", String(toY));
+		p.set("toM", String(toM));
+	}
+	const q = p.toString();
+	return `/api/file/${kind}${q ? `?${q}` : ""}`;
+}
 function ImportPage() {
 	const store = useApp();
+	const years = derivedYears(store);
+	const now = /* @__PURE__ */ new Date();
+	const [scope, setScope] = (0, import_react.useState)("year");
+	const [year, setYear] = (0, import_react.useState)(store.year);
+	const [fromY, setFromY] = (0, import_react.useState)(store.year);
+	const [fromM, setFromM] = (0, import_react.useState)(1);
+	const [toY, setToY] = (0, import_react.useState)(store.year);
+	const [toM, setToM] = (0, import_react.useState)(store.year === now.getFullYear() ? now.getMonth() + 1 : 12);
+	const yearList = years.includes(year) ? years : [...years, year].sort((a, b) => a - b);
+	const rangeText = scope === "all" ? "全部年份" : scope === "year" ? `${year}年` : fromY === toY && fromM === toM ? `${fromY}年${fromM}月` : `${fromY}年${fromM}月至${toY}年${toM}月`;
+	const href = (kind) => exportHref(kind, scope, year, fromY, fromM, toY, toM);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "space-y-5",
 		children: [
@@ -29,25 +55,71 @@ function ImportPage() {
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", { className: "font-semibold", children: "导出" }),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "mt-1 text-sm text-muted",
-							children: "年台账含人员全部字段、12 个月考勤、全部发放、全部报销。也可只导出某一类。"
+							children: "先选全部年份、某一年或起止月份，再点要导出的项。总台账含人员、各月考勤、发放、报销。合同单独一份。人员名单不按年份筛。"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "mt-3 flex flex-wrap gap-2",
+							children: [
+								["all", "全部年份"],
+								["year", "按年"],
+								["range", "按区间"]
+							].map(([k, label]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								onClick: () => setScope(k),
+								className: `h-11 rounded-full border px-3 text-sm ${scope === k ? "border-accent bg-accent text-accent-fg" : "border-line bg-surface text-muted"}`,
+								children: label
+							}, k))
+						}),
+						scope === "year" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "mt-3 flex flex-wrap items-center gap-2",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "text-xs text-muted", children: "年份" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+									className: "field-select w-auto",
+									value: year,
+									onChange: (e) => setYear(Number(e.target.value)),
+									"aria-label": "导出年份",
+									children: yearList.map((y) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+										value: y,
+										children: [y, "年"]
+									}, y))
+								})
+							]
+						}) : null,
+						scope === "range" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "mt-3 flex flex-wrap items-center gap-4",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(YmPick, {
+									label: "起始",
+									years,
+									y: fromY,
+									m: fromM,
+									onY: setFromY,
+									onM: setFromM
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(YmPick, {
+									label: "结束",
+									years,
+									y: toY,
+									m: toM,
+									onY: setToY,
+									onM: setToM
+								})
+							]
+						}) : null,
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+							className: "mt-3 text-sm text-muted",
+							children: ["将导出：", rangeText]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "mt-3 flex flex-wrap gap-2",
 							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-									className: primary,
-									href: `/api/file/export?year=${store.year}`,
-									children: ["导出 ", store.year, " 年台账"]
-								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: primary, href: href("export"), children: "导出总台账" }),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: outline, href: "/api/file/people-export", children: "导出人员名单" }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: outline, href: "/api/file/payment-export", children: "导出全部发放" }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: outline, href: "/api/file/expense-export", children: "导出全部报销" }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-									className: outline,
-									href: `/api/file/contract-export?year=${store.year}`,
-									children: ["导出 ", store.year, " 年合同"]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: outline, href: "/api/file/contract-export", children: "导出全部年份合同" })
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: outline, href: href("attendance-export"), children: "导出考勤" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: outline, href: href("payment-export"), children: "导出发放" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: outline, href: href("expense-export"), children: "导出报销" }),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", { className: outline, href: href("contract-export"), children: "导出合同" })
 							]
 						})
 					]
@@ -160,5 +232,4 @@ function ImportPage() {
 		]
 	});
 }
-//#endregion
 export { ImportPage as component };

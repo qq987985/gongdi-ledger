@@ -33,5 +33,6 @@ docker compose -f "$FILE" up -d --force-recreate
 echo
 echo "完成。打开：http://本机IP:8501"
 echo "数据目录：$(pwd)/data"
+echo "左下角点版本号可检查更新；GitHub 有新版可直接点更新，台账不会动。"
 echo "若拉取 403：GitHub Packages 里把 gongdi-ledger 改成 Public"
 echo "若拉取 EOF：确认用的是 ghcr.1ms.run/qq987985/gongdi-ledger:latest"

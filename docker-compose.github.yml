@@ -6,6 +6,7 @@
 #
 # 前提：Actions 已成功，Packages 里 gongdi-ledger 为 Public。
 # 只挂 data，不要挂 VERSION.txt。
+# docker.sock 给软件里「检查更新 / 更新」用，台账仍只在 data。
 services:
   attendance:
     image: ghcr.1ms.run/qq987985/gongdi-ledger:latest
@@ -15,6 +16,7 @@ services:
       - "8501:8080"
     volumes:
       - /vol1/1000/docker/attendance/data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       DATA_DIR: /data
       PHOTO_DIR: /data/photos
@@ -25,3 +27,4 @@ services:
       NITRO_PORT: "8080"
       HOST: 0.0.0.0
       PORT: "8080"
+      GONGDI_IMAGE: ghcr.1ms.run/qq987985/gongdi-ledger:latest

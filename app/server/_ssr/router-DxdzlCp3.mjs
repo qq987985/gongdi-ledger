@@ -1455,13 +1455,18 @@ function buildExpenseWorkbook(expenses) {
 	return wb;
 }
 function buildFullWorkbook(args) {
-	const { year, people, attendance, payments, expenses = [] } = args;
+	const { year, people, attendance, payments, expenses = [], months: monthArg, skipPeople = false, skipPay = false, skipExp = false } = args;
 	const wb = utils.book_new();
-	const yearPays = paymentsInYear(payments, year, year);
-	utils.book_append_sheet(wb, sheetFromAoa(peopleSheetAoa(people)), "人员信息");
-	for (let m = 1; m <= 12; m++) {
-		const monthRows = attendance.filter((a) => a.year === year && a.month === m && a.name.trim() && hasWork(a));
-		const aoa = [[`${year}年${m}月考勤`], [
+	const monthList = Array.isArray(monthArg) && monthArg.length ? monthArg : Array.from({ length: 12 }, (_, i) => ({
+		year,
+		month: i + 1
+	}));
+	const yearSet = [...new Set(monthList.map((x) => x.year))].sort((a, b) => a - b);
+	const singleYear = yearSet.length <= 1;
+	if (!skipPeople) utils.book_append_sheet(wb, sheetFromAoa(peopleSheetAoa(people)), "人员信息");
+	for (const { year: y, month: m } of monthList) {
+		const monthRows = attendance.filter((a) => a.year === y && a.month === m && a.name.trim() && hasWork(a));
+		const aoa = [[`${y}年${m}月考勤`], [
 			"序号",
 			"姓名",
 			"班组",
@@ -1495,107 +1500,111 @@ function buildFullWorkbook(args) {
 				a.remark || ""
 			]);
 		});
-		utils.book_append_sheet(wb, sheetFromAoa(aoa), `${m}月考勤`);
+		const sheetName = singleYear ? `${m}月考勤` : `${y}年${m}月考勤`;
+		utils.book_append_sheet(wb, sheetFromAoa(aoa), sheetName);
 	}
-	utils.book_append_sheet(wb, sheetFromAoa(paymentSheetAoa(payments)), "发放记录");
-	utils.book_append_sheet(wb, sheetFromAoa(expenseSheetAoa(expenses)), "报销单");
-	const sumAoa = [[`${year}年度工资汇总表`], [
-		"序号",
-		"姓名",
-		"班组",
-		"1月",
-		"2月",
-		"3月",
-		"4月",
-		"5月",
-		"6月",
-		"7月",
-		"8月",
-		"9月",
-		"10月",
-		"11月",
-		"12月",
-		"全年合计",
-		"已发放金额",
-		"未发放金额",
-		"发放状态"
-	]];
-	const workers = people.filter((p) => attendance.some((a) => a.year === year && a.name === p.name && hasWork(a)));
-	workers.forEach((p, i) => {
-		const months = [];
-		for (let m = 1; m <= 12; m++) {
-			const a = attendance.find((x) => x.year === year && x.month === m && x.name === p.name);
-			months.push(monthPay(a, p).pay);
-		}
-		const total = months.reduce((s, n) => s + n, 0);
-		const paid = yearPays.filter((x) => x.owner === p.name && x.date).reduce((s, x) => s + x.amount, 0);
-		const unpaid = total - paid;
-		const status = total === 0 ? "未计" : unpaid <= 0 ? "已结清" : paid > 0 ? "部分发放" : "未发放";
-		sumAoa.push([
-			i + 1,
-			p.name,
-			p.team,
-			...months.map((n) => n || ""),
-			total || "",
-			paid || "",
-			unpaid || "",
-			status
-		]);
-	});
-	utils.book_append_sheet(wb, sheetFromAoa(sumAoa), "汇总");
-	const workAoa = [[`${year}年度工天加班汇总表`], [
-		"序号",
-		"姓名",
-		"班组",
-		"1月工天",
-		"1月加班",
-		"2月工天",
-		"2月加班",
-		"3月工天",
-		"3月加班",
-		"4月工天",
-		"4月加班",
-		"5月工天",
-		"5月加班",
-		"6月工天",
-		"6月加班",
-		"7月工天",
-		"7月加班",
-		"8月工天",
-		"8月加班",
-		"9月工天",
-		"9月加班",
-		"10月工天",
-		"10月加班",
-		"11月工天",
-		"11月加班",
-		"12月工天",
-		"12月加班",
-		"全年工天",
-		"全年加班"
-	]];
-	workers.forEach((p, i) => {
-		const cells = [];
-		let daysSum = 0;
-		let otSum = 0;
-		for (let m = 1; m <= 12; m++) {
-			const a = attendance.find((x) => x.year === year && x.month === m && x.name === p.name);
-			const d = a?.days || 0;
-			const o = a?.otHours || 0;
-			daysSum += d;
-			otSum += o;
-			cells.push(d || "", o || "");
-		}
-		workAoa.push([
-			i + 1,
-			p.name,
-			p.team,
-			...cells,
-			daysSum || "",
-			otSum || ""
-		]);
-	});
-	utils.book_append_sheet(wb, sheetFromAoa(workAoa), "工天加班");
+	if (!skipPay) utils.book_append_sheet(wb, sheetFromAoa(paymentSheetAoa(payments)), "发放记录");
+	if (!skipExp) utils.book_append_sheet(wb, sheetFromAoa(expenseSheetAoa(expenses)), "报销单");
+	for (const y of yearSet) {
+		const yearPays = paymentsInYear(payments, y, y);
+		const sumAoa = [[`${y}年度工资汇总表`], [
+			"序号",
+			"姓名",
+			"班组",
+			"1月",
+			"2月",
+			"3月",
+			"4月",
+			"5月",
+			"6月",
+			"7月",
+			"8月",
+			"9月",
+			"10月",
+			"11月",
+			"12月",
+			"全年合计",
+			"已发放金额",
+			"未发放金额",
+			"发放状态"
+		]];
+		const workers = people.filter((p) => attendance.some((a) => a.year === y && a.name === p.name && hasWork(a)));
+		workers.forEach((p, i) => {
+			const months = [];
+			for (let m = 1; m <= 12; m++) {
+				const a = attendance.find((x) => x.year === y && x.month === m && x.name === p.name);
+				months.push(monthPay(a, p).pay);
+			}
+			const total = months.reduce((s, n) => s + n, 0);
+			const paid = yearPays.filter((x) => x.owner === p.name && x.date).reduce((s, x) => s + x.amount, 0);
+			const unpaid = total - paid;
+			const status = total === 0 ? "未计" : unpaid <= 0 ? "已结清" : paid > 0 ? "部分发放" : "未发放";
+			sumAoa.push([
+				i + 1,
+				p.name,
+				p.team,
+				...months.map((n) => n || ""),
+				total || "",
+				paid || "",
+				unpaid || "",
+				status
+			]);
+		});
+		utils.book_append_sheet(wb, sheetFromAoa(sumAoa), singleYear ? "汇总" : `${y}年汇总`);
+		const workAoa = [[`${y}年度工天加班汇总表`], [
+			"序号",
+			"姓名",
+			"班组",
+			"1月工天",
+			"1月加班",
+			"2月工天",
+			"2月加班",
+			"3月工天",
+			"3月加班",
+			"4月工天",
+			"4月加班",
+			"5月工天",
+			"5月加班",
+			"6月工天",
+			"6月加班",
+			"7月工天",
+			"7月加班",
+			"8月工天",
+			"8月加班",
+			"9月工天",
+			"9月加班",
+			"10月工天",
+			"10月加班",
+			"11月工天",
+			"11月加班",
+			"12月工天",
+			"12月加班",
+			"全年工天",
+			"全年加班"
+		]];
+		workers.forEach((p, i) => {
+			const cells = [];
+			let daysSum = 0;
+			let otSum = 0;
+			for (let m = 1; m <= 12; m++) {
+				const a = attendance.find((x) => x.year === y && x.month === m && x.name === p.name);
+				const d = a?.days || 0;
+				const o = a?.otHours || 0;
+				daysSum += d;
+				otSum += o;
+				cells.push(d || "", o || "");
+			}
+			workAoa.push([
+				i + 1,
+				p.name,
+				p.team,
+				...cells,
+				daysSum || "",
+				otSum || ""
+			]);
+		});
+		utils.book_append_sheet(wb, sheetFromAoa(workAoa), singleYear ? "工天加班" : `${y}年工天加班`);
+	}
 	return wb;
 }
 function yesNo(s) {
@@ -3726,9 +3735,21 @@ function WinUpdate({ compact }) {
 	(0, import_react.useEffect)(() => {
 		load();
 	}, []);
-	if (!info?.portable) return null;
+	async function waitRestart() {
+		for (let i = 0; i < 40; i++) {
+			await new Promise((r) => setTimeout(r, 3e3));
+			try {
+				if ((await fetch("/api/version", { cache: "no-store" })).ok) {
+					location.reload();
+					return;
+				}
+			} catch {}
+		}
+		location.reload();
+	}
 	async function apply() {
-		if (!confirm("将下载新版本并重启。data 台账不会动。")) return;
+		const docker = info?.mode === "docker";
+		if (!confirm(docker ? "将拉取新镜像并重启容器。data 台账不会动。大约一两分钟。" : "将下载新版本并重启。data 台账不会动。")) return;
 		setBusy(true);
 		try {
 			const r = await fetch("/api/update", { method: "POST" });
@@ -3739,11 +3760,14 @@ function WinUpdate({ compact }) {
 				return;
 			}
 			toast.success("正在更新并重启…");
+			void waitRestart();
 		} catch {
 			toast.error("更新失败");
 			setBusy(false);
 		}
 	}
+	const desc = info?.mode === "windows" ? "从 GitHub 下载 Windows 包并替换程序。data 不覆盖。" : info?.mode === "docker" ? "GitHub 有新版时点更新，会拉镜像并重启。data 台账不会动。" : "GitHub 有新版会在这里提醒。飞牛第一次请先运行一次「一键拉取」，以后就能点更新。";
+	const status = !info ? "检查中…" : info.error && !info.remote ? info.error : info.canApply ? "" : info.hint || info.error || (info.newer ? "有新版本，请先在飞牛运行一次一键拉取" : "已是最新");
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: compact ? "mt-3" : "rounded-xl border border-line bg-surface p-5",
 		children: [
@@ -3752,7 +3776,7 @@ function WinUpdate({ compact }) {
 				children: "软件更新"
 			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 				className: "mt-1 text-sm text-muted",
-				children: "从 GitHub 下载 Windows 包并替换程序。data 不覆盖。"
+				children: desc
 			})] }),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: `flex flex-wrap items-center gap-2 ${compact ? "" : "mt-3"}`,
@@ -3763,7 +3787,7 @@ function WinUpdate({ compact }) {
 					disabled: busy,
 					onClick: () => void load(),
 					children: "检查更新"
-				}), info.newer && info.remote ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+				}), info?.canApply ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 					type: "button",
 					size: "sm",
 					disabled: busy,
@@ -3771,10 +3795,14 @@ function WinUpdate({ compact }) {
 					children: busy ? "更新中…" : `更新到 ${formatVersion(info.remote)}`
 				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 					className: "text-xs text-muted",
-					children: info.error || "已是最新"
+					children: status
 				})]
 			}),
-			info.remote ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+			info?.hint && info.canApply ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "mt-2 text-xs text-subtle",
+				children: info.hint
+			}) : null,
+			info?.remote ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 				className: "mt-2 text-xs text-subtle",
 				children: [
 					"GitHub ",
@@ -3796,9 +3824,13 @@ var FALLBACK = {
 function VersionLog() {
 	const [log, setLog] = (0, import_react.useState)(FALLBACK);
 	const [open, setOpen] = (0, import_react.useState)(false);
+	const [hasNew, setHasNew] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => {
 		fetch("/api/version").then((r) => r.json()).then((d) => {
 			if (d?.current) setLog(d);
+		}).catch(() => void 0);
+		fetch("/api/update").then((r) => r.json()).then((d) => {
+			if (d?.newer) setHasNew(true);
 		}).catch(() => void 0);
 	}, []);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
@@ -3808,7 +3840,10 @@ function VersionLog() {
 		children: ["版本号：", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 			className: "tabular-nums",
 			children: formatVersion(log.current)
-		})]
+		}), hasNew ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+			className: "ml-2 text-xs font-normal text-ok",
+			children: "有新版本"
+		}) : null]
 	}), open ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 		className: "fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4",
 		onClick: () => setOpen(false),
@@ -4891,8 +4926,7 @@ var Route$3 = createFileRoute("/api/update")({ server: { handlers: {
 		try {
 			const { resolveTenant } = await import("./accounts.server-DNyKCx-M.mjs");
 			if (!(await resolveTenant(request)).user) return Response.json({ error: "请先登录" }, { status: 401 });
-			const { applyUpdate, isPortable } = await import("./update.server-DlHtnlXz.mjs");
-			if (!isPortable()) return Response.json({ error: "只有 Windows 解压版能点更新" }, { status: 400 });
+			const { applyUpdate } = await import("./update.server-DlHtnlXz.mjs");
 			const result = await applyUpdate();
 			return Response.json(result, { status: result.ok ? 200 : 400 });
 		} catch (e) {
@@ -4946,8 +4980,184 @@ var Route$1 = createFileRoute("/api/year")({ server: { handlers: {
 		return addYearAndRedirect(request, Number(form.get("year") || form.get("add") || 0));
 	}
 } } });
+function ymKeyExport(y, m) {
+	return y * 12 + m;
+}
+function ymdPartsExport(value) {
+	const t = parseDateYmd(value);
+	if (!t) return null;
+	const m = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+	if (!m) return null;
+	return {
+		year: Number(m[1]),
+		month: Number(m[2])
+	};
+}
+function parseExportRange(url, fallbackYear) {
+	const sp = url.searchParams;
+	const scopeRaw = (sp.get("scope") || "").trim();
+	const yearRaw = sp.get("year");
+	const yearNum = Number(yearRaw || fallbackYear || 2026);
+	const year = yearNum >= 2e3 && yearNum <= 2100 ? yearNum : fallbackYear || 2026;
+	const yearMode = () => ({
+		scope: "year",
+		year,
+		fromY: year,
+		fromM: 1,
+		toY: year,
+		toM: 12,
+		lo: ymKeyExport(year, 1),
+		hi: ymKeyExport(year, 12),
+		stamp: `${year}年`
+	});
+	const allMode = () => ({
+		scope: "all",
+		year,
+		fromY: 2e3,
+		fromM: 1,
+		toY: 2100,
+		toM: 12,
+		lo: 0,
+		hi: 99999,
+		stamp: "全部"
+	});
+	if (scopeRaw === "range") {
+		let fromY = Number(sp.get("fromY") || year);
+		let fromM = Number(sp.get("fromM") || 1);
+		let toY = Number(sp.get("toY") || year);
+		let toM = Number(sp.get("toM") || 12);
+		if (!(fromY >= 2e3 && fromY <= 2100)) fromY = year;
+		if (!(toY >= 2e3 && toY <= 2100)) toY = year;
+		if (!(fromM >= 1 && fromM <= 12)) fromM = 1;
+		if (!(toM >= 1 && toM <= 12)) toM = 12;
+		let lo = ymKeyExport(fromY, fromM);
+		let hi = ymKeyExport(toY, toM);
+		if (lo > hi) {
+			[lo, hi] = [hi, lo];
+			[fromY, fromM, toY, toM] = [toY, toM, fromY, fromM];
+		}
+		const stamp = fromY === toY && fromM === toM ? `${fromY}年${fromM}月` : `${fromY}年${fromM}月至${toY}年${toM}月`;
+		return {
+			scope: "range",
+			year: fromY,
+			fromY,
+			fromM,
+			toY,
+			toM,
+			lo,
+			hi,
+			stamp
+		};
+	}
+	if (scopeRaw === "all") return allMode();
+	if (scopeRaw === "year") return yearMode();
+	if (yearRaw != null && yearRaw !== "") return yearMode();
+	return allMode();
+}
+function monthsOfRange(range) {
+	if (range.scope === "year") return Array.from({ length: 12 }, (_, i) => ({
+		year: range.year,
+		month: i + 1
+	}));
+	const out = [];
+	for (let k = range.lo; k <= range.hi; k++) {
+		const year = Math.floor((k - 1) / 12);
+		const month = (k - 1) % 12 + 1;
+		out.push({
+			year,
+			month
+		});
+	}
+	return out;
+}
+function monthsFromAttendance(attendance) {
+	const seen = /* @__PURE__ */ new Set();
+	const out = [];
+	for (const a of attendance || []) {
+		if (!hasWork(a)) continue;
+		const y = a.year;
+		const m = a.month;
+		if (!(y >= 2e3 && y <= 2100) || !(m >= 1 && m <= 12)) continue;
+		const k = ymKeyExport(y, m);
+		if (seen.has(k)) continue;
+		seen.add(k);
+		out.push({
+			year: y,
+			month: m,
+			k
+		});
+	}
+	out.sort((a, b) => a.k - b.k);
+	return out.map(({ year, month }) => ({
+		year,
+		month
+	}));
+}
+function inExportRange(y, m, range) {
+	if (range.scope === "all") return true;
+	const k = ymKeyExport(y, m);
+	return k >= range.lo && k <= range.hi;
+}
+function filterAttendanceExport(attendance, range) {
+	if (range.scope === "all") return attendance || [];
+	return (attendance || []).filter((a) => inExportRange(a.year, a.month, range));
+}
+function filterPaymentsExport(payments, range) {
+	if (range.scope === "all") return payments || [];
+	return (payments || []).filter((p) => {
+		if (!p.date) return true;
+		const parts = ymdPartsExport(p.date);
+		if (!parts) {
+			const y = dateYear(p.date);
+			if (y == null) return true;
+			return y >= range.fromY && y <= range.toY;
+		}
+		return inExportRange(parts.year, parts.month, range);
+	});
+}
+function filterExpensesExport(expenses, range) {
+	if (range.scope === "all") return expenses || [];
+	return (expenses || []).filter((e) => {
+		const parts = ymdPartsExport(e.date) || ymdPartsExport(e.period) || ymdPartsExport(e.payoutDate);
+		if (parts) return inExportRange(parts.year, parts.month, range);
+		const y = Number(e.year) || dateYear(e.date) || dateYear(e.period);
+		if (y >= 2e3) return y >= range.fromY && y <= range.toY;
+		return true;
+	});
+}
+function filterContractsExport(contracts, entries, range) {
+	if (range.scope === "all") return {
+		contracts: contracts || [],
+		entries: entries || []
+	};
+	const filtered = (contracts || []).filter((c) => {
+		const y = Number(c.year);
+		if (!(y >= 2e3)) return true;
+		return y >= range.fromY && y <= range.toY;
+	});
+	const ids = new Set(filtered.map((c) => c.id));
+	return {
+		contracts: filtered,
+		entries: (entries || []).filter((e) => ids.has(e.contractId))
+	};
+}
+function fileStamp(range, kind) {
+	const labels = {
+		full: "总台账",
+		att: "考勤",
+		pay: "发放记录",
+		exp: "报销单",
+		con: "合同明细",
+		people: "人员名单"
+	};
+	const label = labels[kind] || "导出";
+	if (kind === "people") return "人员名单.xlsx";
+	if (range.scope === "all") return `${label}.xlsx`;
+	return `${range.stamp}${label}.xlsx`;
+}
 async function xlsxFile(wb, filename) {
 	const data = await writeCenteredXlsx(wb);
+
 	const ascii = filename.replace(/[^\x20-\x7e]/g, "_");
 	return new Response(data, { headers: {
 		"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -4964,42 +5174,44 @@ var Route = createFileRoute("/api/file/$kind")({ server: { handlers: { GET: asyn
 	if (kind === "payment-template") return xlsxFile(paymentTemplateWb(), "发放记录导入模板.xlsx");
 	if (kind === "expense-template") return xlsxFile(expenseTemplateWb(), "报销单导入模板.xlsx");
 	if (kind === "contract-template") return xlsxFile(contractTemplateWb(), "合同导入模板.xlsx");
-	if (kind === "contract-export" || kind === "export" || kind === "payment-export" || kind === "expense-export" || kind === "people-export") {
+	if (kind === "contract-export" || kind === "export" || kind === "payment-export" || kind === "expense-export" || kind === "people-export" || kind === "attendance-export") {
 		const { persistOn, readLedger } = await import("./nas-fs.server-huEdTgug.mjs");
 		const { withTenant } = await import("./accounts.server-DNyKCx-M.mjs");
 		const run = async () => {
+			const range = parseExportRange(url, year);
 			const data = persistOn() ? await readLedger() : { empty: true };
 			const rec = !("empty" in data && data.empty) ? data : {};
 			if (kind === "contract-export") {
-				let contracts = rec.contracts || [];
-				let contractEntries = rec.contractEntries || [];
-				const yearFilter = url.searchParams.get("year");
-				const y = Number(yearFilter);
-				if (y >= 2e3) {
-					contracts = contracts.filter((c) => c.year === y);
-					const ids = new Set(contracts.map((c) => c.id));
-					contractEntries = contractEntries.filter((e) => ids.has(e.contractId));
-				}
-				const name = y >= 2e3 ? `${y}年合同明细.xlsx` : "合同明细.xlsx";
+				const { contracts, entries } = filterContractsExport(rec.contracts || [], rec.contractEntries || [], range);
 				return xlsxFile(buildContractWorkbook({
 					contracts,
-					entries: contractEntries
-				}), name);
+					entries
+				}), fileStamp(range, "con"));
 			}
+			if (kind === "people-export") return xlsxFile(buildPeopleWorkbook(rec.people || []), fileStamp(range, "people"));
 			const people = rec.people || [];
-			const attendance = rec.attendance || [];
-			const payments = rec.payments || [];
-			const expenses = rec.expenses || [];
-			if (kind === "payment-export") return xlsxFile(buildPaymentWorkbook(payments), "发放记录.xlsx");
-			if (kind === "expense-export") return xlsxFile(buildExpenseWorkbook(expenses), "报销单.xlsx");
-			if (kind === "people-export") return xlsxFile(buildPeopleWorkbook(people), "人员名单.xlsx");
+			const attendance = filterAttendanceExport(rec.attendance || [], range);
+			const payments = filterPaymentsExport(rec.payments || [], range);
+			const expenses = filterExpensesExport(rec.expenses || [], range);
+			if (kind === "payment-export") return xlsxFile(buildPaymentWorkbook(payments), fileStamp(range, "pay"));
+			if (kind === "expense-export") return xlsxFile(buildExpenseWorkbook(expenses), fileStamp(range, "exp"));
+			let months = range.scope === "all" ? monthsFromAttendance(attendance) : monthsOfRange(range);
+			if (!months.length) months = Array.from({ length: 12 }, (_, i) => ({
+				year: range.year,
+				month: i + 1
+			}));
+			const skip = kind === "attendance-export";
 			return xlsxFile(buildFullWorkbook({
-				year,
+				year: range.year,
 				people,
 				attendance,
 				payments,
-				expenses
-			}), `${year}年台账.xlsx`);
+				expenses,
+				months,
+				skipPeople: skip,
+				skipPay: skip,
+				skipExp: skip
+			}), fileStamp(range, skip ? "att" : "full"));
 		};
 		if (persistOn()) return withTenant(request, run);
 		return run();
