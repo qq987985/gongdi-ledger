@@ -3,11 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-<<<<<<< HEAD
 当前版本：**1.2.19**（以根目录 `VERSION.txt` 第一行为准）
-=======
-当前版本：**1.2.17**（以根目录 `VERSION.txt` 第一行为准）
->>>>>>> origin/main
 
 镜像：
 
@@ -29,7 +25,6 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
 
-<<<<<<< HEAD
 ### 1.2.19
 
 - 导入导出主按钮改叫导出总台账。可按全部年份、按年或按区间导出，并分项导出人员、考勤、发放、报销、合同
@@ -38,8 +33,6 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 
 - GitHub 有新版本时左下角会提醒。飞牛点更新会自动拉镜像并重启，Windows 仍下载解压包。台账不会动
 
-=======
->>>>>>> origin/main
 ### 1.2.17
 
 - 照片管理点「更改」弹出编辑，和发放、报销一样
@@ -190,11 +183,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 ./一键部署.sh
 ```
 
-<<<<<<< HEAD
 打开 `http://NAS的IP:8501`，左下角应显示 **1.2.19**。
-=======
-打开 `http://NAS的IP:8501`，左下角应显示 **1.2.17**。
->>>>>>> origin/main
 
 拉 GitHub 镜像（Actions 全绿，并且 Packages 里 `gongdi-ledger` 已设 Public）：
 
@@ -205,13 +194,9 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 国内镜像：`ghcr.1ms.run/qq987985/gongdi-ledger:latest`  
 compose **只挂 data**，不要再挂 `VERSION.txt`。
 
-<<<<<<< HEAD
 第一次拉起后，左下角点版本号可以检查更新。GitHub 出新版会提示「有新版本」，点更新会自动拉镜像并重启，台账不会动。这次覆盖后请先运行一次 `./一键拉取.sh`（或本机构建），以后就不用再上飞牛。仓库也要设成 Public（和 Packages 一样），软件才能查到新版本；只公开镜像不够。
 
 本机构建镜像名：`gongdi-ledger:1.2.19`，端口 `8501:8080`。
-=======
-本机构建镜像名：`gongdi-ledger:1.2.17`，端口 `8501:8080`。
->>>>>>> origin/main
 
 ---
 
