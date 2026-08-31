@@ -60,13 +60,14 @@ async function idbDel(id, kind) {
 		tx.onerror = () => reject(tx.error);
 	});
 }
-async function setDoc(id, kind, file) {
+async function setDoc(id, kind, file, opts) {
 	await idbSet(id, kind, file, file.name);
 	if (!nasEnabled()) return file.name;
 	const body = new FormData();
 	body.set("id", id);
 	body.set("kind", kind);
 	body.set("file", file, file.name);
+	if (opts && opts.replace) body.set("replace", "1");
 	const res = await fetch("/api/doc", {
 		method: "PUT",
 		credentials: "include",
@@ -168,6 +169,51 @@ function renameFile(file, base) {
 		lastModified: file.lastModified
 	});
 }
+function escapeHtml(s) {
+	return String(s || "").replace(/[&<>"']/g, (c) => "&#" + ({ "&": "38", "<": "60", ">": "62", '"': "34", "'": "39" }[c]) + ";");
+}
+function stemOf(name) {
+	return String(name || "").replace(/\.[^.]+$/, "");
+}
+function askDupAction(fileName) {
+	return new Promise((resolve) => {
+		if (typeof document === "undefined") {
+			resolve("add");
+			return;
+		}
+		const wrap = document.createElement("div");
+		wrap.style.cssText = "position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(28,25,21,.4);padding:16px";
+		wrap.innerHTML = `<div role="dialog" aria-modal="true" style="width:100%;max-width:26rem;border-radius:12px;background:#f4efe6;padding:1.25rem 1.25rem 1rem;border:1px solid #d7cfc2;box-shadow:0 18px 50px rgba(28,25,21,.25)"><div style="font-size:15px;font-weight:600;color:#1c1915">已有同名文件</div><p style="margin:8px 0 16px;font-size:13px;line-height:1.55;color:#5c564c">重命名后的「${escapeHtml(fileName)}」已经存在。替换会盖掉现有文件；增加会另存为同名后加 -2、-3。</p><div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end"><button type="button" data-act="cancel" style="border:1px solid #d7cfc2;background:#fff;padding:6px 12px;border-radius:4px;font-size:13px;cursor:pointer">取消</button><button type="button" data-act="add" style="border:1px solid #d7cfc2;background:#fff;padding:6px 12px;border-radius:4px;font-size:13px;cursor:pointer">增加</button><button type="button" data-act="replace" style="background:#2f4f3e;color:#f4efe6;padding:6px 12px;border-radius:4px;font-size:13px;cursor:pointer;border:0">替换</button></div></div>`;
+		const finish = (act) => {
+			wrap.remove();
+			resolve(act);
+		};
+		wrap.addEventListener("click", (e) => {
+			const btn = e.target.closest("[data-act]");
+			if (btn) finish(btn.getAttribute("data-act"));
+			else if (e.target === wrap) finish("cancel");
+		});
+		document.body.appendChild(wrap);
+		wrap.querySelector("[data-act='replace']")?.focus();
+	});
+}
+async function prepareNamedFile(file, base, taken, currentName) {
+	if (!file) return null;
+	const cur = currentName ? stemOf(currentName) : "";
+	const conflict = (taken || []).map(stemOf).includes(base) && base !== cur;
+	let useBase = base;
+	let replace = false;
+	if (conflict) {
+		const act = await askDupAction(`${base}${fileExt(file.name) || ""}`);
+		if (act === "cancel") return null;
+		if (act === "replace") replace = true;
+		else useBase = uniqueBase(base, taken);
+	}
+	return {
+		file: renameFile(file, useBase),
+		replace
+	};
+}
 /** 合同名-开票月份-金额 */
 function invoiceBase(contractName, date, amount) {
 	return `${safeBase(contractName)}-${monthLabel(date)}-${amountTag(amount)}`;
@@ -238,8 +284,15 @@ function DocActions({ id, kind, fileName, suggest, taken = [], onDeleted, onRepl
 					if (!f) return;
 					const tip = fileName ? `用「${f.name}」替换影像资料「${fileName}」？` : `上传影像资料「${f.name}」？`;
 					if (!confirm(tip)) return;
-					const named = suggest ? renameFile(f, uniqueBase(suggest, taken.filter((n) => n !== fileName))) : f;
-					const saved = await setDoc(id, kind, named) || named.name;
+					let named = f;
+					let replace = false;
+					if (suggest) {
+						const pack = await prepareNamedFile(f, suggest, taken.filter((n) => n !== fileName), fileName);
+						if (!pack) return;
+						named = pack.file;
+						replace = pack.replace;
+					}
+					const saved = await setDoc(id, kind, named, { replace }) || named.name;
 					onReplaced(saved);
 					toast.success(fileName ? `已替换为 ${saved}` : `已上传 ${saved}`);
 				}
@@ -264,4 +317,4 @@ function DocActions({ id, kind, fileName, suggest, taken = [], onDeleted, onRepl
 	});
 }
 //#endregion
-export { receiptSubBase as a, renameFile as c, uniqueBase as d, getDocBlob as g, invoiceBase as i, reportBase as l, DocActions as n, receiptWorkerBase as o, attendanceBase as r, removeDoc as s, DOC_KIND_LABEL as t, setDoc as u };
+export { receiptSubBase as a, renameFile as c, uniqueBase as d, getDocBlob as g, invoiceBase as i, reportBase as l, DocActions as n, receiptWorkerBase as o, prepareNamedFile as p, attendanceBase as r, removeDoc as s, DOC_KIND_LABEL as t, setDoc as u };

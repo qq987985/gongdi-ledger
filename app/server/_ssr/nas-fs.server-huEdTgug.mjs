@@ -570,7 +570,7 @@ async function sweepDocFiles(kind, sid) {
 		}
 	}
 }
-async function saveDoc(id, kind, buf, fileName) {
+async function saveDoc(id, kind, buf, fileName, opts = {}) {
 	if (!persistOn()) return fileName || "";
 	await ensureDirs();
 	const dir = docsDir(kind);
@@ -582,7 +582,7 @@ async function saveDoc(id, kind, buf, fileName) {
 	let orig = (fileName || `file${ext}`).replace(/[\\/]/g, "");
 	const prev = await readPointerName(dir, sid);
 	const sharedPrev = prev ? await otherPointersUse(dir, sid, prev) : false;
-	orig = uniqueFileName(dir, orig, prev && !sharedPrev ? prev : "");
+	if (!opts.replace) orig = uniqueFileName(dir, orig, prev && !sharedPrev ? prev : "");
 	await sweepDocFiles(kind, sid);
 	if (kind === "contract" || kind === "expense" || kind === "payout") {
 		await writeFile(join(dir, orig), buf);
@@ -697,9 +697,9 @@ async function removeBookDir(id) {
 }
 async function readVersionText() {
 	const candidates = [
-		dataDir() ? join(dataDir(), "VERSION.txt") : "",
 		join(process.cwd(), "VERSION.txt"),
 		"/app/VERSION.txt",
+		dataDir() ? join(dataDir(), "VERSION.txt") : "",
 		"/data/VERSION.txt"
 	].filter(Boolean);
 	for (const p of candidates) try {

@@ -85,14 +85,17 @@ function FilesPage() {
 			if (scope === "year" && e.year !== year) continue;
 			if (seenP.has(e.payoutId)) continue;
 			seenP.add(e.payoutId);
-			const sib = (expenses || []).filter((x) => x.payoutId === e.payoutId).length;
+			const group = (expenses || []).filter((x) => x.payoutId === e.payoutId);
+			const sib = group.length;
+			const total = group.reduce((s, x) => s + (x.amount || 0), 0);
+			const amt = Number.isInteger(total) ? String(total) : String(Math.round(total * 100) / 100);
 			out.push({
 				id: e.payoutId,
 				kind: "payout",
 				fileName: e.payoutFileName,
 				belong: `${e.year} ${e.claimant || e.name}`,
 				extra: [e.payAccount, e.forWhom || e.claimant, sib > 1 ? `${sib}笔一起` : "", e.payoutDate, e.status].filter(Boolean).join(" · "),
-				suggest: `${(e.claimant || "报销").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "")}-${(e.payAccount || "账户").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "")}`,
+				suggest: `收报销款-${amt}-${sib}笔`,
 				source: "payout"
 			});
 		}

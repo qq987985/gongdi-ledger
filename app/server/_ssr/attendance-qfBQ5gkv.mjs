@@ -3,7 +3,7 @@ import { B as require_react, z as require_jsx_runtime } from "../_libs/@tanstack
 import { A as ArrowLeft, c as Plus, o as Trash2, r as UserPlus } from "../_libs/lucide-react.mjs";
 import { n as toast } from "../_libs/sonner.mjs";
 import { $ as wageLabel, B as hasWork, H as monthStatus, L as derivedYears, U as nextYear, V as monthPay, X as paymentsInYear, Y as parseOtRule, a as Input, f as Button, ft as confirmBatchDelete, gt as uid, ht as toggleSel, mt as money, y as useApp } from "./router-DxdzlCp3.mjs";
-import { c as renameFile, d as uniqueBase, n as DocActions, r as attendanceBase, u as setDoc } from "./doc-actions-CoPSki7O.mjs";
+import { c as renameFile, d as uniqueBase, n as DocActions, p as prepareNamedFile, r as attendanceBase, u as setDoc } from "./doc-actions-CoPSki7O.mjs";
 import { n as WideTable } from "./wide-table-D8rPvj0E.mjs";
 import { n as FilePick } from "./file-pick-BbqxzWa5.mjs";
 import { o as TplLink, t as AttendanceImport } from "./excel-import-BfyfwtjF.mjs";
@@ -750,10 +750,12 @@ function MonthFiles({ year, month }) {
 					onFiles: async (files) => {
 						if (!files.length) return;
 						const taken = docs.map((d) => d.fileName);
+						let uploaded = 0;
 						for (const file of files) {
 							const id = uid();
-							const named = renameFile(file, uniqueBase(attendanceBase(year, month), taken));
-							const saved = await setDoc(id, "attendance", named) || named.name;
+							const pack = await prepareNamedFile(file, attendanceBase(year, month), taken, "");
+							if (!pack) continue;
+							const saved = await setDoc(id, "attendance", pack.file, { replace: pack.replace }) || pack.file.name;
 							taken.push(saved);
 							add({
 								id,
@@ -762,9 +764,10 @@ function MonthFiles({ year, month }) {
 								fileName: saved,
 								remark
 							});
+							uploaded += 1;
 						}
 						setRemark("");
-						toast.success(`已上传 ${files.length} 份`);
+						if (uploaded) toast.success(`已上传 ${uploaded} 份`);
 					}
 				})]
 			}),

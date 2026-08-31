@@ -62,8 +62,92 @@ async function localVersion() {
 	const first = String(text || "").split(/\r?\n/).find((l) => l.trim()) || "1.0.2";
 	return parseRemoteTag(first);
 }
-async function fetchGithub() {
-	if (cache.data && Date.now() - cache.at < 8 * 60 * 1000) return cache.data;
+async function fetchWithTimeout(url, headers = {}, ms = 4500) {
+	return fetch(url, {
+		headers: {
+			"User-Agent": "gongdi-ledger",
+			...headers
+		},
+		redirect: "follow",
+		signal: AbortSignal.timeout(ms)
+	});
+}
+function firstVersionLine(text) {
+	return parseRemoteTag(String(text || "").split(/\r?\n/).find((l) => l.trim()) || "");
+}
+function pickNewer(a, b) {
+	if (!a) return b || "";
+	if (!b) return a;
+	return isNewerVersion(b, a) ? b : a;
+}
+async function versionFromResponse(res) {
+	if (!res.ok) throw new Error(String(res.status));
+	const text = await res.text();
+	const trimmed = text.trim();
+	if (trimmed.startsWith("{")) try {
+		const data = JSON.parse(trimmed);
+		if (data.content && data.encoding === "base64") return firstVersionLine(Buffer.from(data.content, "base64").toString("utf8"));
+		let tag = parseRemoteTag(data.tag_name || data.name || "");
+		if (!/\d+(?:\.\d+)*/.test(tag)) {
+			const m = String(data.body || "").match(/\d+\.\d+\.\d+/);
+			if (m) tag = m[0];
+		}
+		if (tag) return {
+			remote: tag,
+			url: ((data.assets || []).find((a) => /windows/i.test(a.name) && a.name.endsWith(".zip")) || (data.assets || []).find((a) => a.name.endsWith(".zip")))?.browser_download_url || "",
+			name: ((data.assets || []).find((a) => /windows/i.test(a.name) && a.name.endsWith(".zip")) || (data.assets || []).find((a) => a.name.endsWith(".zip")))?.name || "",
+			size: ((data.assets || []).find((a) => /windows/i.test(a.name) && a.name.endsWith(".zip")) || (data.assets || []).find((a) => a.name.endsWith(".zip")))?.size || 0,
+			notes: data.body || "",
+			page: data.html_url || ""
+		};
+	} catch {}
+	if (trimmed.startsWith("<")) throw new Error("html");
+	const remote = firstVersionLine(text);
+	if (!remote) throw new Error("empty");
+	return { remote };
+}
+async function raceSources(urls, headersFor) {
+	return await new Promise((resolve) => {
+		let left = urls.length;
+		let best = null;
+		let settled = false;
+		const finish = () => {
+			if (settled) return;
+			settled = true;
+			resolve(best);
+		};
+		if (!urls.length) return finish();
+		for (const url of urls) {
+			fetchWithTimeout(url, headersFor(url)).then(versionFromResponse).then((hit) => {
+				if (!(hit && hit.remote)) return;
+				best = best ? {
+					...best,
+					...hit,
+					remote: pickNewer(best.remote, hit.remote),
+					url: hit.url || best.url,
+					name: hit.name || best.name,
+					size: hit.size || best.size,
+					notes: hit.notes || best.notes,
+					page: hit.page || best.page
+				} : {
+					url: "",
+					name: "",
+					size: 0,
+					notes: "",
+					page: "",
+					...hit
+				};
+				setTimeout(finish, 500);
+			}).catch(() => {}).finally(() => {
+				left--;
+				if (left <= 0) finish();
+			});
+		}
+		setTimeout(finish, 5500);
+	});
+}
+async function fetchGithub(fresh = false) {
+	if (!fresh && cache.data && cache.data.remote && Date.now() - cache.at < 2 * 60 * 1000) return cache.data;
 	const out = {
 		remote: "",
 		url: "",
@@ -72,50 +156,59 @@ async function fetchGithub() {
 		notes: "",
 		page: ""
 	};
-	try {
-		const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: ghHeaders() });
-		if (res.ok) {
-			const data = await res.json();
-			const asset = (data.assets || []).find((a) => /windows/i.test(a.name) && a.name.endsWith(".zip")) || (data.assets || []).find((a) => a.name.endsWith(".zip"));
-			out.remote = parseRemoteTag(data.tag_name || data.name || "");
-			if (!/\d+(?:\.\d+)*/.test(out.remote)) {
-				const m = String(data.body || "").match(/\d+\.\d+\.\d+/);
-				if (m) out.remote = m[0];
-			}
-			out.url = asset?.browser_download_url || "";
-			out.name = asset?.name || "";
-			out.size = asset?.size || 0;
-			out.notes = data.body || "";
-			out.page = data.html_url || "";
-		}
-	} catch {}
-	try {
-		const res = await fetch(`https://api.github.com/repos/${REPO}/contents/VERSION.txt`, { headers: ghHeaders({ Accept: "application/vnd.github.raw" }) });
-		if (res.ok) {
-			const first = (await res.text()).split(/\r?\n/).find((l) => l.trim()) || "";
-			const raw = parseRemoteTag(first);
-			if (raw && (!out.remote || isNewerVersion(raw, out.remote))) out.remote = raw;
-		}
-	} catch {}
-	if (!out.remote) try {
-		const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/VERSION.txt`, { headers: { "User-Agent": "gongdi-ledger" } });
-		if (res.ok) {
-			const first = (await res.text()).split(/\r?\n/).find((l) => l.trim()) || "";
-			const raw = parseRemoteTag(first);
-			if (raw && (!out.remote || isNewerVersion(raw, out.remote))) out.remote = raw;
-		}
-	} catch {}
-	cache = {
+	const versionUrls = [
+		`https://api.github.com/repos/${REPO}/contents/VERSION.txt`,
+		`https://raw.githubusercontent.com/${REPO}/main/VERSION.txt`,
+		`https://gh-proxy.com/https://raw.githubusercontent.com/${REPO}/main/VERSION.txt`,
+		`https://ghfast.top/https://raw.githubusercontent.com/${REPO}/main/VERSION.txt`,
+		`https://gh.ddlc.top/https://raw.githubusercontent.com/${REPO}/main/VERSION.txt`,
+		`https://cdn.jsdelivr.net/gh/${REPO}@main/VERSION.txt`,
+		`https://fastly.jsdelivr.net/gh/${REPO}@main/VERSION.txt`,
+		`https://cdn.jsdmirror.com/gh/${REPO}@main/VERSION.txt`
+	];
+	const releaseUrls = [
+		`https://api.github.com/repos/${REPO}/releases/latest`,
+		`https://gh-proxy.com/https://api.github.com/repos/${REPO}/releases/latest`,
+		`https://ghfast.top/https://api.github.com/repos/${REPO}/releases/latest`
+	];
+	const headersFor = (url) => {
+		if (url.includes("api.github.com") && url.includes("/contents/")) return ghHeaders({ Accept: "application/vnd.github.raw" });
+		if (url.includes("api.github.com")) return ghHeaders();
+		return { "User-Agent": "gongdi-ledger" };
+	};
+	const [fromFile, fromRelease] = await Promise.all([
+		raceSources(versionUrls, headersFor),
+		raceSources(releaseUrls, headersFor)
+	]);
+	for (const hit of [fromRelease, fromFile]) {
+		if (!hit) continue;
+		out.remote = pickNewer(out.remote, hit.remote);
+		if (hit.url) out.url = hit.url;
+		if (hit.name) out.name = hit.name;
+		if (hit.size) out.size = hit.size;
+		if (hit.notes) out.notes = hit.notes;
+		if (hit.page) out.page = hit.page;
+	}
+	if (out.remote && !out.url) {
+		out.url = `https://github.com/${REPO}/releases/latest/download/gongdi-windows.zip`;
+		out.name = out.name || "gongdi-windows.zip";
+	}
+	if (!out.page) out.page = `https://github.com/${REPO}/releases/latest`;
+	if (out.remote) cache = {
 		at: Date.now(),
 		data: out
 	};
+	else cache = {
+		at: 0,
+		data: null
+	};
 	return out;
 }
-async function checkUpdate() {
+async function checkUpdate(fresh = false) {
 	const local = await localVersion();
 	const portable = isPortable();
 	const docker = await hasDockerSock();
-	const latest = await fetchGithub();
+	const latest = await fetchGithub(fresh);
 	const remote = latest.remote || "";
 	const newer = remote ? isNewerVersion(remote, local) : false;
 	let mode = "manual";
@@ -124,7 +217,7 @@ async function checkUpdate() {
 	const canApply = newer && ((mode === "windows" && Boolean(latest.url)) || mode === "docker");
 	let error = "";
 	let hint = "";
-	if (!remote) error = "暂时连不上 GitHub。请把仓库设成 Public，和 Packages 一样。只公开镜像不够。";
+	if (!remote) error = "暂时连不上 GitHub。仓库已经公开的话，多半是飞牛访问 GitHub 被拦了，点「检查更新」再试一次。";
 	else if (mode === "windows" && newer && !latest.url) {
 		error = "";
 		hint = "GitHub 已有新版本，Windows 安装包还在打包，稍后再点更新";
@@ -214,6 +307,14 @@ async function pullImage(ref) {
 	const { repo, tag } = splitImage(ref);
 	await dockerReq("POST", `/images/create?fromImage=${encodeURIComponent(repo)}&tag=${encodeURIComponent(tag)}`, { stream: true });
 }
+function uniqueImages(list) {
+	const out = [];
+	for (const x of list) {
+		const s = String(x || "").trim();
+		if (s && !out.includes(s)) out.push(s);
+	}
+	return out;
+}
 const HELPER = `const http=require("node:http");
 const fs=require("node:fs");
 function docker(method,path,body){
@@ -255,19 +356,27 @@ async function applyDockerUpdate() {
 	};
 	const me = await selfContainer();
 	const name = String(me.Name || "/attendance-app").replace(/^\//, "") || "attendance-app";
-	let image = DEFAULT_IMAGE;
 	const current = String(me.Config?.Image || "");
-	if (/ghcr|gongdi-ledger/i.test(current) && current.includes("/")) image = current.includes(":") ? current.replace(/:[^:]+$/, ":latest") : `${current}:latest`;
-	if (/^gongdi-ledger:/.test(current)) image = DEFAULT_IMAGE;
-	if (process.env.GONGDI_IMAGE) image = process.env.GONGDI_IMAGE.trim();
-	try {
-		await pullImage(image);
-	} catch (e) {
-		if (image !== DEFAULT_IMAGE) {
-			image = DEFAULT_IMAGE;
-			await pullImage(image);
-		} else throw e;
+	let image = "";
+	const candidates = uniqueImages([
+		process.env.GONGDI_IMAGE,
+		/ghcr|gongdi-ledger/i.test(current) && current.includes("/") ? (current.includes(":") ? current.replace(/:[^:]+$/, ":latest") : `${current}:latest`) : "",
+		DEFAULT_IMAGE,
+		"ghcr.1ms.run/qq987985/gongdi-ledger:latest",
+		"ghcr.io/qq987985/gongdi-ledger:latest"
+	]);
+	let lastErr = "拉镜像失败";
+	for (const ref of candidates) {
+		try {
+			await pullImage(ref);
+			image = ref;
+			lastErr = "";
+			break;
+		} catch (e) {
+			lastErr = e instanceof Error ? e.message : String(e);
+		}
 	}
+	if (!image) throw new Error(lastErr.slice(0, 180) || "拉镜像失败。请确认 Packages 是 Public，或到飞牛再运行一次「一键拉取」。");
 	const binds = [...(me.HostConfig?.Binds || [])];
 	if (!binds.some((b) => String(b).includes("docker.sock"))) binds.push(`${SOCK}:${SOCK}`);
 	const hostConfig = {
@@ -337,18 +446,41 @@ async function applyWindowsUpdate() {
 	});
 	await mkdir(tmp, { recursive: true });
 	const zipPath = join(tmp, "gongdi-windows.zip");
-	const res = await fetch(info.url, {
-		headers: {
-			"User-Agent": "gongdi-ledger",
-			Accept: "application/octet-stream"
-		},
-		redirect: "follow"
-	});
-	if (!res.ok) return {
+	const urls = uniqueImages([
+		info.url,
+		`https://github.com/${REPO}/releases/latest/download/gongdi-windows.zip`,
+		`https://gh-proxy.com/https://github.com/${REPO}/releases/latest/download/gongdi-windows.zip`,
+		`https://ghfast.top/https://github.com/${REPO}/releases/latest/download/gongdi-windows.zip`
+	]);
+	let buf = null;
+	let last = "下载失败";
+	for (const u of urls) {
+		try {
+			const res = await fetch(u, {
+				headers: {
+					"User-Agent": "gongdi-ledger",
+					Accept: "application/octet-stream"
+				},
+				redirect: "follow",
+				signal: AbortSignal.timeout(120000)
+			});
+			if (!res.ok) {
+				last = `下载失败 ${res.status}`;
+				continue;
+			}
+			buf = Buffer.from(await res.arrayBuffer());
+			if (buf.length > 1024) break;
+			last = "下载内容太小";
+			buf = null;
+		} catch (e) {
+			last = e instanceof Error ? e.message : String(e);
+		}
+	}
+	if (!buf) return {
 		ok: false,
-		error: `下载失败 ${res.status}`
+		error: last
 	};
-	await writeFile(zipPath, Buffer.from(await res.arrayBuffer()));
+	await writeFile(zipPath, buf);
 	try {
 		await stat(home);
 	} catch {

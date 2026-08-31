@@ -23,6 +23,7 @@ printf '%s\n' '工地台账 Windows 解压即用' '双击 启动.bat' 'http://12
 if [ -f /tmp/node-win/node.exe ]; then
   cp /tmp/node-win/node.exe "$STAGE/node/node.exe"
 else
+  rm -rf /tmp/nodewin-ci
   curl -fsSL -o /tmp/node-win.zip "https://nodejs.org/dist/v22.18.0/node-v22.18.0-win-x64.zip"
   python3 - <<PY
 import zipfile, shutil
@@ -41,7 +42,10 @@ root=Path("$STAGE")
 out=Path("$OUT")
 with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as z:
     for p in root.rglob("*"):
-        if p.is_file():
-            z.write(p, p.relative_to(root).as_posix())
+        rel=p.relative_to(root).as_posix()
+        if p.is_dir():
+            z.writestr(rel+"/","")
+        elif p.is_file():
+            z.write(p, rel)
 print("wrote", out, out.stat().st_size)
 PY

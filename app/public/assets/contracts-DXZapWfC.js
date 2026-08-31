@@ -2,7 +2,7 @@ const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/xlsx-center-nSN
 import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";
 import{r as t}from"./audit-K39-jiKA.js";
 import{t as n}from"./jsx-runtime-DREnUpxT.js";
-import{i as receiptSubBase,o as renameFile,c as uniqueBase,r as invoiceBase,s as reportBase,t as DocActions,a as receiptWorkerBase,u as removeDoc,d as setDoc}from"./doc-actions-CmcTaqrK.js";
+import{i as receiptSubBase,o as renameFile,c as uniqueBase,r as invoiceBase,s as reportBase,t as DocActions,a as receiptWorkerBase,u as removeDoc,d as setDoc,f as prepareNamedFile}from"./doc-actions-CmcTaqrK.js";
 import{n as FilePick}from"./file-pick-Sh_I8IQI.js";
 import{a as toggleSel,i as money,n as confirmBatchDelete,o as uid}from"./utils-BSPq25aB.js";
 import{n as contractRollup,t as CONTRACT_STATUSES,o as splitTax,r as emptyContract,i as normalizeEntry,_ as round2}from"./contracts-D6qZj01d.js";
@@ -1256,8 +1256,9 @@ function DocPick({ label, fileName, disabled, onFile }) {
 }
 async function attachNamed(id, kind, file, base, taken) {
 	if (!file) return "";
-	const named = renameFile(file, uniqueBase(base, taken));
-	const saved = await setDoc(id, kind, named) || named.name;
+	const pack = await prepareNamedFile(file, base, taken, "");
+	if (!pack) return "";
+	const saved = await setDoc(id, kind, pack.file, { replace: pack.replace }) || pack.file.name;
 	return saved;
 }
 function useTakenNames() {
@@ -1744,6 +1745,8 @@ function contractScanName(name) {
 	return base ? `${base}-合同电子版` : "";
 }
 function ContractScanBox({ contract, onFileName }) {
+	const scans = useApp((s) => s.contracts);
+	const taken = (scans || []).map((c) => c.scanFileName).filter(Boolean);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		id: "contract-scan",
 		className: "rounded-lg border-2 border-dashed border-accent bg-accent-soft p-4",
@@ -1779,12 +1782,9 @@ function ContractScanBox({ contract, onFileName }) {
 						toast.error("先填项目名称，扫描件按 项目名称-合同电子版 保存");
 						return;
 					}
-					const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".pdf";
-					const named = new File([file], `${base}${ext}`, {
-						type: file.type,
-						lastModified: file.lastModified
-					});
-					const saved = await setDoc(contract.id, "contract", named) || named.name;
+					const pack = await prepareNamedFile(file, base, taken, contract.scanFileName);
+					if (!pack) return;
+					const saved = await setDoc(contract.id, "contract", pack.file, { replace: pack.replace }) || pack.file.name;
 					onFileName(saved);
 					toast.success(`已保存 ${saved}`);
 				}
@@ -1800,7 +1800,8 @@ function ContractScanBox({ contract, onFileName }) {
 					kind: "contract",
 					fileName: contract.scanFileName,
 					suggest: contractScanName(contract.name) || "合同电子版",
-					taken: [],
+					taken,
+					onReplaced: onFileName,
 					onDeleted: () => onFileName("")
 				})
 			})

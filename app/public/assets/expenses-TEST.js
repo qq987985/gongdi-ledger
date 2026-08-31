@@ -1,7 +1,7 @@
 import{i as e}from"./rolldown-runtime-Dd_uD5pT.js";
 import{r as t}from"./audit-K39-jiKA.js";
 import{t as n}from"./jsx-runtime-DREnUpxT.js";
-import{d as setDoc,t as DocActions}from"./doc-actions-CmcTaqrK.js";
+import{d as setDoc,t as DocActions,f as prepareNamedFile}from"./doc-actions-CmcTaqrK.js";
 import{a as toggleSel,i as money,n as confirmBatch,o as uid}from"./utils-BSPq25aB.js";
 import{S as Plus,_ as Label,g as Input,h as toast,v as Button,y as useApp}from"./index-ghxum7yZ.js";
 import{n as WideTable,a as PageBar,o as usePager}from"./wide-table-BtpzsvMP.js";
@@ -49,21 +49,29 @@ function emptyExpense(year) {
 		payoutMethod: "转账"
 	};
 }
+function amountTag(n) {
+	const x = Number(n) || 0;
+	return String(Number.isInteger(x) ? x : Math.round(x * 100) / 100);
+}
+function dateFromPeriod(period, fallback) {
+	const p = String(period || "").trim();
+	if (/^\d{4}-\d{2}-\d{2}$/.test(p)) return p;
+	const m = p.match(/^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})/);
+	if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+	return fallback || todayYmd();
+}
 function voucherBase(items) {
 	if (!items.length) return "报销凭证";
-	if (items.length === 1) return `${safeBase(items[0].name)}-${items[0].amount}`;
-	const bits = items.slice(0, 3).map((e) => `${safeBase(e.name)}-${e.amount}`);
+	if (items.length === 1) return `${safeBase(items[0].name)}-${amountTag(items[0].amount)}`;
+	const bits = items.slice(0, 3).map((e) => `${safeBase(e.name)}-${amountTag(e.amount)}`);
 	let n = bits.join("+");
 	if (items.length > 3) n += `等${items.length}笔`;
 	return n.slice(0, 80);
 }
 function payoutBase(items) {
-	if (!items.length) return "报销打款";
-	const who = safeBase(items[0].forWhom || items[0].claimant || "收款");
-	const acc = safeBase(items[0].payAccount || "账户");
+	if (!items.length) return "收报销款-0-0笔";
 	const total = round2(items.reduce((s, e) => s + (e.amount || 0), 0));
-	const n = items.length > 1 ? `${who}-${acc}-${total}等${items.length}笔` : `${who}-${acc}-${total}`;
-	return n.slice(0, 80);
+	return `收报销款-${amountTag(total)}-${items.length}笔`;
 }
 function round2(n) {
 	return Math.round((Number(n) || 0) * 100) / 100;
@@ -216,10 +224,7 @@ function ExpensesPage() {
 	const [selected, setSelected] = (0, L.useState)([]);
 	const [editing, setEditing] = (0, L.useState)(null);
 	const [creating, setCreating] = (0, L.useState)(false);
-	const [printFrom, setPrintFrom] = (0, L.useState)("");
-	const [printTo, setPrintTo] = (0, L.useState)("");
 	const [printStatus, setPrintStatus] = (0, L.useState)("未报销");
-	const [printImages, setPrintImages] = (0, L.useState)(false);
 	const [batch, setBatch] = (0, L.useState)({
 		claimant: "",
 		forWhom: "",
@@ -286,12 +291,12 @@ function ExpensesPage() {
 	const printRows = (0, L.useMemo)(() => {
 		let rows = selected.length ? list.filter((e) => selected.includes(e.id)) : shown;
 		if (printStatus !== "all") rows = rows.filter((e) => e.status === printStatus);
-		if (printFrom) rows = rows.filter((e) => (e.date || "") >= printFrom);
-		if (printTo) rows = rows.filter((e) => (e.date || "") <= printTo);
-		return rows.slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-	}, [selected, list, shown, printStatus, printFrom, printTo]);
+		return rows.slice().sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.period || "").localeCompare(b.period || ""));
+	}, [selected, list, shown, printStatus]);
 	const batchRows = list.filter((e) => selected.includes(e.id));
 	const batchTotal = round2(batchRows.reduce((s, e) => s + (e.amount || 0), 0));
+	const anyHung = batchRows.some((e) => e.payoutId);
+	const anyDone = batchRows.some((e) => e.status === "已报销");
 	function del(ids) {
 		if (!ids.length) return;
 		if (!confirmBatch("报销", ids.length, "会同时去掉这些报销记录。凭证文件还在目录里，可到「影像资料」里清。")) return;
@@ -358,7 +363,37 @@ function ExpensesPage() {
 			...b,
 			payoutId: pid
 		}));
-		toast.success(markDone ? `已把 ${batchRows.length} 笔记为已报销，挂到同一笔打款` : `已把 ${batchRows.length} 笔挂到同一笔打款`);
+		toast.success(markDone ? `已把 ${batchRows.length} 笔记为已报销，挂到同一笔打款` : `已把 ${batchRows.length} 笔挂账`);
+	}
+	function unhangBatch() {
+		if (!batchRows.length) {
+			toast.error("先勾选要取消挂账的几笔");
+			return;
+		}
+		if (!confirm(`取消这 ${batchRows.length} 笔的挂账？打款凭证不再共用，报销人账户还留着。`)) return;
+		for (const e of batchRows) saveOne(e, {
+			payoutId: "",
+			payoutFileName: ""
+		});
+		setBatch((b) => ({
+			...b,
+			payoutId: "",
+			payoutFileName: ""
+		}));
+		toast.success(`已取消 ${batchRows.length} 笔挂账`);
+	}
+	function markOpen() {
+		if (!batchRows.length) {
+			toast.error("先勾选要改回未报销的几笔");
+			return;
+		}
+		if (!confirm(`把这 ${batchRows.length} 笔标为未报销？`)) return;
+		for (const e of batchRows) saveOne(e, {
+			status: "未报销",
+			payoutDate: "",
+			reimbursedAt: ""
+		});
+		toast.success(`已把 ${batchRows.length} 笔标为未报销`);
 	}
 	async function uploadPayout(file) {
 		if (!file) return;
@@ -380,12 +415,9 @@ function ExpensesPage() {
 			payAccount: acc
 		}));
 		const pid = batch.payoutId || uid();
-		const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".pdf";
-		const named = new File([file], `${payoutBase(group)}${ext}`, {
-			type: file.type,
-			lastModified: file.lastModified
-		});
-		const saved = await setDoc(pid, "payout", named) || named.name;
+		const pack = await prepareNamedFile(file, payoutBase(group), list.map((e) => e.payoutFileName).filter(Boolean), batch.payoutFileName);
+		if (!pack) return;
+		const saved = await setDoc(pid, "payout", pack.file, { replace: pack.replace }) || pack.file.name;
 		setBatch((b) => ({
 			...b,
 			payoutId: pid,
@@ -540,13 +572,25 @@ function ExpensesPage() {
 												variant: "outline",
 																							type: "button",
 												onClick: () => applyBatch(false),
-												children: "只挂打款，先不改状态"
+												children: "挂账"
 											}),
+											anyHung ? /* @__PURE__ */ (0, R.jsx)(Button, {
+												variant: "outline",
+												type: "button",
+												onClick: unhangBatch,
+												children: "取消挂账"
+											}) : null,
 											/* @__PURE__ */ (0, R.jsx)(Button, {
 												type: "button",
 												onClick: () => applyBatch(true),
 												children: "记为已报销"
-											})
+											}),
+											anyDone ? /* @__PURE__ */ (0, R.jsx)(Button, {
+												variant: "outline",
+												type: "button",
+												onClick: markOpen,
+												children: "标为未报销"
+											}) : null
 										]
 									})
 								]
@@ -623,9 +667,18 @@ function ExpensesPage() {
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, R.jsx)("p", {
-								className: "text-xs text-muted",
-								children: batch.payoutFileName ? `已挂打款凭证：${batch.payoutFileName}。要换图，点开其中一笔，在下面「打款凭证」上传，勾选的几笔共用。` : "打款凭证请点开其中一笔，在下面「打款凭证」上传。勾选的几笔共用一张。"
+							/* @__PURE__ */ (0, R.jsx)(VoucherSlot, {
+								title: "打款凭证",
+								hint: `文件名「${payoutBase(batchRows.length ? batchRows : [{ amount: batchTotal }])}」。勾选的几笔共用一张。`,
+								id: batch.payoutId || "pending",
+								kind: "payout",
+								fileName: batch.payoutFileName,
+								optional: (batch.payoutMethod || "转账") === "现金",
+								onFile: uploadPayout,
+								onDeleted: () => {
+									setBatch((b) => ({ ...b, payoutFileName: "" }));
+									for (const e of batchRows) saveOne(e, { payoutFileName: "" });
+								}
 							})
 						]
 					}) : null,
@@ -648,50 +701,11 @@ function ExpensesPage() {
 									})
 								]
 							}),
-							/* @__PURE__ */ (0, R.jsxs)("label", {
-								className: "text-sm",
-								children: [
-									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "购买时间从" }),
-									/* @__PURE__ */ (0, R.jsx)(Input, {
-										className: "mt-1",
-										type: "date",
-										value: printFrom,
-										onChange: (e) => setPrintFrom(e.target.value)
-									})
-								]
-							}),
-							/* @__PURE__ */ (0, R.jsxs)("label", {
-								className: "text-sm",
-								children: [
-									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "到" }),
-									/* @__PURE__ */ (0, R.jsx)(Input, {
-										className: "mt-1",
-										type: "date",
-										value: printTo,
-										onChange: (e) => setPrintTo(e.target.value)
-									})
-								]
-							}),
 							/* @__PURE__ */ (0, R.jsxs)(Button, {
 								variant: "outline",
 								type: "button",
 								onClick: doPrint,
 								children: ["打印报销单", printRows.length ? `（${printRows.length}）` : ""]
-							}),
-							/* @__PURE__ */ (0, R.jsxs)("label", {
-								className: "text-sm",
-								children: [
-									/* @__PURE__ */ (0, R.jsx)("span", { className: "text-xs text-muted", children: "影像资料" }),
-									/* @__PURE__ */ (0, R.jsxs)("select", {
-										className: "field-select mt-1 w-auto",
-										value: printImages ? "yes" : "no",
-										onChange: (e) => setPrintImages(e.target.value === "yes"),
-										children: [
-											/* @__PURE__ */ (0, R.jsx)("option", { value: "no", children: "不打印" }),
-											/* @__PURE__ */ (0, R.jsx)("option", { value: "yes", children: "打印" })
-										]
-									})
-								]
 							}),
 							/* @__PURE__ */ (0, R.jsx)("p", {
 								className: "w-full text-xs text-muted",
@@ -821,11 +835,27 @@ function ExpensesPage() {
 												}),
 												/* @__PURE__ */ (0, R.jsx)("td", {
 													className: "p-2 text-xs",
-													children: e.voucherFileName || (e.payMethod === "现金" ? "—" : /* @__PURE__ */ (0, R.jsx)("span", { className: "text-warn", children: "缺" }))
+													onClick: (ev) => ev.stopPropagation(),
+													children: e.voucherFileName ? /* @__PURE__ */ (0, R.jsx)(DocActions, {
+														id: e.voucherId || e.id,
+														kind: "expense",
+														fileName: e.voucherFileName
+													}) : e.payMethod === "现金" ? "—" : /* @__PURE__ */ (0, R.jsx)("span", { className: "text-warn", children: "缺" })
 												}),
 												/* @__PURE__ */ (0, R.jsx)("td", {
 													className: "p-2 text-xs",
-													children: e.payoutFileName ? /* @__PURE__ */ (0, R.jsxs)("span", { children: [e.payoutFileName, sib > 1 ? ` ·${sib}笔` : ""] }) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? /* @__PURE__ */ (0, R.jsx)("span", { className: "text-warn", children: "缺打款" }) : "—"
+													onClick: (ev) => ev.stopPropagation(),
+													children: e.payoutFileName ? /* @__PURE__ */ (0, R.jsxs)("div", {
+														className: "flex flex-wrap items-center gap-1",
+														children: [
+															/* @__PURE__ */ (0, R.jsx)(DocActions, {
+																id: e.payoutId || e.id,
+																kind: "payout",
+																fileName: e.payoutFileName
+															}),
+															sib > 1 ? /* @__PURE__ */ (0, R.jsxs)("span", { className: "text-muted", children: ["·", sib, "笔"] }) : null
+														]
+													}) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? /* @__PURE__ */ (0, R.jsx)("span", { className: "text-warn", children: "缺打款" }) : "—"
 												}),
 												/* @__PURE__ */ (0, R.jsx)("td", { className: "max-w-40 truncate p-2 text-muted", children: e.remark })
 											]
@@ -859,8 +889,7 @@ function ExpensesPage() {
 				]
 			}),
 			/* @__PURE__ */ (0, R.jsx)(ExpenseSheets, {
-				rows: printRows,
-				withImages: printImages
+				rows: printRows
 			})
 		] })
 	});
@@ -884,6 +913,7 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCan
 		setC((prev) => {
 			const next = { ...prev, [key]: value };
 			if (key === "qty" || key === "price") next.amount = round2((key === "qty" ? value : next.qty) * (key === "price" ? value : next.price));
+			if (key === "period") next.date = dateFromPeriod(value, prev.date);
 			if (key === "forWhom") {
 				const filled = applyPayee(next, payees, value);
 				next.payBank = filled.payBank;
@@ -929,12 +959,9 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCan
 		}
 		const group = shareTargets.length > 1 ? shareTargets.map((e) => e.id === c.id ? c : e) : [c];
 		const vid = c.voucherId || uid();
-		const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".pdf";
-		const named = new File([file], `${voucherBase(group)}${ext}`, {
-			type: file.type,
-			lastModified: file.lastModified
-		});
-		const saved = await setDoc(vid, "expense", named) || named.name;
+		const pack = await prepareNamedFile(file, voucherBase(group), (all || []).map((e) => e.voucherFileName).filter(Boolean), c.voucherFileName);
+		if (!pack) return;
+		const saved = await setDoc(vid, "expense", pack.file, { replace: pack.replace }) || pack.file.name;
 		const next = { ...c, id: c.id || uid(), voucherId: vid, voucherFileName: saved };
 		setC(next);
 		onSave(next);
@@ -952,12 +979,9 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCan
 		}
 		const group = siblings.length > 1 ? siblings.map((e) => e.id === c.id ? c : e) : [c];
 		const pid = c.payoutId || uid();
-		const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".pdf";
-		const named = new File([file], `${payoutBase(group)}${ext}`, {
-			type: file.type,
-			lastModified: file.lastModified
-		});
-		const savedPay = await setDoc(pid, "payout", named) || named.name;
+		const pack = await prepareNamedFile(file, payoutBase(group), (all || []).map((e) => e.payoutFileName).filter(Boolean), c.payoutFileName);
+		if (!pack) return;
+		const savedPay = await setDoc(pid, "payout", pack.file, { replace: pack.replace }) || pack.file.name;
 		const next = {
 			...c,
 			id: c.id || uid(),
@@ -1033,18 +1057,7 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCan
 				children: [
 					/* @__PURE__ */ (0, R.jsx)(Field, { label: "年份", children: /* @__PURE__ */ (0, R.jsx)(Input, { type: "number", value: c.year, onChange: (e) => patch("year", Number(e.target.value) || 0) }) }),
 					/* @__PURE__ */ (0, R.jsx)(Field, { label: "项目 *", children: /* @__PURE__ */ (0, R.jsx)(Input, { value: c.name, onChange: (e) => patch("name", e.target.value) }) }),
-					/* @__PURE__ */ (0, R.jsx)(Field, { label: "购买时间（显示）", children: /* @__PURE__ */ (0, R.jsx)(Input, { value: c.period, onChange: (e) => patch("period", e.target.value), placeholder: "如 2026/3月-12月 或 2026/4/9" }) }),
-					/* @__PURE__ */ (0, R.jsx)(Field, {
-						label: "筛选/打印用日期",
-						children: /* @__PURE__ */ (0, R.jsx)(Input, {
-							type: "date",
-							value: c.date,
-							onChange: (e) => {
-								const v = e.target.value;
-								setC((prev) => ({ ...prev, date: v, period: prev.period && prev.period !== prev.date ? prev.period : v }));
-							}
-						})
-					}),
+					/* @__PURE__ */ (0, R.jsx)(Field, { label: "购买时间", children: /* @__PURE__ */ (0, R.jsx)(Input, { value: c.period, onChange: (e) => patch("period", e.target.value), placeholder: "如 2026/3月-12月 或 2026/4/9" }) }),
 					/* @__PURE__ */ (0, R.jsx)(Field, { label: "单位", children: /* @__PURE__ */ (0, R.jsx)(Input, { value: c.unit, onChange: (e) => patch("unit", e.target.value) }) }),
 					/* @__PURE__ */ (0, R.jsx)(Field, { label: "数量", children: /* @__PURE__ */ (0, R.jsx)(Input, { type: "number", step: "0.01", value: c.qty, onChange: (e) => patch("qty", Number(e.target.value) || 0) }) }),
 					/* @__PURE__ */ (0, R.jsx)(Field, { label: "单价", children: /* @__PURE__ */ (0, R.jsx)(Input, { type: "number", step: "0.01", value: c.price, onChange: (e) => patch("price", Number(e.target.value) || 0) }) }),
@@ -1221,7 +1234,7 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCan
 	});
 }
 
-function ExpenseSheets({ rows, withImages }) {
+function ExpenseSheets({ rows }) {
 	if (!rows.length) return null;
 	const today = todayYmd();
 	const total = rows.reduce((s, e) => s + (e.amount || 0), 0);
@@ -1229,21 +1242,6 @@ function ExpenseSheets({ rows, withImages }) {
 	const forWhoms = [...new Set(rows.map((e) => e.forWhom).filter(Boolean))];
 	const banks = [...new Set(rows.map((e) => (e.payBank || "").trim()).filter(Boolean))];
 	const cards = [...new Set(rows.map((e) => (e.payCardNo || "").trim()).filter(Boolean))];
-	const images = [];
-	if (withImages) {
-		const seenV = /* @__PURE__ */ new Set();
-		const seenP = /* @__PURE__ */ new Set();
-		for (const e of rows) {
-			if (e.voucherId && e.voucherFileName && !/\.pdf$/i.test(e.voucherFileName) && !seenV.has(e.voucherId)) {
-				seenV.add(e.voucherId);
-				images.push({ id: e.voucherId, kind: "expense", name: e.voucherFileName });
-			}
-			if (e.payoutId && e.payoutFileName && !/\.pdf$/i.test(e.payoutFileName) && !seenP.has(e.payoutId)) {
-				seenP.add(e.payoutId);
-				images.push({ id: e.payoutId, kind: "payout", name: e.payoutFileName });
-			}
-		}
-	}
 	return /* @__PURE__ */ (0, R.jsxs)("div", {
 		className: "print-only space-y-8 text-black",
 		children: [
@@ -1306,18 +1304,7 @@ function ExpenseSheets({ rows, withImages }) {
 						children: ["打印日期 ", today]
 					})
 				]
-			}),
-			images.map((e) => /* @__PURE__ */ (0, R.jsxs)("article", {
-				className: "statement border border-black p-4",
-				children: [
-					/* @__PURE__ */ (0, R.jsx)("div", { className: "mb-2 text-sm font-semibold", children: e.name }),
-					/* @__PURE__ */ (0, R.jsx)("img", {
-						src: `/api/doc?id=${encodeURIComponent(e.id)}&kind=${e.kind}`,
-						alt: e.name,
-						className: "max-h-[240mm] w-full object-contain"
-					})
-				]
-			}, `${e.kind}-${e.id}`))
+			})
 		]
 	});
 }

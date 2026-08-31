@@ -1,4 +1,4 @@
-# 仓库里这份和 docker-compose.yml 相同，给「一键部署.sh」识别用。
+# 本机构建专用 compose，由「一键部署.sh」调用。
 # 用法：docker compose -f docker-compose.build.yml up -d --build
 # docker.sock 给软件里「检查更新 / 更新」用；点更新后会改拉 GitHub 镜像。
 services:

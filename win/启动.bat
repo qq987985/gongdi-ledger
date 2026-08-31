@@ -14,6 +14,12 @@ if not exist "app\server\index.mjs" (
   exit /b 1
 )
 
+if exist "data\VERSION.txt" (
+  echo 清理 data\VERSION.txt 旧挂载残留...
+  rmdir /S /Q "data\VERSION.txt" 2>nul
+  del /F /Q "data\VERSION.txt" 2>nul
+)
+
 mkdir "data\accounts" 2>nul
 mkdir "data\books" 2>nul
 mkdir "data\backups" 2>nul

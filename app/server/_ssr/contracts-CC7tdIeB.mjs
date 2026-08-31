@@ -3,7 +3,7 @@ import { B as require_react, z as require_jsx_runtime } from "../_libs/@tanstack
 import { c as Plus, o as Trash2 } from "../_libs/lucide-react.mjs";
 import { n as toast } from "../_libs/sonner.mjs";
 import { C as buildContractWorkbook, F as contractRollup, N as CONTRACT_STATUSES, Q as splitTax, R as emptyContract, W as normalizeEntry, Z as round2, a as Input, f as Button, ft as confirmBatchDelete, gt as uid, ht as toggleSel, mt as money, o as Label, y as useApp } from "./router-DxdzlCp3.mjs";
-import { a as receiptSubBase, c as renameFile, d as uniqueBase, i as invoiceBase, l as reportBase, n as DocActions, o as receiptWorkerBase, s as removeDoc, u as setDoc } from "./doc-actions-CoPSki7O.mjs";
+import { a as receiptSubBase, c as renameFile, d as uniqueBase, i as invoiceBase, l as reportBase, n as DocActions, o as receiptWorkerBase, p as prepareNamedFile, s as removeDoc, u as setDoc } from "./doc-actions-CoPSki7O.mjs";
 import { n as WideTable, t as ThHint, a as PageBar, o as usePager } from "./wide-table-D8rPvj0E.mjs";
 import { n as FilePick } from "./file-pick-BbqxzWa5.mjs";
 import { n as ContractImport } from "./excel-import-BfyfwtjF.mjs";
@@ -1255,8 +1255,9 @@ function DocPick({ label, fileName, disabled, onFile }) {
 }
 async function attachNamed(id, kind, file, base, taken) {
 	if (!file) return "";
-	const named = renameFile(file, uniqueBase(base, taken));
-	const saved = await setDoc(id, kind, named) || named.name;
+	const pack = await prepareNamedFile(file, base, taken, "");
+	if (!pack) return "";
+	const saved = await setDoc(id, kind, pack.file, { replace: pack.replace }) || pack.file.name;
 	return saved;
 }
 function useTakenNames() {
@@ -1743,6 +1744,8 @@ function contractScanName(name) {
 	return base ? `${base}-合同电子版` : "";
 }
 function ContractScanBox({ contract, onFileName }) {
+	const scans = useApp((s) => s.contracts);
+	const taken = (scans || []).map((c) => c.scanFileName).filter(Boolean);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		id: "contract-scan",
 		className: "rounded-lg border-2 border-dashed border-accent bg-accent-soft p-4",
@@ -1778,12 +1781,9 @@ function ContractScanBox({ contract, onFileName }) {
 						toast.error("先填项目名称，扫描件按 项目名称-合同电子版 保存");
 						return;
 					}
-					const ext = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".pdf";
-					const named = new File([file], `${base}${ext}`, {
-						type: file.type,
-						lastModified: file.lastModified
-					});
-					const saved = await setDoc(contract.id, "contract", named) || named.name;
+					const pack = await prepareNamedFile(file, base, taken, contract.scanFileName);
+					if (!pack) return;
+					const saved = await setDoc(contract.id, "contract", pack.file, { replace: pack.replace }) || pack.file.name;
 					onFileName(saved);
 					toast.success(`已保存 ${saved}`);
 				}
@@ -1799,7 +1799,8 @@ function ContractScanBox({ contract, onFileName }) {
 					kind: "contract",
 					fileName: contract.scanFileName,
 					suggest: contractScanName(contract.name) || "合同电子版",
-					taken: [],
+					taken,
+					onReplaced: onFileName,
 					onDeleted: () => onFileName("")
 				})
 			})

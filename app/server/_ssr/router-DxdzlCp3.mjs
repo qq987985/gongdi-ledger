@@ -3722,9 +3722,12 @@ function BookSwitcher({ compact }) {
 function WinUpdate({ compact }) {
 	const [info, setInfo] = (0, import_react.useState)(null);
 	const [busy, setBusy] = (0, import_react.useState)(false);
-	async function load() {
+	async function load(fresh) {
 		try {
-			const d = await (await fetch("/api/update")).json();
+			const d = await (await fetch(fresh ? "/api/update?fresh=1" : "/api/update", {
+				cache: "no-store",
+				signal: AbortSignal.timeout(2e4)
+			})).json();
 			setInfo(d);
 			return d;
 		} catch {
@@ -3733,7 +3736,7 @@ function WinUpdate({ compact }) {
 		}
 	}
 	(0, import_react.useEffect)(() => {
-		load();
+		load(true);
 	}, []);
 	async function waitRestart() {
 		for (let i = 0; i < 40; i++) {
@@ -3785,7 +3788,7 @@ function WinUpdate({ compact }) {
 					variant: "outline",
 					size: "sm",
 					disabled: busy,
-					onClick: () => void load(),
+					onClick: () => void load(true),
 					children: "检查更新"
 				}), info?.canApply ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 					type: "button",
@@ -3829,7 +3832,7 @@ function VersionLog() {
 		fetch("/api/version").then((r) => r.json()).then((d) => {
 			if (d?.current) setLog(d);
 		}).catch(() => void 0);
-		fetch("/api/update").then((r) => r.json()).then((d) => {
+		fetch("/api/update", { cache: "no-store" }).then((r) => r.json()).then((d) => {
 			if (d?.newer) setHasNew(true);
 		}).catch(() => void 0);
 	}, []);
@@ -4737,8 +4740,9 @@ var Route$10 = createFileRoute("/api/doc")({ server: { handlers: {
 		const file = form.get("file");
 		if (!id || !kind || !(file instanceof File)) return Response.json({ ok: false }, { status: 400 });
 		const buf = Buffer.from(await file.arrayBuffer());
+		const replace = String(form.get("replace") || "") === "1";
 		return withTenant(request, async () => {
-			const saved = await saveDoc(id, kind, buf, file.name);
+			const saved = await saveDoc(id, kind, buf, file.name, { replace });
 			return Response.json({
 				ok: true,
 				fileName: saved || file.name
@@ -4907,10 +4911,9 @@ var Route$4 = createFileRoute("/api/photo-scan")({ server: { handlers: { POST: a
 var Route$3 = createFileRoute("/api/update")({ server: { handlers: {
 	GET: async ({ request }) => {
 		try {
-			const { resolveTenant } = await import("./accounts.server-DNyKCx-M.mjs");
-			if (!(await resolveTenant(request)).user) return Response.json({ error: "请先登录" }, { status: 401 });
 			const { checkUpdate, isPortable } = await import("./update.server-DlHtnlXz.mjs");
-			const info = await checkUpdate();
+			const fresh = new URL(request.url).searchParams.has("fresh");
+			const info = await checkUpdate(fresh);
 			return Response.json({
 				...info,
 				portable: isPortable()
