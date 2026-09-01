@@ -44,7 +44,7 @@ jobs:
       - name: version
         id: ver
         run: |
-          VER=$(head -n1 VERSION.txt | tr -d '[:space:]')
+          VER=$(head -n1 VERSION.txt | awk '{print $1}' | tr -d '[:space:]')
           [ -n "$VER" ] || VER=latest
           echo "ver=$VER" >> "$GITHUB_OUTPUT"
       - name: pack

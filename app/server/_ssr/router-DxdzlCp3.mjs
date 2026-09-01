@@ -2766,9 +2766,9 @@ var useApp = create()(persist((set, get) => ({
 }));
 //#endregion
 //#region node_modules/.nitro/vite/services/ssr/assets/changelog-lVJQt1nZ.js
-var VER = /^\[?(v?\d+(?:\.\d+){0,3})\]?\s*$/i;
+var VER = /^\[?(v?\d+(?:\.\d+){0,3})\]?\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})?\s*$/i;
 function normalizeVersion(v) {
-	const s = String(v || "").trim().replace(/^v/i, "");
+	const s = String(v || "").trim().replace(/^v/i, "").replace(/\s+\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\s*$/, "").split(/\s+/)[0] || "";
 	if (!s) return "0.0.0";
 	if (/^\d+$/.test(s)) return Number(s) >= 10 ? `0.0.${s}` : `${s}.0.0`;
 	return s;
@@ -2777,6 +2777,11 @@ function formatVersion(v) {
 	const n = normalizeVersion(v);
 	if (n.startsWith("0.0.") && Number(n.slice(4)) >= 10) return n.slice(4);
 	return n;
+}
+function formatReleaseDate(s) {
+	const m = String(s || "").match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+	if (!m) return "";
+	return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
 }
 function isNewerVersion(remote, local) {
 	const a = normalizeVersion(remote).split(".").map((x) => parseInt(x, 10) || 0);
@@ -2790,25 +2795,33 @@ function parseChangelog(text) {
 	const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
 	const entries = [];
 	let current = "";
+	let currentDate = "";
 	let block = null;
 	let sawCurrentLine = false;
 	for (const raw of lines) {
 		const line = raw.trim();
 		if (!line || line.startsWith("#") || line.startsWith("当前")) continue;
 		const m = line.match(VER);
-		if (m && line.length < 24) {
+		if (m && line.length < 36) {
 			const version = normalizeVersion(m[1]);
+			const date = formatReleaseDate(m[2] || "");
 			const bracket = line.startsWith("[");
 			if (!current) current = version;
+			if (date && !currentDate) currentDate = date;
 			if (!bracket && !sawCurrentLine) {
 				sawCurrentLine = true;
+				if (date && !currentDate) currentDate = date;
 				continue;
 			}
 			sawCurrentLine = true;
-			if (block && block.version === version) continue;
+			if (block && block.version === version) {
+				if (date && !block.date) block.date = date;
+				continue;
+			}
 			if (block) entries.push(block);
 			block = {
 				version,
+				date,
 				items: []
 			};
 			continue;
@@ -2823,15 +2836,20 @@ function parseChangelog(text) {
 	const merged = [];
 	for (const e of entries) {
 		const last = merged[merged.length - 1];
-		if (last && last.version === e.version) last.items.push(...e.items);
-		else merged.push({
+		if (last && last.version === e.version) {
+			last.items.push(...e.items);
+			if (e.date && !last.date) last.date = e.date;
+		} else merged.push({
 			version: e.version,
+			date: e.date || "",
 			items: [...e.items]
 		});
 	}
 	if (!current && merged[0]) current = merged[0].version;
+	if (!currentDate && merged[0]) currentDate = merged[0].date || "";
 	return {
 		current: current || "1.0.2",
+		date: currentDate,
 		entries: merged
 	};
 }
@@ -3842,7 +3860,7 @@ function VersionLog() {
 		onClick: () => setOpen(true),
 		children: ["版本号：", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 			className: "tabular-nums",
-			children: formatVersion(log.current)
+			children: [formatVersion(log.current), log.date ? ` ${log.date}` : ""]
 		}), hasNew ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 			className: "ml-2 text-xs font-normal text-ok",
 			children: "有新版本"
@@ -3871,7 +3889,7 @@ function VersionLog() {
 					className: "mt-4 space-y-4",
 					children: log.entries.slice(0, 10).map((e, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "text-sm font-semibold",
-						children: [formatVersion(e.version), e.version === log.current ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						children: [formatVersion(e.version), e.date ? ` ${e.date}` : "", e.version === log.current ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 							className: "ml-2 text-xs font-normal text-ok",
 							children: "当前"
 						}) : null]

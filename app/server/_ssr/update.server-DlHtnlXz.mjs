@@ -24,7 +24,7 @@ function isPortable() {
 	return process.platform === "win32" && Boolean(portableHome());
 }
 function parseRemoteTag(s) {
-	return String(s || "").trim().replace(/^win-/, "").replace(/^v/i, "");
+	return String(s || "").trim().replace(/^win-/, "").replace(/^v/i, "").replace(/\s+\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\s*$/, "").split(/\s+/)[0] || "";
 }
 function normalizeVersion(v) {
 	const n = parseRemoteTag(v);
