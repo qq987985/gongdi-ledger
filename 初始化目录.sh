@@ -6,8 +6,8 @@ mkdir -p data/accounts data/books data/backups data/templates \
   data/photos/id data/photos/bank data/photos/ic \
   data/photos/报量单 data/photos/发票 data/photos/收款回单 data/photos/考勤影像 data/photos/合同扫描件 data/photos/报销凭证 data/photos/报销打款
 
-if [ -d data/VERSION.txt ]; then
-  echo "发现 data/VERSION.txt 是文件夹（旧挂载残留），已删除"
+if [ -e data/VERSION.txt ]; then
+  echo "发现 data/VERSION.txt（旧挂载残留），已删除"
   rm -rf data/VERSION.txt
 fi
 

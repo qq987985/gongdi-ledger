@@ -22,13 +22,14 @@ echo "停止旧容器..."
 docker compose down --timeout 8 2>/dev/null || true
 docker rm -f attendance-app 2>/dev/null || true
 
-COMPOSE=docker-compose.yml
-if [ -f docker-compose.build.yml ]; then
-  COMPOSE=docker-compose.build.yml
+if [ ! -f docker-compose.build.yml ]; then
+  echo "缺少 docker-compose.build.yml，无法本机构建。"
+  echo "如需拉 GitHub 镜像，请运行 ./一键拉取.sh"
+  exit 1
 fi
 
 echo "本机构建并启动（不拉 GitHub 镜像）..."
-docker compose -f "$COMPOSE" up -d --build --force-recreate
+docker compose -f docker-compose.build.yml up -d --build --force-recreate
 
 echo
 echo "完成。打开：http://本机IP:8501"
