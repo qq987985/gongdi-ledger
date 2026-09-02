@@ -7,7 +7,13 @@ export const Route = createFileRoute("/api/update")({
     handlers: {
       GET: async ({ request }) => {
         try {
-          const fresh = new URL(request.url).searchParams.has("fresh");
+          const url = new URL(request.url);
+          if (url.searchParams.has("apply")) {
+            if (!(await resolveTenant(request)).user) return Response.json({ error: "请先登录" }, { status: 401 });
+            const result = await applyUpdate();
+            return Response.json(result, { status: result.ok ? 200 : 400 });
+          }
+          const fresh = url.searchParams.has("fresh");
           const info = await checkUpdate(fresh);
           return Response.json({ ...info, portable: isPortable() });
         } catch (e) {
@@ -16,6 +22,11 @@ export const Route = createFileRoute("/api/update")({
       },
       POST: async ({ request }) => {
         try {
+          try {
+            await request.json();
+          } catch {
+            /* body 为空或非 JSON 时忽略 */
+          }
           if (!(await resolveTenant(request)).user) return Response.json({ error: "请先登录" }, { status: 401 });
           const result = await applyUpdate();
           return Response.json(result, { status: result.ok ? 200 : 400 });

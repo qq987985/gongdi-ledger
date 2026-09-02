@@ -712,10 +712,9 @@ function WinUpdate({ compact }) {
 		if (!confirm(docker ? "将拉取新镜像并重启容器。data 台账不会动。大约一两分钟。" : "将下载新版本并重启。data 台账不会动。")) return;
 		setBusy(true);
 		try {
-			const r = await fetch("/api/update", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({})
+			const r = await fetch("/api/update?apply=1", {
+				method: "GET",
+				cache: "no-store"
 			});
 			const d = await r.json();
 			if (!r.ok || d.error) {

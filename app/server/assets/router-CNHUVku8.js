@@ -1,5 +1,5 @@
 import { t as Link } from "./link-C8A9580o.js";
-import { r as parseChangelog, t as AppShell } from "./shell-BfyfjXHc.js";
+import { r as parseChangelog, t as AppShell } from "./shell-BilkdacW.js";
 import { D as deepEqual, E as invariant, F as require_react, M as isModuleNotFoundError, N as redirect, O as escapeHtml, P as rootRouteId, S as joinPaths, T as trimPathRight, V as __toESM, _ as _getAssetMatches, a as useStore, b as createNonReactiveReadonlyStore, c as require_jsx_runtime, d as getScriptPreloadAttrs, f as resolveManifestCssLink, g as isServer, l as appendUniqueUserTags, o as useRouter, p as reactUse, r as useMatch, s as useHydrated, u as getAssetCrossOrigin, v as RouterCore, w as trimPathLeft, y as createNonReactiveMutableStore } from "../server.js";
 import { C as writeLedger, _ as saveBackup, b as scanPhotoFolder, c as readAudit, d as readVersionText, i as findPhotoPath, m as removePhoto, o as persistOn, p as removeDocFile, r as findDoc, s as photoFlags, t as appendAudit, u as readLedger, v as saveDoc, x as writeAudit, y as savePhoto } from "./nas-fs.server-rrkW0KnM.js";
 import "./perms-CYLuVN7r.js";
@@ -865,7 +865,7 @@ var $$splitComponentImporter$2 = () => import("./photos-BD-jD_-6.js");
 const Route$10 = createFileRoute("/photos")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
 var $$splitComponentImporter$1 = () => import("./query-Z_E2H-N6.js");
 const Route$11 = createFileRoute("/query")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./settings-enaGndux.js");
+var $$splitComponentImporter = () => import("./settings-Cdlg_9RD.js");
 const Route$12 = createFileRoute("/settings")({ component: lazyRouteComponent($$splitComponentImporter, "component") });
 const Route$13 = createFileRoute("/api/audit")({ server: { handlers: {
 	GET: async ({ request }) => {
@@ -1668,7 +1668,13 @@ async function applyUpdate() {
 const Route$23 = createFileRoute("/api/update")({ server: { handlers: {
 	GET: async ({ request }) => {
 		try {
-			const info = await checkUpdate(new URL(request.url).searchParams.has("fresh"));
+			const url = new URL(request.url);
+			if (url.searchParams.has("apply")) {
+				if (!(await resolveTenant(request)).user) return Response.json({ error: "请先登录" }, { status: 401 });
+				const result = await applyUpdate();
+				return Response.json(result, { status: result.ok ? 200 : 400 });
+			}
+			const info = await checkUpdate(url.searchParams.has("fresh"));
 			return Response.json({
 				...info,
 				portable: isPortable()
@@ -1682,6 +1688,9 @@ const Route$23 = createFileRoute("/api/update")({ server: { handlers: {
 	},
 	POST: async ({ request }) => {
 		try {
+			try {
+				await request.json();
+			} catch {}
 			if (!(await resolveTenant(request)).user) return Response.json({ error: "请先登录" }, { status: 401 });
 			const result = await applyUpdate();
 			return Response.json(result, { status: result.ok ? 200 : 400 });

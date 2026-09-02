@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.2.25**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.2.26**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -24,6 +24,11 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.2.26
+
+- 软件内点「更新到 x.x.x」由 POST 改为 GET 触发（`/api/update?apply=1`），彻底绕过某些运行环境对 POST 空请求体解析报错 `invalid JSON: got EOF while reading request body` 的问题。
+- 服务端 `/api/update` 对空请求体增加兼容处理，旧版客户端也能正常响应。
 
 ### 1.2.25
 
@@ -213,7 +218,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 ./一键部署.sh
 ```
 
-打开 `http://NAS的IP:8501`，左下角应显示 **1.2.25**。
+打开 `http://NAS的IP:8501`，左下角应显示 **1.2.26**。
 
 拉 GitHub 镜像（Actions 全绿，并且 Packages 里 `gongdi-ledger` 已设 Public）：
 
@@ -226,7 +231,7 @@ compose **只挂 data**，不要再挂 `VERSION.txt`。
 
 第一次拉起后，左下角点版本号可以检查更新。GitHub 出新版会提示「有新版本」，点更新会自动拉镜像并重启，台账不会动。这次覆盖后请先运行一次 `./一键拉取.sh`（或本机构建），以后就不用再上飞牛。仓库也要设成 Public（和 Packages 一样），软件才能查到新版本；只公开镜像不够。
 
-本机构建镜像名：`gongdi-ledger:1.2.25`，端口 `8501:8080`。
+本机构建镜像名：`gongdi-ledger:1.2.26`，端口 `8501:8080`。
 
 ---
 
