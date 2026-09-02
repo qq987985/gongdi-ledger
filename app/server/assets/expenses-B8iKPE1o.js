@@ -886,26 +886,16 @@ function ExpensesPage() {
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 											className: "py-2 px-3",
 											onClick: (ev) => ev.stopPropagation(),
-											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex flex-col gap-1",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-													variant: "outline",
-													size: "sm",
-													type: "button",
-													className: "h-7 px-2 text-[11px]",
-													onClick: () => {
-														setCreating(false);
-														setEditing(e);
-													},
-													children: "编辑"
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-													variant: "ghost",
-													size: "sm",
-													type: "button",
-													className: "h-7 px-2 text-[11px] text-danger",
-													onClick: () => del([e.id]),
-													children: "删除"
-												})]
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+												variant: "outline",
+												size: "sm",
+												type: "button",
+												className: "h-7 px-2 text-[11px]",
+												onClick: () => {
+													setCreating(false);
+													setEditing(e);
+												},
+												children: "编辑"
 											})
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {

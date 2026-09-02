@@ -718,23 +718,18 @@ function ExpensesPage() {
                         />
                       </td>
                       <td className="py-2 px-3" onClick={(ev) => ev.stopPropagation()}>
-                        <div className="flex flex-col gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            type="button"
-                            className="h-7 px-2 text-[11px]"
-                            onClick={() => {
-                              setCreating(false);
-                              setEditing(e);
-                            }}
-                          >
-                            编辑
-                          </Button>
-                          <Button variant="ghost" size="sm" type="button" className="h-7 px-2 text-[11px] text-danger" onClick={() => del([e.id])}>
-                            删除
-                          </Button>
-                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          type="button"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => {
+                            setCreating(false);
+                            setEditing(e);
+                          }}
+                        >
+                          编辑
+                        </Button>
                       </td>
                       <td className="py-2 px-3 tabular-nums text-muted">{(pager.page - 1) * pager.size + i + 1}</td>
                       <td className="py-2 px-3 font-medium">{e.name}</td>
