@@ -1,6 +1,6 @@
 /**
  * 构建后整理产物为部署目录 app/：
- *   dist/server/**  -> app/server/**（server.js 改名 server.mjs，并放入启动器 index.mjs）
+ *   dist/server/**  -> app/server/**（server.js 保持不变，并放入启动器 index.mjs）
  *   dist/client/**  -> app/public/**
  * 运行：vite build 之后自动执行（package.json 的 postbuild）。
  */
@@ -23,10 +23,6 @@ await mkdir(appDir, { recursive: true });
 
 await cp(join(dist, "server"), join(appDir, "server"), { recursive: true });
 await mkdir(join(root, "data"), { recursive: true });
-await rename(
-  join(appDir, "server", "server.js"),
-  join(appDir, "server", "server.mjs"),
-);
 await copyFile(
   join(root, "scripts", "app-server-index.mjs"),
   join(appDir, "server", "index.mjs"),
