@@ -463,13 +463,35 @@ function PersonEditor({ person, creating, refresh = 0, onClose, onSave, onDelete
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 						className: "font-display text-lg font-semibold",
 						children: creating ? "新增人员" : form.name
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-						type: "button",
-						className: "inline-flex size-10 items-center justify-center rounded-sm text-2xl leading-none text-muted hover:bg-accent-soft hover:text-ink",
-						"aria-label": "关闭",
-						title: "关闭（Esc）",
-						onClick: onClose,
-						children: "×"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex items-center gap-2",
+						children: [
+							!creating ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								variant: "danger",
+								size: "sm",
+								onClick: () => onDelete?.(),
+								children: "删除"
+							}) : null,
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								variant: "outline",
+								size: "sm",
+								onClick: onClose,
+								children: "取消"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								size: "sm",
+								onClick: save,
+								children: "保存"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: "inline-flex size-8 items-center justify-center rounded-sm text-xl leading-none text-muted hover:bg-accent-soft hover:text-ink",
+								"aria-label": "关闭",
+								title: "关闭（Esc）",
+								onClick: onClose,
+								children: "×"
+							})
+						]
 					})]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -657,25 +679,6 @@ function PersonEditor({ person, creating, refresh = 0, onClose, onSave, onDelete
 				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mt-4 text-xs text-muted",
 					children: "先填姓名再上传。身份证格子只显示正面，边上可点「查看反面」。也可直接拷到 NAS：data/photos/id，文件名「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "mt-6 flex justify-end gap-2",
-					children: [
-						!creating ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-							variant: "danger",
-							onClick: () => onDelete?.(),
-							children: "删除"
-						}) : null,
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-							variant: "outline",
-							onClick: onClose,
-							children: "取消"
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-							onClick: save,
-							children: "保存"
-						})
-					]
 				})
 			]
 		})

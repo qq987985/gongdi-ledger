@@ -859,7 +859,7 @@ var $$splitComponentImporter$5 = () => import("./import-BAzjmmse.js");
 const Route$7 = createFileRoute("/import")({ component: lazyRouteComponent($$splitComponentImporter$5, "component") });
 var $$splitComponentImporter$4 = () => import("./payments-D8M8K67D.js");
 const Route$8 = createFileRoute("/payments")({ component: lazyRouteComponent($$splitComponentImporter$4, "component") });
-var $$splitComponentImporter$3 = () => import("./people-CSN8h2_f.js");
+var $$splitComponentImporter$3 = () => import("./people-DPLdPAE_.js");
 const Route$9 = createFileRoute("/people")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
 var $$splitComponentImporter$2 = () => import("./photos-DZ2hAqAc.js");
 const Route$10 = createFileRoute("/photos")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });

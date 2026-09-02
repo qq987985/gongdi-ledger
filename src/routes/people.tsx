@@ -370,15 +370,28 @@ function PersonEditor({
       >
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold">{creating ? "新增人员" : form.name}</h2>
-          <button
-            type="button"
-            className="inline-flex size-10 items-center justify-center rounded-sm text-2xl leading-none text-muted hover:bg-accent-soft hover:text-ink"
-            aria-label="关闭"
-            title="关闭（Esc）"
-            onClick={onClose}
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-2">
+            {!creating ? (
+              <Button variant="danger" size="sm" onClick={() => onDelete?.()}>
+                删除
+              </Button>
+            ) : null}
+            <Button variant="outline" size="sm" onClick={onClose}>
+              取消
+            </Button>
+            <Button size="sm" onClick={save}>
+              保存
+            </Button>
+            <button
+              type="button"
+              className="inline-flex size-8 items-center justify-center rounded-sm text-xl leading-none text-muted hover:bg-accent-soft hover:text-ink"
+              aria-label="关闭"
+              title="关闭（Esc）"
+              onClick={onClose}
+            >
+              ×
+            </button>
+          </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <Field label="姓名" required error={tried ? errors.name : ""}>
@@ -460,17 +473,6 @@ function PersonEditor({
             先填姓名再上传。身份证格子只显示正面，边上可点「查看反面」。也可直接拷到 NAS：data/photos/id，文件名「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。
           </p>
         )}
-        <div className="mt-6 flex justify-end gap-2">
-          {!creating ? (
-            <Button variant="danger" onClick={() => onDelete?.()}>
-              删除
-            </Button>
-          ) : null}
-          <Button variant="outline" onClick={onClose}>
-            取消
-          </Button>
-          <Button onClick={save}>保存</Button>
-        </div>
       </div>
     </div>
   );
