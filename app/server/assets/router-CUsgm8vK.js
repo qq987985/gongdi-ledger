@@ -348,7 +348,7 @@ function useRouteContext(opts) {
 	});
 }
 var import_jsx_runtime = /* @__PURE__ */ __toESM(require_jsx_runtime(), 1);
-var Route$29 = class extends BaseRoute {
+var Route$27 = class extends BaseRoute {
 	constructor(options) {
 		super(options);
 		this.useMatch = (opts) => {
@@ -403,7 +403,7 @@ var Route$29 = class extends BaseRoute {
 	}
 };
 function createRoute(options) {
-	return new Route$29(options);
+	return new Route$27(options);
 }
 var RootRoute = class extends BaseRootRoute {
 	constructor(options) {
@@ -1711,163 +1711,6 @@ const Route$24 = createFileRoute("/api/version")({ server: { handlers: { GET: as
 	const text = await readVersionText();
 	return Response.json(parseChangelog(text || "1.0.2\n\n[1.0.2]\n左下角点版本号查看更新记录"));
 } } } });
-function getEnv(key) {
-	if (typeof process !== "undefined" && process.env) return process.env[key];
-	if (typeof import.meta !== "undefined" && {
-		"BASE_URL": "/",
-		"DEV": false,
-		"MODE": "production",
-		"PROD": true,
-		"SSR": true,
-		"TSS_DEV_SERVER": "false",
-		"TSS_DEV_SSR_STYLES_BASEPATH": "/",
-		"TSS_DEV_SSR_STYLES_ENABLED": "true",
-		"TSS_DISABLE_CSRF_MIDDLEWARE_WARNING": "false",
-		"TSS_INLINE_CSS_ENABLED": "false",
-		"TSS_ROUTER_BASEPATH": "",
-		"TSS_SERVER_FN_BASE": "/_serverFn/"
-	}) return {
-		"BASE_URL": "/",
-		"DEV": false,
-		"MODE": "production",
-		"PROD": true,
-		"SSR": true,
-		"TSS_DEV_SERVER": "false",
-		"TSS_DEV_SSR_STYLES_BASEPATH": "/",
-		"TSS_DEV_SSR_STYLES_ENABLED": "true",
-		"TSS_DISABLE_CSRF_MIDDLEWARE_WARNING": "false",
-		"TSS_INLINE_CSS_ENABLED": "false",
-		"TSS_ROUTER_BASEPATH": "",
-		"TSS_SERVER_FN_BASE": "/_serverFn/"
-	}[key];
-}
-const VOLCANO_CONFIG = {
-	apiKey: getEnv("VOLCANO_API_KEY") || "",
-	apiSecret: getEnv("VOLCANO_API_SECRET") || "",
-	baseUrl: getEnv("VOLCANO_BASE_URL") || "https://ark.cn-beijing.volces.com/api/v3",
-	region: getEnv("VOLCANO_REGION") || "cn-beijing",
-	model: getEnv("VOLCANO_MODEL") || "deepseek-r1-250120"
-};
-function isVolcanoConfigValid() {
-	return !!VOLCANO_CONFIG.apiKey && !!VOLCANO_CONFIG.apiSecret;
-}
-function getVolcanoHeaders() {
-	return {
-		"Content-Type": "application/json",
-		Authorization: `Bearer ${VOLCANO_CONFIG.apiKey}`
-	};
-}
-const VOLCANO_ENDPOINTS = {
-	chat: `${VOLCANO_CONFIG.baseUrl}/chat/completions`,
-	models: `${VOLCANO_CONFIG.baseUrl}/models`
-};
-async function chatCompletion(request) {
-	const response = await fetch(VOLCANO_ENDPOINTS.chat, {
-		method: "POST",
-		headers: getVolcanoHeaders(),
-		body: JSON.stringify({
-			model: request.model || VOLCANO_CONFIG.model,
-			messages: request.messages,
-			temperature: request.temperature ?? .7,
-			max_tokens: request.max_tokens ?? 2048,
-			stream: request.stream ?? false
-		})
-	});
-	if (!response.ok) {
-		const error = await response.text();
-		throw new Error(`火山引擎 API 错误: ${response.status} - ${error}`);
-	}
-	return response.json();
-}
-async function* streamChatCompletion(request) {
-	const response = await fetch(VOLCANO_ENDPOINTS.chat, {
-		method: "POST",
-		headers: getVolcanoHeaders(),
-		body: JSON.stringify({
-			model: request.model || VOLCANO_CONFIG.model,
-			messages: request.messages,
-			temperature: request.temperature ?? .7,
-			max_tokens: request.max_tokens ?? 2048,
-			stream: true
-		})
-	});
-	if (!response.ok) {
-		const error = await response.text();
-		throw new Error(`火山引擎 API 错误: ${response.status} - ${error}`);
-	}
-	const reader = response.body?.getReader();
-	if (!reader) throw new Error("无法读取响应流");
-	const decoder = new TextDecoder();
-	let buffer = "";
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-			const lines = buffer.split("\n");
-			buffer = lines.pop() || "";
-			for (const line of lines) {
-				const trimmed = line.trim();
-				if (!trimmed || trimmed === "data: [DONE]") continue;
-				if (trimmed.startsWith("data: ")) try {
-					const content = JSON.parse(trimmed.slice(6)).choices?.[0]?.delta?.content;
-					if (content) yield content;
-				} catch {}
-			}
-		}
-	} finally {
-		reader.releaseLock();
-	}
-}
-const Route$25 = createFileRoute("/api/volcano-chat-route")({ server: { handlers: { POST: async ({ request }) => {
-	if (!isVolcanoConfigValid()) return Response.json({ error: "火山引擎 API 未配置，请检查 .env 文件" }, { status: 500 });
-	try {
-		const { messages, stream = false, temperature, max_tokens } = await request.json();
-		if (!messages || !Array.isArray(messages)) return Response.json({ error: "缺少 messages 参数" }, { status: 400 });
-		if (stream) {
-			const encoder = new TextEncoder();
-			const readable = new ReadableStream({ async start(controller) {
-				try {
-					for await (const chunk of streamChatCompletion({
-						messages,
-						temperature,
-						max_tokens
-					})) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: chunk })}\n\n`));
-					controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-					controller.close();
-				} catch (error) {
-					controller.error(error);
-				}
-			} });
-			return new Response(readable, { headers: {
-				"Content-Type": "text/event-stream",
-				"Cache-Control": "no-cache",
-				Connection: "keep-alive"
-			} });
-		}
-		const response = await chatCompletion({
-			messages,
-			temperature,
-			max_tokens
-		});
-		return Response.json(response);
-	} catch (error) {
-		console.error("火山引擎 API 调用错误:", error);
-		return Response.json({ error: error instanceof Error ? error.message : "调用火山引擎 API 失败" }, { status: 500 });
-	}
-} } } });
-const Route$26 = createFileRoute("/api/volcano-health")({ server: { handlers: { GET: async () => {
-	const configValid = isVolcanoConfigValid();
-	return Response.json({
-		ok: configValid,
-		configured: configValid,
-		region: VOLCANO_CONFIG.region,
-		baseUrl: VOLCANO_CONFIG.baseUrl,
-		model: VOLCANO_CONFIG.model,
-		apiKeyPrefix: VOLCANO_CONFIG.apiKey ? VOLCANO_CONFIG.apiKey.substring(0, 10) + "..." : null,
-		message: configValid ? "火山引擎配置正常" : "火山引擎配置不完整，请检查 .env 文件"
-	});
-} } } });
 async function addYearAndRedirect(request, year) {
 	const referer = request.headers.get("referer");
 	let back = "/";
@@ -1901,7 +1744,7 @@ async function addYearAndRedirect(request, year) {
 	});
 	return Response.redirect(new URL(back, request.url), 303);
 }
-const Route$27 = createFileRoute("/api/year")({ server: { handlers: {
+const Route$25 = createFileRoute("/api/year")({ server: { handlers: {
 	GET: async () => Response.json({ error: "请在月度考勤里新增年份" }, { status: 405 }),
 	POST: async ({ request }) => {
 		const form = await request.formData();
@@ -2096,7 +1939,7 @@ async function xlsxFile(wb, filename) {
 		"Cache-Control": "no-store"
 	} });
 }
-const Route$28 = createFileRoute("/api/file/$kind")({ server: { handlers: { GET: async ({ params, request }) => {
+const Route$26 = createFileRoute("/api/file/$kind")({ server: { handlers: { GET: async ({ params, request }) => {
 	const url = new URL(request.url);
 	const year = Number(url.searchParams.get("year") || "2026") || 2026;
 	const kind = params.kind;
@@ -2268,22 +2111,12 @@ var rootRouteChildren = {
 		path: "/api/version",
 		getParentRoute: () => Route
 	}),
-	ApiVolcanoChatRouteRoute: Route$25.update({
-		id: "/api/volcano-chat-route",
-		path: "/api/volcano-chat-route",
-		getParentRoute: () => Route
-	}),
-	ApiVolcanoHealthRoute: Route$26.update({
-		id: "/api/volcano-health",
-		path: "/api/volcano-health",
-		getParentRoute: () => Route
-	}),
-	ApiYearRoute: Route$27.update({
+	ApiYearRoute: Route$25.update({
 		id: "/api/year",
 		path: "/api/year",
 		getParentRoute: () => Route
 	}),
-	ApiFileKindRoute: Route$28.update({
+	ApiFileKindRoute: Route$26.update({
 		id: "/api/file/$kind",
 		path: "/api/file/$kind",
 		getParentRoute: () => Route

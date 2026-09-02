@@ -1,7 +1,7 @@
 1.2.39
 
 [1.2.39] 2026-09-02
-代码清理：删除人员类型中未使用的字段（batchNo、cardType、nation、nativePlace、livePlace、icValidFrom、icValidTo），这些字段在编辑器中从未显示。删除 shell.tsx 中未使用的空占位组件（PreviewHostBridge、AuthProvider）。
+代码清理：删除人员类型中未使用的字段（batchNo、cardType、nation、nativePlace、livePlace、icValidFrom、icValidTo）。删除 shell.tsx 中未使用的空占位组件。删除误添加的火山引擎相关文件。
 
 [1.2.25] 2026-09-02
 修复软件内「检查更新/更新」时空请求体导致 invalid JSON 报错，升级 POST 请求改为发送空 JSON body。

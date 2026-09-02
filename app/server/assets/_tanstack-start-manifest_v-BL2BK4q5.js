@@ -26,8 +26,6 @@ const tsrStartManifest = () => ({ routes: {
 			"/api/photo-scan",
 			"/api/update",
 			"/api/version",
-			"/api/volcano-chat-route",
-			"/api/volcano-health",
 			"/api/year",
 			"/api/file/$kind"
 		],

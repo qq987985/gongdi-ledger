@@ -27,8 +27,9 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 
 ### 1.2.39
 
-- 代码清理：删除人员类型中未使用的字段（batchNo、cardType、nation、nativePlace、livePlace、icValidFrom、icValidTo），这些字段在编辑器中从未显示。
-- 删除 shell.tsx 中未使用的空占位组件（PreviewHostBridge、AuthProvider）。
+- 代码清理：删除人员类型中未使用的字段（batchNo、cardType、nation、nativePlace、livePlace、icValidFrom、icValidTo）。
+- 删除 shell.tsx 中未使用的空占位组件。
+- 删除误添加的火山引擎相关文件。
 
 ### 1.2.38
 

@@ -33,8 +33,6 @@ import { Route as ApiPhotoFlagsRouteImport } from './routes/api/photo-flags'
 import { Route as ApiPhotoScanRouteImport } from './routes/api/photo-scan'
 import { Route as ApiUpdateRouteImport } from './routes/api/update'
 import { Route as ApiVersionRouteImport } from './routes/api/version'
-import { Route as ApiVolcanoChatRouteRouteImport } from './routes/api/volcano-chat-route'
-import { Route as ApiVolcanoHealthRouteImport } from './routes/api/volcano-health'
 import { Route as ApiYearRouteImport } from './routes/api/year'
 import { Route as ApiFileKindRouteImport } from './routes/api/file/$kind'
 
@@ -158,16 +156,6 @@ const ApiVersionRoute = ApiVersionRouteImport.update({
   path: '/api/version',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiVolcanoChatRouteRoute = ApiVolcanoChatRouteRouteImport.update({
-  id: '/api/volcano-chat-route',
-  path: '/api/volcano-chat-route',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiVolcanoHealthRoute = ApiVolcanoHealthRouteImport.update({
-  id: '/api/volcano-health',
-  path: '/api/volcano-health',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiYearRoute = ApiYearRouteImport.update({
   id: '/api/year',
   path: '/api/year',
@@ -204,8 +192,6 @@ export interface FileRoutesByFullPath {
   '/api/photo-scan': typeof ApiPhotoScanRoute
   '/api/update': typeof ApiUpdateRoute
   '/api/version': typeof ApiVersionRoute
-  '/api/volcano-chat-route': typeof ApiVolcanoChatRouteRoute
-  '/api/volcano-health': typeof ApiVolcanoHealthRoute
   '/api/year': typeof ApiYearRoute
   '/api/file/$kind': typeof ApiFileKindRoute
 }
@@ -234,8 +220,6 @@ export interface FileRoutesByTo {
   '/api/photo-scan': typeof ApiPhotoScanRoute
   '/api/update': typeof ApiUpdateRoute
   '/api/version': typeof ApiVersionRoute
-  '/api/volcano-chat-route': typeof ApiVolcanoChatRouteRoute
-  '/api/volcano-health': typeof ApiVolcanoHealthRoute
   '/api/year': typeof ApiYearRoute
   '/api/file/$kind': typeof ApiFileKindRoute
 }
@@ -265,8 +249,6 @@ export interface FileRoutesById {
   '/api/photo-scan': typeof ApiPhotoScanRoute
   '/api/update': typeof ApiUpdateRoute
   '/api/version': typeof ApiVersionRoute
-  '/api/volcano-chat-route': typeof ApiVolcanoChatRouteRoute
-  '/api/volcano-health': typeof ApiVolcanoHealthRoute
   '/api/year': typeof ApiYearRoute
   '/api/file/$kind': typeof ApiFileKindRoute
 }
@@ -297,8 +279,6 @@ export interface FileRouteTypes {
     | '/api/photo-scan'
     | '/api/update'
     | '/api/version'
-    | '/api/volcano-chat-route'
-    | '/api/volcano-health'
     | '/api/year'
     | '/api/file/$kind'
   fileRoutesByTo: FileRoutesByTo
@@ -327,8 +307,6 @@ export interface FileRouteTypes {
     | '/api/photo-scan'
     | '/api/update'
     | '/api/version'
-    | '/api/volcano-chat-route'
-    | '/api/volcano-health'
     | '/api/year'
     | '/api/file/$kind'
   id:
@@ -357,8 +335,6 @@ export interface FileRouteTypes {
     | '/api/photo-scan'
     | '/api/update'
     | '/api/version'
-    | '/api/volcano-chat-route'
-    | '/api/volcano-health'
     | '/api/year'
     | '/api/file/$kind'
   fileRoutesById: FileRoutesById
@@ -388,8 +364,6 @@ export interface RootRouteChildren {
   ApiPhotoScanRoute: typeof ApiPhotoScanRoute
   ApiUpdateRoute: typeof ApiUpdateRoute
   ApiVersionRoute: typeof ApiVersionRoute
-  ApiVolcanoChatRouteRoute: typeof ApiVolcanoChatRouteRoute
-  ApiVolcanoHealthRoute: typeof ApiVolcanoHealthRoute
   ApiYearRoute: typeof ApiYearRoute
   ApiFileKindRoute: typeof ApiFileKindRoute
 }
@@ -564,20 +538,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiVersionRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/volcano-chat-route': {
-      id: '/api/volcano-chat-route'
-      path: '/api/volcano-chat-route'
-      fullPath: '/api/volcano-chat-route'
-      preLoaderRoute: typeof ApiVolcanoChatRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/volcano-health': {
-      id: '/api/volcano-health'
-      path: '/api/volcano-health'
-      fullPath: '/api/volcano-health'
-      preLoaderRoute: typeof ApiVolcanoHealthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/year': {
       id: '/api/year'
       path: '/api/year'
@@ -620,8 +580,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPhotoScanRoute: ApiPhotoScanRoute,
   ApiUpdateRoute: ApiUpdateRoute,
   ApiVersionRoute: ApiVersionRoute,
-  ApiVolcanoChatRouteRoute: ApiVolcanoChatRouteRoute,
-  ApiVolcanoHealthRoute: ApiVolcanoHealthRoute,
   ApiYearRoute: ApiYearRoute,
   ApiFileKindRoute: ApiFileKindRoute,
 }
