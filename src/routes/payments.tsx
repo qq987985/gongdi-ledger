@@ -229,22 +229,17 @@ function PaymentsPage() {
                     />
                   </td>
                   <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex flex-wrap gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        type="button"
-                        onClick={() => {
-                          setCreating(false);
-                          setEditing(p);
-                        }}
-                      >
-                        编辑
-                      </Button>
-                      <Button variant="ghost" size="sm" type="button" onClick={() => dropIds([p.id], "已删除 1 笔发放")}>
-                        删除
-                      </Button>
-                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      onClick={() => {
+                        setCreating(false);
+                        setEditing(p);
+                      }}
+                    >
+                      编辑
+                    </Button>
                   </td>
                   <td className="p-3 tabular-nums text-muted">{(pager.page - 1) * pager.size + i + 1}</td>
                   <td className="p-3 font-medium">{p.owner}</td>

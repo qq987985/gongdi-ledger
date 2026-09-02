@@ -371,24 +371,15 @@ function PaymentsPage() {
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 									className: "p-3",
 									onClick: (e) => e.stopPropagation(),
-									children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex flex-wrap gap-1",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-											variant: "outline",
-											size: "sm",
-											type: "button",
-											onClick: () => {
-												setCreating(false);
-												setEditing(p);
-											},
-											children: "编辑"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-											variant: "ghost",
-											size: "sm",
-											type: "button",
-											onClick: () => dropIds([p.id], "已删除 1 笔发放"),
-											children: "删除"
-										})]
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+										variant: "outline",
+										size: "sm",
+										type: "button",
+										onClick: () => {
+											setCreating(false);
+											setEditing(p);
+										},
+										children: "编辑"
 									})
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {

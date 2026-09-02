@@ -234,11 +234,10 @@ function PeoplePage() {
 								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 									className: "p-3",
 									children: "照片"
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { className: "p-3" })
+								})
 							] })
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [filtered.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							colSpan: 12,
+							colSpan: 11,
 							className: "p-8 text-center text-sm text-muted",
 							children: "没有匹配的人员"
 						}) }) : null, pageRows.map((p, i) => {
@@ -325,22 +324,6 @@ function PeoplePage() {
 											type: "button",
 											onClick: () => setEditing(p),
 											children: [n, "/4 已上传"]
-										})
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-3",
-										onClick: (e) => e.stopPropagation(),
-										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-											variant: "ghost",
-											size: "sm",
-											type: "button",
-											onClick: () => {
-												if (!confirmBatchDelete("人员", 1, `将删除 ${p.name} 的档案。考勤和发放记录里的名字还在。`)) return;
-												removePeople([p.id]);
-												setSelected((s) => s.filter((id) => id !== p.id));
-												toast.success(`已删除 ${p.name}`);
-											},
-											children: "删除"
 										})
 									})
 								]

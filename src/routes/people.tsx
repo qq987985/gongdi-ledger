@@ -172,13 +172,12 @@ function PeoplePage() {
                 <th className="p-3">年龄</th>
                 <th className="p-3">电话</th>
                 <th className="p-3">照片</th>
-                <th className="p-3" />
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="p-8 text-center text-sm text-muted">
+                  <td colSpan={11} className="p-8 text-center text-sm text-muted">
                     没有匹配的人员
                   </td>
                 </tr>
@@ -223,21 +222,6 @@ function PeoplePage() {
                       <button className="text-left text-xs text-accent" type="button" onClick={() => setEditing(p)}>
                         {n}/4 已上传
                       </button>
-                    </td>
-                    <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        type="button"
-                        onClick={() => {
-                          if (!confirmBatchDelete("人员", 1, `将删除 ${p.name} 的档案。考勤和发放记录里的名字还在。`)) return;
-                          removePeople([p.id]);
-                          setSelected((s) => s.filter((id) => id !== p.id));
-                          toast.success(`已删除 ${p.name}`);
-                        }}
-                      >
-                        删除
-                      </Button>
                     </td>
                   </tr>
                 );
