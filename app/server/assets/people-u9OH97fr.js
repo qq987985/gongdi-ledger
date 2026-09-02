@@ -350,6 +350,13 @@ function PeoplePage() {
 							toast.success("已保存");
 						}
 						closeEditor();
+					},
+					onDelete: () => {
+						if (!confirmBatchDelete("人员", 1, `将删除 ${editing.name} 的档案。考勤和发放记录里的名字还在。`)) return;
+						removePeople([editing.id]);
+						setSelected((s) => s.filter((id) => id !== editing.id));
+						toast.success(`已删除 ${editing.name}`);
+						closeEditor();
 					}
 				}) : null
 			]
@@ -380,7 +387,7 @@ function confirmEdits(kind, name, creating, before, after, labels) {
 	const extra = lines.length > 8 ? `\n…另有 ${lines.length - 8} 项` : "";
 	return window.confirm(`确认保存${kind}「${name}」？\n\n改了 ${lines.length} 项：\n${show.join("\n")}${extra}`);
 }
-function PersonEditor({ person, creating, refresh = 0, onClose, onSave, onChanged }) {
+function PersonEditor({ person, creating, refresh = 0, onClose, onSave, onDelete, onChanged }) {
 	const [form, setForm] = import_react.useState(() => ({
 		...person,
 		idValidFrom: normalizeIdDate(person.idValidFrom),
@@ -660,14 +667,22 @@ function PersonEditor({ person, creating, refresh = 0, onClose, onSave, onChange
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "mt-6 flex justify-end gap-2",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-						variant: "outline",
-						onClick: onClose,
-						children: "取消"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-						onClick: save,
-						children: "保存"
-					})]
+					children: [
+						!creating ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							variant: "danger",
+							onClick: () => onDelete?.(),
+							children: "删除"
+						}) : null,
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							variant: "outline",
+							onClick: onClose,
+							children: "取消"
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							onClick: save,
+							children: "保存"
+						})
+					]
 				})
 			]
 		})

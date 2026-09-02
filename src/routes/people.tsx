@@ -250,6 +250,13 @@ function PeoplePage() {
               }
               closeEditor();
             }}
+            onDelete={() => {
+              if (!confirmBatchDelete("人员", 1, `将删除 ${editing.name} 的档案。考勤和发放记录里的名字还在。`)) return;
+              removePeople([editing.id]);
+              setSelected((s) => s.filter((id) => id !== editing.id));
+              toast.success(`已删除 ${editing.name}`);
+              closeEditor();
+            }}
           />
         ) : null}
       </div>
@@ -289,6 +296,7 @@ function PersonEditor({
   refresh = 0,
   onClose,
   onSave,
+  onDelete,
   onChanged,
 }: {
   person: Person;
@@ -296,6 +304,7 @@ function PersonEditor({
   refresh?: number;
   onClose: () => void;
   onSave: (p: Person) => void;
+  onDelete?: () => void;
   onChanged?: () => void;
 }) {
   const [form, setForm] = React.useState<Person>(() => ({
@@ -459,6 +468,11 @@ function PersonEditor({
           </p>
         )}
         <div className="mt-6 flex justify-end gap-2">
+          {!creating ? (
+            <Button variant="danger" onClick={() => onDelete?.()}>
+              删除
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={onClose}>
             取消
           </Button>

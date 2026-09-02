@@ -519,7 +519,13 @@ function ContractsPage() {
 						toast.success("合同已保存");
 					},
 					onAddEntry: (e) => addContractEntry(e),
-					onRemoveEntries: removeContractEntries
+					onRemoveEntries: removeContractEntries,
+					onDelete: () => {
+						if (!confirmBatchDelete("合同", 1, `将删除 ${editing.name} 的合同及所有报量、发票、收款记录。`)) return;
+						dropIds([editing.id]);
+						setEditing(null);
+						setCreating(false);
+					}
 				}) : null,
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WideTable, {
 					id: "contracts",
@@ -645,24 +651,15 @@ function ContractsPage() {
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 											className: "p-2",
 											onClick: (e) => e.stopPropagation(),
-											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex flex-wrap gap-1",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-													variant: "outline",
-													size: "sm",
-													type: "button",
-													onClick: () => {
-														setCreating(false);
-														setEditing(c);
-													},
-													children: "编辑"
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-													variant: "ghost",
-													size: "sm",
-													type: "button",
-													onClick: () => dropIds([c.id]),
-													children: "删除"
-												})]
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+												variant: "outline",
+												size: "sm",
+												type: "button",
+												onClick: () => {
+													setCreating(false);
+													setEditing(c);
+												},
+												children: "编辑"
 											})
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
@@ -858,7 +855,7 @@ function confirmEdits(kind, name, creating, before, after, labels) {
 	const extra = lines.length > 8 ? `\n…另有 ${lines.length - 8} 项` : "";
 	return window.confirm(`确认保存${kind}「${name}」？\n\n改了 ${lines.length} 项：\n${show.join("\n")}${extra}`);
 }
-function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry, onRemoveEntries }) {
+function ContractEditor({ draft, creating, entries, onCancel, onSave, onDelete, onAddEntry, onRemoveEntries }) {
 	const [c, setC] = import_react.useState(draft);
 	const roll = contractRollup(c, entries);
 	function patch(key, value) {
@@ -905,6 +902,12 @@ function ContractEditor({ draft, creating, entries, onCancel, onSave, onAddEntry
 								type: "button",
 								onClick: () => window.print(),
 								children: "打印对账单"
+							}) : null,
+							!creating ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+								variant: "danger",
+								type: "button",
+								onClick: () => onDelete?.(),
+								children: "删除"
 							}) : null,
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 								type: "button",

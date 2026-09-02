@@ -332,6 +332,12 @@ function ContractsPage() {
               }}
               onAddEntry={(e) => addContractEntry(e)}
               onRemoveEntries={removeContractEntries}
+              onDelete={() => {
+                if (!confirmBatchDelete("合同", 1, `将删除 ${editing.name} 的合同及所有报量、发票、收款记录。`)) return;
+                dropIds([editing.id]);
+                setEditing(null);
+                setCreating(false);
+              }}
             />
           ) : null}
           <WideTable id="contracts" pager={pager as any}>
@@ -398,22 +404,17 @@ function ContractsPage() {
                         />
                       </td>
                       <td className="p-2" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            type="button"
-                            onClick={() => {
-                              setCreating(false);
-                              setEditing(c);
-                            }}
-                          >
-                            编辑
-                          </Button>
-                          <Button variant="ghost" size="sm" type="button" onClick={() => dropIds([c.id])}>
-                            删除
-                          </Button>
-                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          type="button"
+                          onClick={() => {
+                            setCreating(false);
+                            setEditing(c);
+                          }}
+                        >
+                          编辑
+                        </Button>
                       </td>
                       <td className="sticky left-0 z-10 bg-surface p-2 tabular-nums text-muted">{(pager.page - 1) * pager.size + i + 1}</td>
                       <td className="p-2">{c.year}</td>
@@ -533,6 +534,7 @@ function ContractEditor({
   entries,
   onCancel,
   onSave,
+  onDelete,
   onAddEntry,
   onRemoveEntries,
 }: {
@@ -541,6 +543,7 @@ function ContractEditor({
   entries: ContractEntry[];
   onCancel: () => void;
   onSave: (c: ContractRecord) => void;
+  onDelete?: () => void;
   onAddEntry: (e: ContractEntry) => void;
   onRemoveEntries: (ids: string[]) => void;
 }) {
@@ -573,6 +576,11 @@ function ContractEditor({
             {!creating ? (
               <Button variant="outline" type="button" onClick={() => window.print()}>
                 打印对账单
+              </Button>
+            ) : null}
+            {!creating ? (
+              <Button variant="danger" type="button" onClick={() => onDelete?.()}>
+                删除
               </Button>
             ) : null}
             <Button
