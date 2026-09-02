@@ -685,18 +685,16 @@ function ExpensesPage() {
                   <th className="py-2 px-3">购买时间</th>
                   <th className="py-2 px-3">金额</th>
                   <th className="py-2 px-3">报销人</th>
-                  <th className="py-2 px-3">收款人</th>
                   <th className="py-2 px-3">打款账户</th>
                   <th className="py-2 px-3">状态</th>
-                  <th className="py-2 px-3">购买凭证</th>
-                  <th className="py-2 px-3">打款凭证</th>
+                  <th className="py-2 px-3">凭证</th>
                   <th className="py-2 px-3">备注</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="p-6 text-muted">
+                    <td colSpan={11} className="p-6 text-muted">
                       还没有报销。点右上角「新增报销」。勾几笔可一起报销、记打款。
                     </td>
                   </tr>
@@ -720,11 +718,12 @@ function ExpensesPage() {
                         />
                       </td>
                       <td className="py-2 px-3" onClick={(ev) => ev.stopPropagation()}>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-col gap-1">
                           <Button
                             variant="outline"
                             size="sm"
                             type="button"
+                            className="h-7 px-2 text-[11px]"
                             onClick={() => {
                               setCreating(false);
                               setEditing(e);
@@ -732,7 +731,7 @@ function ExpensesPage() {
                           >
                             编辑
                           </Button>
-                          <Button variant="ghost" size="sm" type="button" onClick={() => del([e.id])}>
+                          <Button variant="ghost" size="sm" type="button" className="h-7 px-2 text-[11px] text-danger" onClick={() => del([e.id])}>
                             删除
                           </Button>
                         </div>
@@ -742,13 +741,12 @@ function ExpensesPage() {
                       <td className="py-2 px-3">{e.period || e.date}</td>
                       <td className="py-2 px-3 text-right tabular-nums font-medium">{money(e.amount)}</td>
                       <td className="py-2 px-3">{e.claimant || "—"}</td>
-                      <td className="py-2 px-3">{e.forWhom || "—"}</td>
                       <td className="py-2 px-3">
                         {(() => {
                           const parts = accountParts(e);
                           if (!parts) return "—";
                           return (
-                            <div className="text-xs leading-tight">
+                            <div className="text-xs leading-snug">
                               {parts.name ? <div className="font-medium">{parts.name}</div> : null}
                               {parts.bank ? <div className="text-muted">{parts.bank}</div> : null}
                               {parts.card ? <div className="tabular-nums text-muted">{parts.card}</div> : null}
@@ -760,27 +758,27 @@ function ExpensesPage() {
                         <Badge tone={e.status === "已报销" ? "ok" : "warn"}>{e.status}</Badge>
                       </td>
                       <td className="py-2 px-3 text-xs" onClick={(ev) => ev.stopPropagation()}>
-                        {e.voucherFileName ? (
-                          <DocActions id={e.voucherId || e.id} kind="expense" fileName={e.voucherFileName} />
-                        ) : e.payMethod === "现金" ? (
-                          "—"
-                        ) : (
-                          <span className="text-warn">缺</span>
-                        )}
+                        <div className="flex flex-col gap-0.5">
+                          {e.voucherFileName ? (
+                            <DocActions id={e.voucherId || e.id} kind="expense" fileName={e.voucherFileName} />
+                          ) : e.payMethod === "现金" ? (
+                            <span className="text-muted">—</span>
+                          ) : (
+                            <span className="text-warn">缺购买</span>
+                          )}
+                          {e.payoutFileName ? (
+                            <div className="flex items-center gap-1">
+                              <DocActions id={e.payoutId || e.id} kind="payout" fileName={e.payoutFileName} />
+                              {sib > 1 ? <span className="text-muted">·{sib}笔</span> : null}
+                            </div>
+                          ) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? (
+                            <span className="text-warn">缺打款</span>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </div>
                       </td>
-                      <td className="py-2 px-3 text-xs" onClick={(ev) => ev.stopPropagation()}>
-                        {e.payoutFileName ? (
-                          <div className="flex flex-wrap items-center gap-1">
-                            <DocActions id={e.payoutId || e.id} kind="payout" fileName={e.payoutFileName} />
-                            {sib > 1 ? <span className="text-muted">·{sib}笔</span> : null}
-                          </div>
-                        ) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? (
-                          <span className="text-warn">缺打款</span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="max-w-40 truncate py-2 px-3 text-muted">{e.remark}</td>
+                      <td className="max-w-32 truncate py-2 px-3 text-xs text-muted">{e.remark}</td>
                     </tr>
                   );
                 })}
@@ -792,7 +790,7 @@ function ExpensesPage() {
                       合计（{sumTip}）
                     </td>
                     <td className="py-2 px-3 text-right tabular-nums">{money(totals.amount)}</td>
-                    <td className="py-2 px-3 text-xs font-normal text-muted" colSpan={7}>
+                    <td className="py-2 px-3 text-xs font-normal text-muted" colSpan={5}>
                       未报销 ¥{money(totals.open)}　已报销 ¥{money(totals.done)}
                     </td>
                   </tr>

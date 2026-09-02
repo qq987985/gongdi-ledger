@@ -845,10 +845,6 @@ function ExpensesPage() {
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 										className: "py-2 px-3",
-										children: "收款人"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2 px-3",
 										children: "打款账户"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
@@ -857,11 +853,7 @@ function ExpensesPage() {
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 										className: "py-2 px-3",
-										children: "购买凭证"
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "py-2 px-3",
-										children: "打款凭证"
+										children: "凭证"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 										className: "py-2 px-3",
@@ -870,7 +862,7 @@ function ExpensesPage() {
 								] })
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [shown.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-								colSpan: 13,
+								colSpan: 11,
 								className: "p-6 text-muted",
 								children: "还没有报销。点右上角「新增报销」。勾几笔可一起报销、记打款。"
 							}) }) : null, pageRows.map((e, i) => {
@@ -895,11 +887,12 @@ function ExpensesPage() {
 											className: "py-2 px-3",
 											onClick: (ev) => ev.stopPropagation(),
 											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex flex-wrap gap-1",
+												className: "flex flex-col gap-1",
 												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 													variant: "outline",
 													size: "sm",
 													type: "button",
+													className: "h-7 px-2 text-[11px]",
 													onClick: () => {
 														setCreating(false);
 														setEditing(e);
@@ -909,6 +902,7 @@ function ExpensesPage() {
 													variant: "ghost",
 													size: "sm",
 													type: "button",
+													className: "h-7 px-2 text-[11px] text-danger",
 													onClick: () => del([e.id]),
 													children: "删除"
 												})]
@@ -936,15 +930,11 @@ function ExpensesPage() {
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 											className: "py-2 px-3",
-											children: e.forWhom || "—"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-2 px-3",
 											children: (() => {
 												const parts = accountParts(e);
 												if (!parts) return "—";
 												return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-													className: "text-xs leading-tight",
+													className: "text-xs leading-snug",
 													children: [
 														parts.name ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 															className: "font-medium",
@@ -972,39 +962,43 @@ function ExpensesPage() {
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 											className: "py-2 px-3 text-xs",
 											onClick: (ev) => ev.stopPropagation(),
-											children: e.voucherFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
-												id: e.voucherId || e.id,
-												kind: "expense",
-												fileName: e.voucherFileName
-											}) : e.payMethod === "现金" ? "—" : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-warn",
-												children: "缺"
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex flex-col gap-0.5",
+												children: [e.voucherFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
+													id: e.voucherId || e.id,
+													kind: "expense",
+													fileName: e.voucherFileName
+												}) : e.payMethod === "现金" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "text-muted",
+													children: "—"
+												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "text-warn",
+													children: "缺购买"
+												}), e.payoutFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "flex items-center gap-1",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
+														id: e.payoutId || e.id,
+														kind: "payout",
+														fileName: e.payoutFileName
+													}), sib > 1 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+														className: "text-muted",
+														children: [
+															"·",
+															sib,
+															"笔"
+														]
+													}) : null]
+												}) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "text-warn",
+													children: "缺打款"
+												}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "text-muted",
+													children: "—"
+												})]
 											})
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "py-2 px-3 text-xs",
-											onClick: (ev) => ev.stopPropagation(),
-											children: e.payoutFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex flex-wrap items-center gap-1",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
-													id: e.payoutId || e.id,
-													kind: "payout",
-													fileName: e.payoutFileName
-												}), sib > 1 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-													className: "text-muted",
-													children: [
-														"·",
-														sib,
-														"笔"
-													]
-												}) : null]
-											}) : e.status === "已报销" && (e.payoutMethod || "转账") !== "现金" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-warn",
-												children: "缺打款"
-											}) : "—"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "max-w-40 truncate py-2 px-3 text-muted",
+											className: "max-w-32 truncate py-2 px-3 text-xs text-muted",
 											children: e.remark
 										})
 									]
@@ -1028,7 +1022,7 @@ function ExpensesPage() {
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
 										className: "py-2 px-3 text-xs font-normal text-muted",
-										colSpan: 7,
+										colSpan: 5,
 										children: [
 											"未报销 ¥",
 											money(totals.open),
