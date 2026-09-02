@@ -191,6 +191,22 @@ export function IdCardSlot({
     <>
       {compactView}
       {front || back ? (
+        <div className="mt-2 flex items-center justify-center gap-3">
+          {front ? (
+            <button type="button" onClick={() => { setFace("front"); setOpen(true); }} className="block text-center">
+              <img src={front} alt="身份证正面" className="h-20 rounded border border-line object-contain hover:border-accent" />
+              <span className="mt-1 block text-[10px] text-muted">正面</span>
+            </button>
+          ) : null}
+          {back ? (
+            <button type="button" onClick={() => { setFace("back"); setOpen(true); }} className="block text-center">
+              <img src={back} alt="身份证反面" className="h-20 rounded border border-line object-contain hover:border-accent" />
+              <span className="mt-1 block text-[10px] text-muted">反面</span>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {front || back ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -316,6 +332,14 @@ function SinglePhotoSlot({
           busy && "opacity-60",
         )}
       >
+        {url ? (
+          <img
+            src={url}
+            alt={label}
+            className="mx-auto mb-2 h-24 cursor-pointer rounded border border-line object-contain"
+            onClick={() => setOpen(true)}
+          />
+        ) : null}
         <button
           type="button"
           disabled={busy}
