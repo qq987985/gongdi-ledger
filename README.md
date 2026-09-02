@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.2.33**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.2.34**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -24,6 +24,14 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.2.34
+
+- 报销单列表「打款账户」列改为三行显示：
+  - 第一行：收款人姓名（加粗）
+  - 第二行：开户行
+  - 第三行：银行卡号
+  - 不再截断，信息完整且紧凑，右侧内容不再溢出。
 
 ### 1.2.33
 
@@ -267,7 +275,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 ./一键部署.sh
 ```
 
-打开 `http://NAS的IP:8501`，左下角应显示 **1.2.33**。
+打开 `http://NAS的IP:8501`，左下角应显示 **1.2.34**。
 
 拉 GitHub 镜像（Actions 全绿，并且 Packages 里 `gongdi-ledger` 已设 Public）：
 
@@ -289,7 +297,7 @@ compose 文件对照：
 
 compose **只挂 data**，不要再挂 `VERSION.txt`。国内网络建议直接用 `docker-compose.yml`。已经启动过旧容器的，用 `./一键拉取.sh` 即可，数据不会动。
 
-本机构建镜像名：`gongdi-ledger:1.2.33`，端口 `8501:8080`。
+本机构建镜像名：`gongdi-ledger:1.2.34`，端口 `8501:8080`。
 
 ---
 

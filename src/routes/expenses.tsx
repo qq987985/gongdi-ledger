@@ -94,6 +94,13 @@ function formatPayAccount(bank?: string, card?: string) {
 function accountOf(e: any) {
   return formatPayAccount(e?.payBank, e?.payCardNo) || e?.payAccount || "";
 }
+function accountParts(e: any) {
+  const name = (e.forWhom || "").trim();
+  const bank = (e.payBank || "").trim();
+  const card = (e.payCardNo || "").trim();
+  if (!name && !bank && !card) return null;
+  return { name, bank, card };
+}
 function listPayees(expenses: any[]) {
   const map = new Map<string, { name: string; bank: string; card: string }>();
   const rows = (expenses || [])
@@ -736,7 +743,19 @@ function ExpensesPage() {
                       <td className="py-2 px-3 text-right tabular-nums font-medium">{money(e.amount)}</td>
                       <td className="py-2 px-3">{e.claimant || "—"}</td>
                       <td className="py-2 px-3">{e.forWhom || "—"}</td>
-                      <td className="max-w-48 truncate py-2 px-3 text-xs">{accountOf(e) || "—"}</td>
+                      <td className="py-2 px-3">
+                        {(() => {
+                          const parts = accountParts(e);
+                          if (!parts) return "—";
+                          return (
+                            <div className="text-xs leading-tight">
+                              {parts.name ? <div className="font-medium">{parts.name}</div> : null}
+                              {parts.bank ? <div className="text-muted">{parts.bank}</div> : null}
+                              {parts.card ? <div className="tabular-nums text-muted">{parts.card}</div> : null}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="py-2 px-3">
                         <Badge tone={e.status === "已报销" ? "ok" : "warn"}>{e.status}</Badge>
                       </td>
