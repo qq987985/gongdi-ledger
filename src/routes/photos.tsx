@@ -32,7 +32,7 @@ function PhotosPage() {
         <header>
           <h1 className="font-display text-2xl font-semibold">照片管理</h1>
           <p className="mt-1 text-sm text-muted">
-            点「更改」弹出编辑。点遮罩或 Esc 关闭。人员照片：张三-身份证-正面.jpg、张三-身份证-反面.jpg。
+            点「编辑」弹出编辑。点遮罩或 Esc 关闭。人员照片：张三-身份证-正面.jpg、张三-身份证-反面.jpg。
           </p>
         </header>
         <div className="flex flex-wrap gap-2">
@@ -84,7 +84,7 @@ function PhotosPage() {
                   <tr key={p.id} className={`border-b border-line last:border-0 hover:bg-accent-soft ${on ? "bg-accent-soft" : ""}`}>
                     <td className="p-3">
                       <Button variant="outline" size="sm" type="button" onClick={() => setPicked(p.name)}>
-                        更改
+                        编辑
                       </Button>
                     </td>
                     <td className="p-3 font-medium">{p.name}</td>

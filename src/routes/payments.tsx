@@ -109,7 +109,7 @@ function PaymentsPage() {
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold">发放记录</h1>
-            <p className="mt-1 max-w-xl text-sm text-muted">点「更改」弹出编辑。点一行是勾选。点遮罩或 Esc 关闭。</p>
+            <p className="mt-1 max-w-xl text-sm text-muted">点「编辑」弹出编辑。点一行是勾选。点遮罩或 Esc 关闭。</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <TplLink href="/api/file/payment-template" filename="发放记录导入模板.xlsx" />
@@ -239,7 +239,7 @@ function PaymentsPage() {
                           setEditing(p);
                         }}
                       >
-                        更改
+                        编辑
                       </Button>
                       <Button variant="ghost" size="sm" type="button" onClick={() => dropIds([p.id], "已删除 1 笔发放")}>
                         删除

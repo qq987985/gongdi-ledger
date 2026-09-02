@@ -321,7 +321,7 @@ function MembersCard() {
                       );
                     }}
                   >
-                    改权限
+                    编辑权限
                   </Button>
                   <Button
                     variant="ghost"
@@ -334,7 +334,7 @@ function MembersCard() {
                       toast.success("已移除");
                     }}
                   >
-                    移除
+                    删除
                   </Button>
                 </div>
               ) : null}

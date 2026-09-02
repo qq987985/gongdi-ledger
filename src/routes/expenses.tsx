@@ -245,6 +245,7 @@ function ExpensesPage() {
   const [editing, setEditing] = React.useState<any | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [printStatus, setPrintStatus] = React.useState("未报销");
+  const [printVoucher, setPrintVoucher] = React.useState(true);
   const [batch, setBatch] = React.useState<any>({
     claimant: "",
     forWhom: "",
@@ -639,6 +640,10 @@ function ExpensesPage() {
             <Button variant="outline" type="button" onClick={doPrint}>
               打印报销单{printRows.length ? `（${printRows.length}）` : ""}
             </Button>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={printVoucher} onChange={(e) => setPrintVoucher(e.target.checked)} />
+              打印票据列
+            </label>
             <p className="w-full text-xs text-muted">
               {selected.length ? `已勾选 ${selected.length} 笔，打印时只用勾选的。` : "没勾选就打印当前列表里符合条件的。"}
             </p>
@@ -736,7 +741,7 @@ function ExpensesPage() {
                             setEditing(e);
                           }}
                         >
-                          更改
+                          编辑
                         </Button>
                       </td>
                       <td className="p-2 tabular-nums text-muted">{(pager.page - 1) * pager.size + i + 1}</td>
@@ -791,7 +796,7 @@ function ExpensesPage() {
             </table>
           </WideTable>
         </div>
-        <ExpenseSheets rows={printRows} />
+        <ExpenseSheets rows={printRows} showVoucher={printVoucher} />
       </>
     </Need>
   );
@@ -1156,7 +1161,7 @@ function ExpenseEditor({
   );
 }
 
-function ExpenseSheets({ rows }: { rows: any[] }) {
+function ExpenseSheets({ rows, showVoucher }: { rows: any[]; showVoucher?: boolean }) {
   if (!rows.length) return null;
   const today = todayYmd();
   const total = rows.reduce((s, e) => s + (e.amount || 0), 0);
@@ -1164,6 +1169,8 @@ function ExpenseSheets({ rows }: { rows: any[] }) {
   const forWhoms = [...new Set(rows.map((e) => e.forWhom).filter(Boolean))];
   const banks = [...new Set(rows.map((e) => (e.payBank || "").trim()).filter(Boolean))];
   const cards = [...new Set(rows.map((e) => (e.payCardNo || "").trim()).filter(Boolean))];
+  const cols = showVoucher ? ["序号", "项目", "购买时间", "金额", "备注", "票据"] : ["序号", "项目", "购买时间", "金额", "备注"];
+  const emptyCells = showVoucher ? 2 : 1;
   return (
     <div className="print-only space-y-8 text-black">
       <article className="statement border border-black p-4">
@@ -1195,7 +1202,7 @@ function ExpenseSheets({ rows }: { rows: any[] }) {
         <table className="mt-2 w-full border-collapse text-center text-xs">
           <thead>
             <tr>
-              {["序号", "项目", "购买时间", "金额", "备注", "票据"].map((col) => (
+              {cols.map((col) => (
                 <th key={col} className="border border-black px-1 py-1 font-medium">
                   {col}
                 </th>
@@ -1203,19 +1210,21 @@ function ExpenseSheets({ rows }: { rows: any[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((e, i) => (
-              <tr key={e.id}>
-                {[i + 1, e.name, e.period || e.date, money(e.amount), e.remark || "", e.voucherFileName || (e.payMethod === "现金" ? "现金" : "—")].map(
-                  (v, k) => (
+            {rows.map((e, i) => {
+              const cells = [i + 1, e.name, e.period || e.date, money(e.amount), e.remark || ""];
+              if (showVoucher) cells.push(e.voucherFileName || (e.payMethod === "现金" ? "现金" : "—"));
+              return (
+                <tr key={e.id}>
+                  {cells.map((v, k) => (
                     <td key={k} className="border border-black px-1 py-1">
                       {v}
                     </td>
-                  ),
-                )}
-              </tr>
-            ))}
+                  ))}
+                </tr>
+              );
+            })}
             <tr>
-              {["合计", "", "", money(total), "", ""].map((v, i) => (
+              {["合计", "", "", money(total), ...Array(emptyCells).fill("")].map((v, i) => (
                 <td key={i} className="border border-black px-1 py-1 font-medium">
                   {v}
                 </td>

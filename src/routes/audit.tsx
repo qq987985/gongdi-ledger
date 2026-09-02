@@ -129,7 +129,7 @@ function AuditPage() {
                       ) : (
                         <>
                           <Button size="sm" variant="outline" type="button" onClick={() => setEdit(e)}>
-                            改
+                            编辑
                           </Button>
                           <Button
                             size="sm"
@@ -141,7 +141,7 @@ function AuditPage() {
                               await load();
                             }}
                           >
-                            删
+                            删除
                           </Button>
                         </>
                       )}

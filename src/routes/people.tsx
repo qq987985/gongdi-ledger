@@ -202,7 +202,7 @@ function PeoplePage() {
                     </td>
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
                       <Button variant="outline" size="sm" type="button" onClick={() => setEditing(p)}>
-                        更改
+                        编辑
                       </Button>
                     </td>
                     <td className="p-3 tabular-nums text-muted">{(pager.page - 1) * pager.size + i + 1}</td>
@@ -226,7 +226,7 @@ function PeoplePage() {
                     </td>
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
                       <Button
-                        variant="danger"
+                        variant="ghost"
                         size="sm"
                         type="button"
                         onClick={() => {
