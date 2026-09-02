@@ -206,15 +206,6 @@ export function IdCardSlot({
           ) : null}
         </div>
       ) : null}
-      {front || back ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="mt-2 block text-xs text-accent hover:underline"
-        >
-          <Expand className="mr-1 inline size-3" /> 放大查看
-        </button>
-      ) : null}
       {open ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm"
@@ -364,15 +355,6 @@ function SinglePhotoSlot({
         />
         <p className="mt-1 text-[11px] text-muted">{url ? "点击或拖新图替换" : "点击选择或拖到这里"}</p>
       </DropSurface>
-      {url && !compact ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="block text-xs text-accent hover:underline"
-        >
-          <Expand className="mr-1 inline size-3" /> 放大查看
-        </button>
-      ) : null}
       {open && url ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm"
