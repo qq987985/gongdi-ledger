@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.2.32**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.2.33**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -24,6 +24,13 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.2.33
+
+- 身份证区域重新排版：
+  - 图片在上、按钮在下，正面/反面两列严格对齐。
+  - 已上传显示缩略图，未上传显示虚线占位框，不再上下错位。
+  - 按钮紧跟图片下方，视觉上更整齐。
 
 ### 1.2.32
 
@@ -260,7 +267,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 ./一键部署.sh
 ```
 
-打开 `http://NAS的IP:8501`，左下角应显示 **1.2.32**。
+打开 `http://NAS的IP:8501`，左下角应显示 **1.2.33**。
 
 拉 GitHub 镜像（Actions 全绿，并且 Packages 里 `gongdi-ledger` 已设 Public）：
 
@@ -282,7 +289,7 @@ compose 文件对照：
 
 compose **只挂 data**，不要再挂 `VERSION.txt`。国内网络建议直接用 `docker-compose.yml`。已经启动过旧容器的，用 `./一键拉取.sh` 即可，数据不会动。
 
-本机构建镜像名：`gongdi-ledger:1.2.32`，端口 `8501:8080`。
+本机构建镜像名：`gongdi-ledger:1.2.33`，端口 `8501:8080`。
 
 ---
 

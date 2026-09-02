@@ -142,25 +142,47 @@ export function IdCardSlot({
         <span className="text-xs font-medium text-muted">身份证</span>
         {front ? <PhotoFlag ok={Boolean(front && back)} /> : null}
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          className={cn(btnFill, !front && "opacity-70")}
-          onClick={() => frontRef.current?.click()}
-        >
-          <Camera className="mr-0.5 size-3.5" />
-          {front ? "换正面" : "正面"}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          className={cn(btnFill, !back && "opacity-70")}
-          onClick={() => backRef.current?.click()}
-        >
-          <Camera className="mr-0.5 size-3.5" />
-          {back ? "换反面" : "反面"}
-        </button>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          {front ? (
+            <button type="button" onClick={() => { setFace("front"); setOpen(true); }} className="block w-full text-center">
+              <img src={front} alt="身份证正面" className="mx-auto h-20 rounded border border-line object-contain hover:border-accent" />
+            </button>
+          ) : (
+            <div className="flex h-20 items-center justify-center rounded border border-dashed border-line bg-bg-elevated">
+              <span className="text-xs text-muted">正面</span>
+            </div>
+          )}
+          <button
+            type="button"
+            disabled={busy}
+            className={cn(btnFill, "w-full", !front && "opacity-70")}
+            onClick={() => frontRef.current?.click()}
+          >
+            <Camera className="mr-0.5 size-3.5" />
+            {front ? "换正面" : "传正面"}
+          </button>
+        </div>
+        <div className="space-y-1.5">
+          {back ? (
+            <button type="button" onClick={() => { setFace("back"); setOpen(true); }} className="block w-full text-center">
+              <img src={back} alt="身份证反面" className="mx-auto h-20 rounded border border-line object-contain hover:border-accent" />
+            </button>
+          ) : (
+            <div className="flex h-20 items-center justify-center rounded border border-dashed border-line bg-bg-elevated">
+              <span className="text-xs text-muted">反面</span>
+            </div>
+          )}
+          <button
+            type="button"
+            disabled={busy}
+            className={cn(btnFill, "w-full", !back && "opacity-70")}
+            onClick={() => backRef.current?.click()}
+          >
+            <Camera className="mr-0.5 size-3.5" />
+            {back ? "换反面" : "传反面"}
+          </button>
+        </div>
       </div>
       <input
         ref={frontRef}
@@ -190,22 +212,6 @@ export function IdCardSlot({
   return (
     <>
       {compactView}
-      {front || back ? (
-        <div className="mt-2 flex items-center justify-center gap-3">
-          {front ? (
-            <button type="button" onClick={() => { setFace("front"); setOpen(true); }} className="block text-center">
-              <img src={front} alt="身份证正面" className="h-20 rounded border border-line object-contain hover:border-accent" />
-              <span className="mt-1 block text-[10px] text-muted">正面</span>
-            </button>
-          ) : null}
-          {back ? (
-            <button type="button" onClick={() => { setFace("back"); setOpen(true); }} className="block text-center">
-              <img src={back} alt="身份证反面" className="h-20 rounded border border-line object-contain hover:border-accent" />
-              <span className="mt-1 block text-[10px] text-muted">反面</span>
-            </button>
-          ) : null}
-        </div>
-      ) : null}
       {open ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm"
