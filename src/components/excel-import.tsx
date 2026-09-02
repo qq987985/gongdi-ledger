@@ -15,6 +15,8 @@ import { uid } from "~/lib/utils";
 import { useApp } from "~/lib/store";
 import type { AttendanceRow, Person } from "~/lib/types";
 
+type ImportMode = "add" | "replace";
+
 function ExcelBtn({ label, onFile }: { label: string; onFile: (f: File) => void }) {
   return (
     <label className="btn inline-flex cursor-pointer items-center rounded-sm border border-line text-xs hover:bg-accent-soft">
@@ -41,8 +43,10 @@ export function TplLink({ href, filename, label = "下载模板" }: { href: stri
   );
 }
 
+/* ───────────── 人员导入 ───────────── */
 export function PeopleImport() {
   const store = useApp();
+  const [mode, setMode] = React.useState<ImportMode>("add");
   const [conflicts, setConflicts] = React.useState<{ incoming: Person; existing: Person; action: "skip" | "overwrite" }[]>([]);
   const [fresh, setFresh] = React.useState<Person[]>([]);
   async function onFile(file: File) {
@@ -62,11 +66,16 @@ export function PeopleImport() {
   }
   function apply() {
     let people = store.people.slice();
+    if (mode === "replace") {
+      // 替换模式：只保留不在导入列表中的原有人员，然后全部重新导入
+      const incomingNames = new Set([...fresh.map((p) => p.name), ...conflicts.filter((c) => c.action === "overwrite").map((c) => c.incoming.name)]);
+      people = people.filter((p) => !incomingNames.has(p.name));
+    }
     for (const p of fresh) people.push({ ...p, id: uid() });
     for (const c of conflicts)
       if (c.action === "overwrite") people = people.map((x) => (x.name === c.existing.name ? { ...c.incoming, id: x.id } : x));
     store.replacePeople(people);
-    toast.success("人员导入完成");
+    toast.success(mode === "replace" ? "人员已替换导入" : "人员导入完成");
     setConflicts([]);
     setFresh([]);
   }
@@ -77,39 +86,52 @@ export function PeopleImport() {
         <section className="basis-full mt-3 rounded-xl border border-line bg-surface p-4">
           <h2 className="font-semibold">人员导入确认</h2>
           <p className="mt-1 text-sm text-muted">
-            新增 {fresh.length} 人。重复的请选跳过或覆盖。
+            新增 {fresh.length} 人，重复 {conflicts.length} 人。
+            {mode === "replace" ? "替换模式：会清空原有重复人员后重新导入。" : "增加模式：在现有人员基础上追加。"}
           </p>
-          <div className="mt-3 flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setConflicts((cs) => cs.map((c) => ({ ...c, action: "skip" })))}>
-              全部跳过
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setConflicts((cs) => cs.map((c) => ({ ...c, action: "overwrite" })))}>
-              全部覆盖
-            </Button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="people-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
+            </label>
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="people-mode" checked={mode === "replace"} onChange={() => setMode("replace")} /> 替换
+            </label>
           </div>
-          <ul className="mt-3 space-y-2 text-sm">
-            {conflicts.map((c, i) => (
-              <li key={c.existing.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2">
-                <span>
-                  {c.incoming.name} · 现有 {c.existing.team || "空"} → 导入 {c.incoming.team || "空"}
-                </span>
-                <select
-                  className="field-select h-9"
-                  value={c.action}
-                  onChange={(e) =>
-                    setConflicts((cs) => {
-                      const n = cs.slice();
-                      n[i] = { ...n[i], action: e.target.value as "skip" | "overwrite" };
-                      return n;
-                    })
-                  }
-                >
-                  <option value="skip">跳过</option>
-                  <option value="overwrite">覆盖</option>
-                </select>
-              </li>
-            ))}
-          </ul>
+          {conflicts.length > 0 ? (
+            <>
+              <div className="mt-3 flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setConflicts((cs) => cs.map((c) => ({ ...c, action: "skip" })))}>
+                  全部跳过
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setConflicts((cs) => cs.map((c) => ({ ...c, action: "overwrite" })))}>
+                  全部覆盖
+                </Button>
+              </div>
+              <ul className="mt-3 space-y-2 text-sm">
+                {conflicts.map((c, i) => (
+                  <li key={c.existing.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2">
+                    <span>
+                      {c.incoming.name} · 现有 {c.existing.team || "空"} → 导入 {c.incoming.team || "空"}
+                    </span>
+                    <select
+                      className="field-select h-9"
+                      value={c.action}
+                      onChange={(e) =>
+                        setConflicts((cs) => {
+                          const n = cs.slice();
+                          n[i] = { ...n[i], action: e.target.value as "skip" | "overwrite" };
+                          return n;
+                        })
+                      }
+                    >
+                      <option value="skip">跳过</option>
+                      <option value="overwrite">覆盖</option>
+                    </select>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           <Button className="mt-4" onClick={apply}>
             确认导入
           </Button>
@@ -119,14 +141,17 @@ export function PeopleImport() {
   );
 }
 
+/* ───────────── 考勤导入 ───────────── */
 export function AttendanceImport() {
   const store = useApp();
+  const [mode, setMode] = React.useState<ImportMode>("add");
   const [preview, setPreview] = React.useState<{
     fileName: string;
     rows: AttendanceRow[];
     targetYear: number;
     targetMonth: number;
     keepMonths: boolean;
+    conflicts: { name: string; existing: AttendanceRow; incoming: AttendanceRow }[];
   } | null>(null);
   async function onFile(file: File) {
     if (!file) return;
@@ -137,17 +162,30 @@ export function AttendanceImport() {
     }
     const months = [...new Set(rows.map((r) => r.month).filter(Boolean))];
     const years = [...new Set(rows.map((r) => r.year).filter(Boolean))];
+    const targetYear = years[0] || store.year;
+    const targetMonth = store.year === new Date().getFullYear() ? new Date().getMonth() + 1 : 1;
+
+    // 检测冲突
+    const conflicts: { name: string; existing: AttendanceRow; incoming: AttendanceRow }[] = [];
+    for (const r of rows) {
+      const y = targetYear;
+      const m = months.length > 1 ? r.month || targetMonth : targetMonth;
+      const ex = store.attendance.find((a) => a.year === y && a.month === m && a.name === r.name);
+      if (ex) conflicts.push({ name: r.name, existing: ex, incoming: r });
+    }
+
     setPreview({
       fileName: file.name,
       rows,
-      targetYear: years[0] || store.year,
-      targetMonth: store.year === new Date().getFullYear() ? new Date().getMonth() + 1 : 1,
+      targetYear,
+      targetMonth,
       keepMonths: months.length > 1,
+      conflicts,
     });
   }
   function apply() {
     if (!preview) return;
-    const { rows, targetYear, targetMonth, keepMonths } = preview;
+    const { rows, targetYear, targetMonth, keepMonths, conflicts } = preview;
     if (!targetYear || targetYear < 2e3) {
       toast.error("请选择导入到哪一年");
       return;
@@ -156,29 +194,32 @@ export function AttendanceImport() {
       toast.error("请选择导入到哪一个月");
       return;
     }
-    const mapped = rows.map((r) => ({
-      ...r,
-      id: uid(),
-      year: targetYear,
-      month: keepMonths ? r.month || targetMonth : targetMonth,
-      team: r.team || store.people.find((p) => p.name === r.name)?.team || "",
-    }));
+
+    const skipNames = new Set(conflicts.map((c) => c.name));
+    const mapped = rows
+      .filter((r) => !skipNames.has(r.name))
+      .map((r) => ({
+        ...r,
+        id: uid(),
+        year: targetYear,
+        month: keepMonths ? r.month || targetMonth : targetMonth,
+        team: r.team || store.people.find((p) => p.name === r.name)?.team || "",
+      }));
+
     store.addYear(targetYear);
-    const grouped = new Map<string, typeof mapped>();
-    for (const r of mapped) {
-      const k = `${r.year}-${r.month}`;
-      grouped.set(k, [...(grouped.get(k) || []), r]);
-    }
     let att = store.attendance;
-    for (const list of grouped.values()) {
-      const y = list[0].year;
-      const m = list[0].month;
-      const names = new Set(list.map((x) => x.name));
-      att = [...att.filter((a) => !(a.year === y && a.month === m && names.has(a.name))), ...list];
+
+    if (mode === "replace") {
+      // 替换模式：删除同月所有原有记录，只保留导入的
+      const importNames = new Set(mapped.map((r) => r.name));
+      const importMonths = new Set(mapped.map((r) => `${r.year}-${r.month}`));
+      att = att.filter((a) => !(importMonths.has(`${a.year}-${a.month}`) && importNames.has(a.name)));
     }
+
+    att = [...att, ...mapped];
     store.replaceAttendance(att);
     store.setYear(targetYear);
-    toast.success(`已导入 ${mapped.length} 条`);
+    toast.success(`已导入 ${mapped.length} 条${mode === "replace" ? "（替换模式）" : ""}`);
     setPreview(null);
   }
   return (
@@ -186,49 +227,49 @@ export function AttendanceImport() {
       <ExcelBtn label="导入考勤" onFile={onFile} />
       {preview ? (
         <section className="basis-full mt-3 rounded-xl border border-accent bg-surface p-4">
-          <h2 className="font-semibold">确认考勤导入到哪年哪月</h2>
+          <h2 className="font-semibold">确认考勤导入</h2>
           <p className="mt-1 text-sm text-muted">
             {preview.fileName} · {preview.rows.length} 条
+            {preview.conflicts.length > 0 ? ` · 冲突 ${preview.conflicts.length} 人` : ""}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="att-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
+            </label>
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="att-mode" checked={mode === "replace"} onChange={() => setMode("replace")} /> 替换
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {mode === "replace" ? "替换模式：同名同月原有记录会被删除，只保留导入的。" : "增加模式：在现有考勤基础上追加，同名同月会冲突。"}
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="text-sm">
               <span className="text-xs text-muted">导入到哪一年</span>
-              <Input
-                className="mt-1"
-                type="number"
-                value={preview.targetYear}
-                onChange={(e) => setPreview({ ...preview, targetYear: Number(e.target.value) })}
-              />
+              <Input className="mt-1" type="number" value={preview.targetYear} onChange={(e) => setPreview({ ...preview, targetYear: Number(e.target.value) })} />
             </label>
             <label className="text-sm">
               <span className="text-xs text-muted">导入到哪一个月</span>
-              <select
-                className="field-select mt-1 w-full"
-                value={preview.targetMonth}
-                disabled={preview.keepMonths}
-                onChange={(e) => setPreview({ ...preview, targetMonth: Number(e.target.value) })}
-              >
+              <select className="field-select mt-1 w-full" value={preview.targetMonth} disabled={preview.keepMonths} onChange={(e) => setPreview({ ...preview, targetMonth: Number(e.target.value) })}>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                  <option value={m} key={m}>
-                    {m} 月
-                  </option>
+                  <option value={m} key={m}>{m} 月</option>
                 ))}
               </select>
             </label>
           </div>
           <label className="mt-3 flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={preview.keepMonths}
-              onChange={(e) => setPreview({ ...preview, keepMonths: e.target.checked })}
-            />
+            <input type="checkbox" checked={preview.keepMonths} onChange={(e) => setPreview({ ...preview, keepMonths: e.target.checked })} />
             表里有多个月份时，按原月份分别写入
           </label>
+          {preview.conflicts.length > 0 ? (
+            <div className="mt-3 rounded-md border border-warn bg-warn-bg p-3 text-sm">
+              <p className="font-medium">以下人员在该月已有考勤记录，导入时会{mode === "replace" ? "被替换" : "冲突跳过"}：</p>
+              <p className="mt-1 text-muted">{preview.conflicts.map((c) => c.name).join("、")}</p>
+            </div>
+          ) : null}
           <div className="mt-4 flex gap-2">
             <Button onClick={apply}>确认导入</Button>
-            <Button variant="outline" onClick={() => setPreview(null)}>
-              取消
-            </Button>
+            <Button variant="outline" onClick={() => setPreview(null)}>取消</Button>
           </div>
         </section>
       ) : null}
@@ -236,19 +277,64 @@ export function AttendanceImport() {
   );
 }
 
+/* ───────────── 发放导入 ───────────── */
 export function PaymentImport() {
   const store = useApp();
+  const [mode, setMode] = React.useState<ImportMode>("add");
+  const [preview, setPreview] = React.useState<{ rows: any[]; fileName: string } | null>(null);
   async function onFile(file: File) {
     if (!file) return;
     const rows = parsePaymentSheet(await file.arrayBuffer());
-    store.replacePayments([...store.payments, ...rows]);
-    toast.success(`已追加 ${rows.length} 条发放。有日期的记到对应年份，可在右上角切「全部年份」查看。`);
+    if (!rows.length) {
+      toast.error("没有读到发放记录");
+      return;
+    }
+    setPreview({ rows, fileName: file.name });
   }
-  return <ExcelBtn label="导入发放" onFile={onFile} />;
+  function apply() {
+    if (!preview) return;
+    if (mode === "replace") {
+      store.replacePayments(preview.rows);
+      toast.success(`已替换为 ${preview.rows.length} 条发放记录`);
+    } else {
+      store.replacePayments([...store.payments, ...preview.rows]);
+      toast.success(`已追加 ${preview.rows.length} 条发放记录`);
+    }
+    setPreview(null);
+  }
+  return (
+    <>
+      <ExcelBtn label="导入发放" onFile={onFile} />
+      {preview ? (
+        <section className="basis-full mt-3 rounded-xl border border-accent bg-surface p-4">
+          <h2 className="font-semibold">发放导入确认</h2>
+          <p className="mt-1 text-sm text-muted">{preview.fileName} · {preview.rows.length} 条</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="pay-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
+            </label>
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="pay-mode" checked={mode === "replace"} onChange={() => setMode("replace")} /> 替换
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {mode === "replace" ? "替换模式：会清空所有原有发放记录，只保留导入的。" : "增加模式：在现有发放记录后追加。"}
+          </p>
+          <div className="mt-4 flex gap-2">
+            <Button onClick={apply}>确认导入</Button>
+            <Button variant="outline" onClick={() => setPreview(null)}>取消</Button>
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
 }
 
+/* ───────────── 合同导入 ───────────── */
 export function ContractImport() {
   const store = useApp();
+  const [mode, setMode] = React.useState<ImportMode>("add");
+  const [preview, setPreview] = React.useState<{ contracts: any[]; entries: any[]; conflicts: any[]; fileName: string } | null>(null);
   async function onFile(file: File) {
     if (!file) return;
     const parsed = parseContractWorkbook(await file.arrayBuffer());
@@ -256,23 +342,89 @@ export function ContractImport() {
       toast.error("没有读到合同。需要「项目名称」列。");
       return;
     }
-    const keep = store.contracts.slice();
-    const keepE = store.contractEntries.slice();
-    let added = 0;
+    // 检测冲突
+    const conflicts: any[] = [];
     for (const c of parsed.contracts) {
+      const ex = store.contracts.find((x) => x.year === c.year && x.name === c.name && x.code === c.code);
+      if (ex) conflicts.push({ incoming: c, existing: ex });
+    }
+    setPreview({ contracts: parsed.contracts, entries: parsed.entries, conflicts, fileName: file.name });
+  }
+  function apply() {
+    if (!preview) return;
+    const { contracts, entries, conflicts } = preview;
+    const skipIds = new Set(conflicts.map((c) => c.existing.id));
+
+    let keep = store.contracts.slice();
+    let keepE = store.contractEntries.slice();
+
+    if (mode === "replace") {
+      // 替换模式：删除冲突的合同和对应条目，然后导入新的
+      keep = keep.filter((c) => !skipIds.has(c.id));
+      keepE = keepE.filter((e) => !skipIds.has(e.contractId));
+    }
+
+    let added = 0;
+    for (const c of contracts) {
       if (keep.find((x) => x.year === c.year && x.name === c.name && x.code === c.code)) continue;
       keep.push(c);
-      keepE.push(...parsed.entries.filter((e) => e.contractId === c.id));
+      keepE.push(...entries.filter((e) => e.contractId === c.id));
       added += 1;
     }
     store.replaceContracts(keep, keepE);
-    toast.success(`导入合同 ${added} 个，跳过重复 ${parsed.contracts.length - added} 个`);
+    toast.success(
+      mode === "replace"
+        ? `导入合同 ${added} 个，替换冲突 ${conflicts.length} 个`
+        : `导入合同 ${added} 个，跳过重复 ${conflicts.length} 个`,
+    );
+    setPreview(null);
   }
-  return <ExcelBtn label="导入合同" onFile={onFile} />;
+  return (
+    <>
+      <ExcelBtn label="导入合同" onFile={onFile} />
+      {preview ? (
+        <section className="basis-full mt-3 rounded-xl border border-accent bg-surface p-4">
+          <h2 className="font-semibold">合同导入确认</h2>
+          <p className="mt-1 text-sm text-muted">
+            {preview.fileName} · {preview.contracts.length} 个合同
+            {preview.conflicts.length > 0 ? ` · 冲突 ${preview.conflicts.length} 个` : ""}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="contract-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
+            </label>
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="contract-mode" checked={mode === "replace"} onChange={() => setMode("replace")} /> 替换
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {mode === "replace" ? "替换模式：同名同年的冲突合同会被删除后重新导入。" : "增加模式：跳过已有合同，只导入新的。"}
+          </p>
+          {preview.conflicts.length > 0 ? (
+            <div className="mt-3 rounded-md border border-warn bg-warn-bg p-3 text-sm">
+              <p className="font-medium">以下合同已存在，导入时会{mode === "replace" ? "被替换" : "跳过"}：</p>
+              <ul className="mt-1 text-muted">
+                {preview.conflicts.map((c) => (
+                  <li key={c.existing.id}>{c.incoming.year} {c.incoming.name}（{c.incoming.code}）</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className="mt-4 flex gap-2">
+            <Button onClick={apply}>确认导入</Button>
+            <Button variant="outline" onClick={() => setPreview(null)}>取消</Button>
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
 }
 
+/* ───────────── 报销导入 ───────────── */
 export function ExpenseImport() {
   const store = useApp();
+  const [mode, setMode] = React.useState<ImportMode>("add");
+  const [preview, setPreview] = React.useState<{ rows: any[]; fileName: string } | null>(null);
   async function onFile(file: File) {
     if (!file) return;
     const rows = parseExpenseSheet(await file.arrayBuffer(), store.year);
@@ -280,12 +432,48 @@ export function ExpenseImport() {
       toast.error("没有读到报销。需要「项目名称」列。");
       return;
     }
-    store.replaceExpenses([...(store.expenses || []), ...rows]);
-    toast.success(`已追加 ${rows.length} 条报销`);
+    setPreview({ rows, fileName: file.name });
   }
-  return <ExcelBtn label="导入报销" onFile={onFile} />;
+  function apply() {
+    if (!preview) return;
+    if (mode === "replace") {
+      store.replaceExpenses(preview.rows);
+      toast.success(`已替换为 ${preview.rows.length} 条报销`);
+    } else {
+      store.replaceExpenses([...(store.expenses || []), ...preview.rows]);
+      toast.success(`已追加 ${preview.rows.length} 条报销`);
+    }
+    setPreview(null);
+  }
+  return (
+    <>
+      <ExcelBtn label="导入报销" onFile={onFile} />
+      {preview ? (
+        <section className="basis-full mt-3 rounded-xl border border-accent bg-surface p-4">
+          <h2 className="font-semibold">报销导入确认</h2>
+          <p className="mt-1 text-sm text-muted">{preview.fileName} · {preview.rows.length} 条</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="exp-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
+            </label>
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="exp-mode" checked={mode === "replace"} onChange={() => setMode("replace")} /> 替换
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            {mode === "replace" ? "替换模式：会清空所有原有报销记录，只保留导入的。" : "增加模式：在现有报销记录后追加。"}
+          </p>
+          <div className="mt-4 flex gap-2">
+            <Button onClick={apply}>确认导入</Button>
+            <Button variant="outline" onClick={() => setPreview(null)}>取消</Button>
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
 }
 
+/* ───────────── 整本导入（保持原有逻辑） ───────────── */
 export function FullBookImport() {
   const store = useApp();
   return (
