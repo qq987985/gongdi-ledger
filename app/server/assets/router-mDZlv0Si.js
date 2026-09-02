@@ -1440,7 +1440,15 @@ async function selfContainer() {
 }
 async function pullImage(ref) {
 	const { repo, tag } = splitImage(ref);
-	await dockerReq("POST", `/images/create?fromImage=${encodeURIComponent(repo)}&tag=${encodeURIComponent(tag)}`, { stream: true });
+	const full = `${repo}:${tag}`;
+	const errors = [];
+	for (const path of [`/images/create?fromImage=${encodeURIComponent(repo)}&tag=${encodeURIComponent(tag)}`, `/images/create?fromImage=${encodeURIComponent(full)}`]) try {
+		await dockerReq("POST", path, { stream: true });
+		return;
+	} catch (e) {
+		errors.push(e instanceof Error ? e.message : String(e));
+	}
+	throw new Error(errors.join("；").slice(0, 240) || "拉镜像失败");
 }
 function uniqueImages(list) {
 	const out = [];

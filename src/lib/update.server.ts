@@ -358,11 +358,20 @@ async function selfContainer(): Promise<any> {
 
 async function pullImage(ref: string): Promise<void> {
   const { repo, tag } = splitImage(ref);
-  await dockerReq(
-    "POST",
+  const full = `${repo}:${tag}`;
+  const errors: string[] = [];
+  for (const path of [
     `/images/create?fromImage=${encodeURIComponent(repo)}&tag=${encodeURIComponent(tag)}`,
-    { stream: true },
-  );
+    `/images/create?fromImage=${encodeURIComponent(full)}`,
+  ]) {
+    try {
+      await dockerReq("POST", path, { stream: true });
+      return;
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  throw new Error(errors.join("；").slice(0, 240) || "拉镜像失败");
 }
 
 function uniqueImages(list: unknown[]): string[] {
