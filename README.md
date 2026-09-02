@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.2.30**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.2.31**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -24,6 +24,12 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.2.31
+
+- 「个人查询」默认姓名为空，不再自动显示任何人。输入或选择姓名后才显示个人信息、考勤和工资条。
+- 日期区间增加「日」选择，默认从 1 号到 31 号，可精确到具体日期筛选打款记录。
+- 打款记录筛选改用日期对象比较（`>= startDate && <= endDate`），精确到日。
 
 ### 1.2.30
 
@@ -250,7 +256,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 ./一键部署.sh
 ```
 
-打开 `http://NAS的IP:8501`，左下角应显示 **1.2.30**。
+打开 `http://NAS的IP:8501`，左下角应显示 **1.2.31**。
 
 拉 GitHub 镜像（Actions 全绿，并且 Packages 里 `gongdi-ledger` 已设 Public）：
 
@@ -272,7 +278,7 @@ compose 文件对照：
 
 compose **只挂 data**，不要再挂 `VERSION.txt`。国内网络建议直接用 `docker-compose.yml`。已经启动过旧容器的，用 `./一键拉取.sh` 即可，数据不会动。
 
-本机构建镜像名：`gongdi-ledger:1.2.30`，端口 `8501:8080`。
+本机构建镜像名：`gongdi-ledger:1.2.31`，端口 `8501:8080`。
 
 ---
 

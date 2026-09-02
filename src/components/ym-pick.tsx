@@ -34,15 +34,19 @@ export function YmPick({
   years,
   y,
   m,
+  d,
   onY,
   onM,
+  onD,
 }: {
   label: string;
   years: number[];
   y: number;
   m: number;
+  d?: number;
   onY: (n: number) => void;
   onM: (n: number) => void;
+  onD?: (n: number) => void;
 }) {
   const extra = years.includes(y) ? years : [...years, y].sort((a, b) => a - b);
   return (
@@ -73,6 +77,20 @@ export function YmPick({
             </option>
           ))}
         </select>
+        {onD ? (
+          <select
+            className="field-select w-auto"
+            value={d || 1}
+            onChange={(e) => onD(Number(e.target.value))}
+            aria-label={`${label}日`}
+          >
+            {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => (
+              <option value={n} key={n}>
+                {n}日
+              </option>
+            ))}
+          </select>
+        ) : null}
       </div>
     </div>
   );

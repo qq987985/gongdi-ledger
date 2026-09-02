@@ -233,16 +233,26 @@ function QueryPage() {
   const { year, people, attendance, attendanceDocs, payments, patchAttendanceDoc, removeAttendanceDocs } = store;
   const years = derivedYears(store);
   const yearOpts = years.length ? years : [year];
-  const [name, setName] = React.useState(people[0]?.name || "");
-  const [printNames, setPrintNames] = React.useState<string[]>(people[0]?.name ? [people[0].name] : []);
+  const [name, setName] = React.useState("");
+  const [printNames, setPrintNames] = React.useState<string[]>([]);
   const [printPays, setPrintPays] = React.useState(true);
   const [fromY, setFromY] = React.useState(year);
   const [fromM, setFromM] = React.useState(1);
+  const [fromD, setFromD] = React.useState(1);
   const [toY, setToY] = React.useState(year);
   const [toM, setToM] = React.useState(12);
+  const [toD, setToD] = React.useState(31);
   const p = people.find((x) => x.name === name);
   const span = React.useMemo(() => monthsInRange(fromY, fromM, toY, toM), [fromY, fromM, toY, toM]);
   const swapped = ymKey(fromY, fromM) > ymKey(toY, toM);
+  const startDate = React.useMemo(() => {
+    const d = new Date(fromY, fromM - 1, fromD);
+    return isNaN(d.getTime()) ? new Date(fromY, fromM - 1, 1) : d;
+  }, [fromY, fromM, fromD]);
+  const endDate = React.useMemo(() => {
+    const d = new Date(toY, toM - 1, toD);
+    return isNaN(d.getTime()) ? new Date(toY, toM - 1, 28) : d;
+  }, [toY, toM, toD]);
   const rows = span.map(({ year: y, month: m }) => {
     const a = attendance.find((x) => x.year === y && x.month === m && x.name === name);
     const calc = monthPay(a, p);
@@ -263,11 +273,9 @@ function QueryPage() {
   const end = span[span.length - 1];
   const pays = payments.filter((x) => {
     if (x.owner !== name && x.receiver !== name) return false;
-    const y = Number(String(x.date || "").slice(0, 4));
-    const m = Number(String(x.date || "").slice(5, 7));
-    if (!y || !m) return false;
-    const k = ymKey(y, m);
-    return k >= ymKey(start.year, start.month) && k <= ymKey(end.year, end.month);
+    const d = x.date ? new Date(x.date) : null;
+    if (!d || isNaN(d.getTime())) return false;
+    return d >= startDate && d <= endDate;
   });
   const paidAsOwner = pays.filter((x) => x.owner === name).reduce((s, x) => s + x.amount, 0);
   const rangeLabelText = rangeLabel(fromY, fromM, toY, toM);
@@ -306,12 +314,12 @@ function QueryPage() {
             </div>
           </header>
           <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4">
-            <YmPick label="从" years={yearOpts} y={fromY} m={fromM} onY={setFromY} onM={setFromM} />
+            <YmPick label="从" years={yearOpts} y={fromY} m={fromM} d={fromD} onY={setFromY} onM={setFromM} onD={setFromD} />
             <span className="pb-2 text-sm text-muted">到</span>
-            <YmPick label="到" years={yearOpts} y={toY} m={toM} onY={setToY} onM={setToM} />
+            <YmPick label="到" years={yearOpts} y={toY} m={toM} d={toD} onY={setToY} onM={setToM} onD={setToD} />
             <p className="w-full text-xs text-muted">
               当前查询：{rangeLabelText}
-              {swapped ? "（起止已自动对调）" : ""} · 共 {span.length} 个月
+              {swapped ? "（起止已自动对调）" : ""} · 共 {span.length} 个月 · {fromD}日 至 {toD}日
             </p>
           </div>
           <section className="rounded-xl border border-line bg-surface p-4">
