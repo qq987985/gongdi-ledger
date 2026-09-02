@@ -5,3 +5,12 @@ node/
 __grok/
 .output/
 node_modules/
+.reference/
+dist/
+.pnpm-store/
+.tanstack/
+.env*
+*.log
+.vscode/
+.idea/
+scripts/seed-test-data.mjs

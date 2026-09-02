@@ -1,0 +1,207 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-display: "DIN Alternate", "DIN", "Arial Black", system-ui, sans-serif;
+
+  --color-bg: #f4efe6;
+  --color-bg-elevated: #faf7f0;
+  --color-surface: #ffffff;
+  --color-ink: #1c1915;
+  --color-muted: #5c564c;
+  --color-subtle: #8c8378;
+  --color-line: #d7cfc2;
+  --color-line-strong: #bdb3a3;
+
+  --color-accent: #2f4f3e;
+  --color-accent-fg: #f4efe6;
+  --color-accent-soft: #e7eee9;
+
+  --color-ok: #2a7a43;
+  --color-warn: #a35a00;
+  --color-warn-bg: #fff2db;
+  --color-danger: #b02a2a;
+  --color-danger-bg: #ffe8e6;
+  --color-danger-fg: #f4efe6;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  .btn {
+    height: 2rem;
+    padding-inline: 0.625rem;
+  }
+  .btn-sm {
+    height: 1.75rem;
+    padding-inline: 0.5rem;
+  }
+  .btn-lg {
+    height: 2.25rem;
+    padding-inline: 0.75rem;
+  }
+  .btn-icon {
+    width: 2rem;
+    height: 2rem;
+    padding-inline: 0;
+  }
+  .btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .field-select {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-line);
+    background: var(--color-surface);
+    height: 2.5rem;
+    color: var(--color-ink);
+    padding-inline: 0.75rem;
+    font-size: 0.875rem;
+  }
+  .field-select:focus {
+    border-color: var(--color-accent);
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 20%, transparent);
+  }
+
+  .shadow-panel {
+    box-shadow: 0 1px 2px #1c19140f;
+  }
+
+  .min-w-ledger {
+    min-width: 56rem;
+  }
+
+  .wide-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+  }
+  .wide-scroll::-webkit-scrollbar {
+    height: 12px;
+  }
+  .wide-scroll::-webkit-scrollbar-track {
+    background: var(--color-bg-elevated);
+  }
+  .wide-scroll::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border-radius: 6px;
+  }
+
+  .wide-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: max-content;
+    min-width: 100%;
+  }
+  .wide-table th {
+    white-space: normal;
+    vertical-align: bottom;
+    line-height: 1.25;
+    position: relative;
+  }
+  .wide-table thead th {
+    text-align: center !important;
+  }
+  .wide-table .th-title {
+    white-space: nowrap;
+    color: var(--color-ink);
+    text-align: center;
+    font-weight: 600;
+  }
+  .wide-table .th-hint {
+    color: var(--color-subtle);
+    white-space: nowrap;
+    text-align: center;
+    margin-top: 2px;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.2;
+  }
+  .wide-table th::after {
+    content: "";
+    cursor: col-resize;
+    background: color-mix(in oklab, var(--color-line-strong) 70%, transparent);
+    border-radius: 3px;
+    width: 6px;
+    height: 60%;
+    position: absolute;
+    top: 20%;
+    right: 0;
+  }
+  .wide-table td {
+    white-space: nowrap;
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .no-print {
+    @media print {
+      display: none !important;
+    }
+  }
+}
+
+@media (width < 48rem) {
+  .btn {
+    height: 2.25rem;
+    padding-inline: 0.75rem;
+  }
+  .btn-sm {
+    height: 2rem;
+    padding-inline: 0.625rem;
+  }
+  .btn-lg {
+    height: 2.5rem;
+    padding-inline: 0.875rem;
+  }
+  .btn-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+  input,
+  select,
+  textarea,
+  .field-select {
+    font-size: 16px !important;
+  }
+  .field-select {
+    height: 2.75rem;
+  }
+  main {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  .wide-table th::after {
+    display: none;
+  }
+}
+
+@media (width < 40rem) {
+  .btn-row {
+    width: 100%;
+  }
+  .btn-row > button,
+  .btn-row > a,
+  .btn-row > label {
+    flex: 1 1 calc(50% - 0.25rem);
+  }
+}

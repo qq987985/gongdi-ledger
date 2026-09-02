@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.2.22**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.2.23**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -24,6 +24,10 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.2.23
+
+- 整理出可读源码目录 `src/`，按页面和模块分开，便于备份和交给别人改。飞牛仍运行 `app/`，台账 `data` 不动。
 
 ### 1.2.22
 
