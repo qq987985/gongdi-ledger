@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, X } from "lucide-react";
 import { toast } from "sonner";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
@@ -285,11 +285,25 @@ function QueryPage() {
               <h1 className="font-display text-2xl font-semibold">个人查询</h1>
               <p className="mt-1 text-sm text-muted">按月份区间查。查单月就把起止设成同一个月，例如 7月到7月。</p>
             </div>
-            <select className="field-select w-auto" value={name} onChange={(e) => setName(e.target.value)}>
-              {people.map((x) => (
-                <option key={x.id}>{x.name}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              <input
+                list="query-people-list"
+                className="field-select w-auto min-w-[8rem]"
+                value={name}
+                placeholder="输入或选择姓名"
+                onChange={(e) => setName(e.target.value)}
+              />
+              <datalist id="query-people-list">
+                {people.map((x) => (
+                  <option key={x.id} value={x.name} />
+                ))}
+              </datalist>
+              {name ? (
+                <Button variant="ghost" size="icon" className="size-9" type="button" onClick={() => setName("")} aria-label="清空">
+                  <X className="size-4" />
+                </Button>
+              ) : null}
+            </div>
           </header>
           <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4">
             <YmPick label="从" years={yearOpts} y={fromY} m={fromM} onY={setFromY} onM={setFromM} />

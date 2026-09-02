@@ -863,7 +863,7 @@ var $$splitComponentImporter$3 = () => import("./people-zKAuwPg2.js");
 const Route$9 = createFileRoute("/people")({ component: lazyRouteComponent($$splitComponentImporter$3, "component") });
 var $$splitComponentImporter$2 = () => import("./photos-BD-jD_-6.js");
 const Route$10 = createFileRoute("/photos")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
-var $$splitComponentImporter$1 = () => import("./query-DLqvHvyI.js");
+var $$splitComponentImporter$1 = () => import("./query-Z_E2H-N6.js");
 const Route$11 = createFileRoute("/query")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
 var $$splitComponentImporter = () => import("./settings-D8c5RivX.js");
 const Route$12 = createFileRoute("/settings")({ component: lazyRouteComponent($$splitComponentImporter, "component") });

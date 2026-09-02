@@ -5,6 +5,7 @@ import { S as wageLabel, b as monthPay, l as overAgeLabel, p as derivedYears, x 
 import "./excel-DljZk7Qw.js";
 import { t as useApp } from "./store-C5SZ1jtR.js";
 import "./nas-sync-YEjyDlzb.js";
+import { t as X } from "./x-CnbYULR9.js";
 import { a as Check, n as PhotoSlot } from "./photo-slot-Bnq64BEg.js";
 import { n as Copy } from "./download-sOIPPxKy.js";
 import { n as DocActions } from "./doc-actions-8VRIgUyF.js";
@@ -365,11 +366,30 @@ function QueryPage() {
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 							className: "mt-1 text-sm text-muted",
 							children: "按月份区间查。查单月就把起止设成同一个月，例如 7月到7月。"
-						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-							className: "field-select w-auto",
-							value: name,
-							onChange: (e) => setName(e.target.value),
-							children: people.map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { children: x.name }, x.id))
+						})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center gap-2",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									list: "query-people-list",
+									className: "field-select w-auto min-w-[8rem]",
+									value: name,
+									placeholder: "输入或选择姓名",
+									onChange: (e) => setName(e.target.value)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("datalist", {
+									id: "query-people-list",
+									children: people.map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: x.name }, x.id))
+								}),
+								name ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+									variant: "ghost",
+									size: "icon",
+									className: "size-9",
+									type: "button",
+									onClick: () => setName(""),
+									"aria-label": "清空",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "size-4" })
+								}) : null
+							]
 						})]
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
