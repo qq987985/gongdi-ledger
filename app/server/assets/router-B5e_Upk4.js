@@ -851,7 +851,7 @@ var $$splitComponentImporter$9 = () => import("./audit-CjdHZv-Q.js");
 const Route$3 = createFileRoute("/audit")({ component: lazyRouteComponent($$splitComponentImporter$9, "component") });
 var $$splitComponentImporter$8 = () => import("./contracts-CNx-1RSy.js");
 const Route$4 = createFileRoute("/contracts")({ component: lazyRouteComponent($$splitComponentImporter$8, "component") });
-var $$splitComponentImporter$7 = () => import("./expenses-CMAvdR0P.js");
+var $$splitComponentImporter$7 = () => import("./expenses-pxx4Q1uP.js");
 const Route$5 = createFileRoute("/expenses")({ component: lazyRouteComponent($$splitComponentImporter$7, "component") });
 var $$splitComponentImporter$6 = () => import("./files-DHMsuGrK.js");
 const Route$6 = createFileRoute("/files")({ component: lazyRouteComponent($$splitComponentImporter$6, "component") });

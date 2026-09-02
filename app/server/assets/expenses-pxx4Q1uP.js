@@ -490,7 +490,7 @@ function ExpensesPage() {
 					})]
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4",
+					className: "flex flex-wrap items-end gap-2",
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
 							className: "field-select w-auto",
@@ -543,6 +543,7 @@ function ExpensesPage() {
 						}),
 						selected.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
 							variant: "danger",
+							size: "sm",
 							type: "button",
 							onClick: () => del(selected),
 							children: [
@@ -551,7 +552,24 @@ function ExpensesPage() {
 								"）"
 							]
 						}) : null,
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "w-full" }),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "ml-auto text-sm text-muted",
+							children: [
+								shown.length,
+								" 笔 · 合计 ¥",
+								money(totals.amount),
+								" · 未报销 ¥",
+								money(totals.open),
+								" · 已报销 ¥",
+								money(totals.done),
+								totals.missing + totals.missPay ? ` · 缺凭证 ${totals.missing + totals.missPay}` : ""
+							]
+						})
+					]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex flex-wrap items-center gap-2",
+					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
 							className: "field-select w-auto",
 							value: printStatus,
@@ -573,6 +591,7 @@ function ExpensesPage() {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
 							variant: "outline",
+							size: "sm",
 							type: "button",
 							onClick: doPrint,
 							children: ["打印报销单", printRows.length ? `（${printRows.length}）` : ""]
@@ -585,19 +604,14 @@ function ExpensesPage() {
 								onChange: (e) => setPrintVoucher(e.target.checked)
 							}), "打印票据列"]
 						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-							className: "text-sm text-muted",
+						selected.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "text-xs text-muted",
 							children: [
-								shown.length,
-								" 笔 · 合计 ¥",
-								money(totals.amount),
-								" · 未报销 ¥",
-								money(totals.open),
-								" · 已报销 ¥",
-								money(totals.done),
-								totals.missing + totals.missPay ? ` · 缺凭证 ${totals.missing + totals.missPay}` : ""
+								"已勾选 ",
+								selected.length,
+								" 笔，打印时只用勾选的"
 							]
-						})
+						}) : null
 					]
 				}),
 				selected.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -785,7 +799,7 @@ function ExpensesPage() {
 								className: "border-b border-line text-xs text-muted",
 								children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "w-10 p-3",
+										className: "w-10 py-2 px-3",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 											type: "checkbox",
 											className: "size-4",
@@ -798,51 +812,51 @@ function ExpensesPage() {
 										})
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "操作"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "序号"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "项目"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "购买时间"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "金额"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "报销人"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "收款人"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "打款账户"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "状态"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "购买凭证"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "打款凭证"
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-										className: "p-3",
+										className: "py-2 px-3",
 										children: "备注"
 									})
 								] })
@@ -870,56 +884,65 @@ function ExpensesPage() {
 											})
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3",
+											className: "py-2 px-3",
 											onClick: (ev) => ev.stopPropagation(),
-											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-												variant: "outline",
-												size: "sm",
-												type: "button",
-												onClick: () => {
-													setCreating(false);
-													setEditing(e);
-												},
-												children: "编辑"
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex flex-wrap gap-1",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+													variant: "outline",
+													size: "sm",
+													type: "button",
+													onClick: () => {
+														setCreating(false);
+														setEditing(e);
+													},
+													children: "编辑"
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+													variant: "ghost",
+													size: "sm",
+													type: "button",
+													onClick: () => del([e.id]),
+													children: "删除"
+												})]
 											})
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3 tabular-nums text-muted",
+											className: "py-2 px-3 tabular-nums text-muted",
 											children: (pager.page - 1) * pager.size + i + 1
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3 font-medium",
+											className: "py-2 px-3 font-medium",
 											children: e.name
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3",
+											className: "py-2 px-3",
 											children: e.period || e.date
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3 text-right tabular-nums font-medium",
+											className: "py-2 px-3 text-right tabular-nums font-medium",
 											children: money(e.amount)
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3",
+											className: "py-2 px-3",
 											children: e.claimant || "—"
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3",
+											className: "py-2 px-3",
 											children: e.forWhom || "—"
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3 text-xs",
+											className: "max-w-48 truncate py-2 px-3 text-xs",
 											children: accountOf(e) || "—"
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3",
+											className: "py-2 px-3",
 											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Badge, {
 												tone: e.status === "已报销" ? "ok" : "warn",
 												children: e.status
 											})
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3 text-xs",
+											className: "py-2 px-3 text-xs",
 											onClick: (ev) => ev.stopPropagation(),
 											children: e.voucherFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(DocActions, {
 												id: e.voucherId || e.id,
@@ -931,7 +954,7 @@ function ExpensesPage() {
 											})
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "p-3 text-xs",
+											className: "py-2 px-3 text-xs",
 											onClick: (ev) => ev.stopPropagation(),
 											children: e.payoutFileName ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 												className: "flex flex-wrap items-center gap-1",
@@ -953,7 +976,7 @@ function ExpensesPage() {
 											}) : "—"
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-											className: "max-w-40 truncate p-3 text-muted",
+											className: "max-w-40 truncate py-2 px-3 text-muted",
 											children: e.remark
 										})
 									]
@@ -963,7 +986,7 @@ function ExpensesPage() {
 								className: "border-t-2 border-ink bg-bg-elevated text-sm font-medium",
 								children: [
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-										className: "p-3",
+										className: "py-2 px-3",
 										colSpan: 5,
 										children: [
 											"合计（",
@@ -972,11 +995,11 @@ function ExpensesPage() {
 										]
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-										className: "p-3 text-right tabular-nums",
+										className: "py-2 px-3 text-right tabular-nums",
 										children: money(totals.amount)
 									}),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-										className: "p-3 text-xs font-normal text-muted",
+										className: "py-2 px-3 text-xs font-normal text-muted",
 										colSpan: 7,
 										children: [
 											"未报销 ¥",

@@ -1,7 +1,7 @@
-1.2.29
+1.2.30
 
-[1.2.29] 2026-09-02
-docker-compose.yml 默认使用国内加速镜像 ghcr.1ms.run，新增 docker-compose.ghcr.yml 给需要 GitHub 官方源的用户。一键拉取脚本兼容 docker-compose.github.yml / docker-compose.yml。
+[1.2.30] 2026-09-02
+继续优化报销单列表：去掉筛选/打印区的外框卡片，改成和人员、发放记录一样的简洁工具栏；表格行高压缩，单元格改为 py-2 px-3；每行增加删除按钮；打款账户列过长时截断。
 
 [1.2.25] 2026-09-02
 修复软件内「检查更新/更新」时空请求体导致 invalid JSON 报错，升级 POST 请求改为发送空 JSON body。

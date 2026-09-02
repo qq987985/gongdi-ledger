@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.2.29**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.2.30**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -25,9 +25,17 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
 
+### 1.2.30
+
+- 继续优化「报销单」列表页：
+  - 去掉筛选/打印/摘要区的外框卡片，改成和「人员」「发放记录」一样的简洁工具栏，视觉上不再臃肿。
+  - 表格行高压缩，表头、单元格内边距统一为 `py-2 px-3`，行距更紧凑。
+  - 每行操作列增加「删除」按钮，和人员、发放记录统一。
+  - 「打款账户」列过长时自动截断，避免列被撑得过宽。
+
 ### 1.2.29
 
-- `docker-compose.yml` 默认镜像改为国内加速 `ghcr.1ms.run/qq987985/gongdi-ledger:latest`。
+- `docker-compose.yml` 默认镜像改为国内加速 `ghcr.1ms.run/qq987985/gongdi-ledger:latest`。`
 - 新增 `docker-compose.ghcr.yml`，给需要 GitHub 官方源 `ghcr.io/...` 的用户。
 - `docker-compose.github.yml` 保留，和 `docker-compose.yml` 内容一致，保证老脚本兼容。
 - 更新 README 对几个 compose 文件的说明。
@@ -242,7 +250,7 @@ chmod +x 一键部署.sh 一键拉取.sh 初始化目录.sh
 ./一键部署.sh
 ```
 
-打开 `http://NAS的IP:8501`，左下角应显示 **1.2.29**。
+打开 `http://NAS的IP:8501`，左下角应显示 **1.2.30**。
 
 拉 GitHub 镜像（Actions 全绿，并且 Packages 里 `gongdi-ledger` 已设 Public）：
 
@@ -264,7 +272,7 @@ compose 文件对照：
 
 compose **只挂 data**，不要再挂 `VERSION.txt`。国内网络建议直接用 `docker-compose.yml`。已经启动过旧容器的，用 `./一键拉取.sh` 即可，数据不会动。
 
-本机构建镜像名：`gongdi-ledger:1.2.29`，端口 `8501:8080`。
+本机构建镜像名：`gongdi-ledger:1.2.30`，端口 `8501:8080`。
 
 ---
 

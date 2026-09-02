@@ -496,7 +496,7 @@ function ExpensesPage() {
               </Button>
             </div>
           </header>
-          <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4">
+          <div className="flex flex-wrap items-end gap-2">
             <select className="field-select w-auto" value={scope} onChange={(e) => setScope(e.target.value)}>
               <option value="year">{year}年</option>
               <option value="all">全部年份</option>
@@ -516,27 +516,29 @@ function ExpensesPage() {
             </select>
             <Input className="max-w-xs" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索项目 / 报销人 / 收款人 / 账户" />
             {selected.length ? (
-              <Button variant="danger" type="button" onClick={() => del(selected)}>
+              <Button variant="danger" size="sm" type="button" onClick={() => del(selected)}>
                 删除所选（{selected.length}）
               </Button>
             ) : null}
-            <div className="w-full" />
+            <span className="ml-auto text-sm text-muted">
+              {shown.length} 笔 · 合计 ¥{money(totals.amount)} · 未报销 ¥{money(totals.open)} · 已报销 ¥{money(totals.done)}
+              {totals.missing + totals.missPay ? ` · 缺凭证 ${totals.missing + totals.missPay}` : ""}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <select className="field-select w-auto" value={printStatus} onChange={(e) => setPrintStatus(e.target.value)}>
               <option value="未报销">打印未报销</option>
               <option value="已报销">打印已报销</option>
               <option value="all">打印全部</option>
             </select>
-            <Button variant="outline" type="button" onClick={doPrint}>
+            <Button variant="outline" size="sm" type="button" onClick={doPrint}>
               打印报销单{printRows.length ? `（${printRows.length}）` : ""}
             </Button>
             <label className="inline-flex items-center gap-2 text-sm">
               <input type="checkbox" checked={printVoucher} onChange={(e) => setPrintVoucher(e.target.checked)} />
               打印票据列
             </label>
-            <span className="text-sm text-muted">
-              {shown.length} 笔 · 合计 ¥{money(totals.amount)} · 未报销 ¥{money(totals.open)} · 已报销 ¥{money(totals.done)}
-              {totals.missing + totals.missPay ? ` · 缺凭证 ${totals.missing + totals.missPay}` : ""}
-            </span>
+            {selected.length ? <span className="text-xs text-muted">已勾选 {selected.length} 笔，打印时只用勾选的</span> : null}
           </div>
           {selected.length ? (
             <div className="rounded-xl border border-line bg-surface p-4">
@@ -658,7 +660,7 @@ function ExpensesPage() {
             <table className="wide-table text-sm">
               <thead className="border-b border-line text-xs text-muted">
                 <tr>
-                  <th className="w-10 p-3">
+                  <th className="w-10 py-2 px-3">
                     <input
                       type="checkbox"
                       className="size-4"
@@ -670,18 +672,18 @@ function ExpensesPage() {
                       aria-label="全选报销"
                     />
                   </th>
-                  <th className="p-3">操作</th>
-                  <th className="p-3">序号</th>
-                  <th className="p-3">项目</th>
-                  <th className="p-3">购买时间</th>
-                  <th className="p-3">金额</th>
-                  <th className="p-3">报销人</th>
-                  <th className="p-3">收款人</th>
-                  <th className="p-3">打款账户</th>
-                  <th className="p-3">状态</th>
-                  <th className="p-3">购买凭证</th>
-                  <th className="p-3">打款凭证</th>
-                  <th className="p-3">备注</th>
+                  <th className="py-2 px-3">操作</th>
+                  <th className="py-2 px-3">序号</th>
+                  <th className="py-2 px-3">项目</th>
+                  <th className="py-2 px-3">购买时间</th>
+                  <th className="py-2 px-3">金额</th>
+                  <th className="py-2 px-3">报销人</th>
+                  <th className="py-2 px-3">收款人</th>
+                  <th className="py-2 px-3">打款账户</th>
+                  <th className="py-2 px-3">状态</th>
+                  <th className="py-2 px-3">购买凭证</th>
+                  <th className="py-2 px-3">打款凭证</th>
+                  <th className="py-2 px-3">备注</th>
                 </tr>
               </thead>
               <tbody>
@@ -710,30 +712,35 @@ function ExpensesPage() {
                           aria-label={`选择 ${e.name}`}
                         />
                       </td>
-                      <td className="p-3" onClick={(ev) => ev.stopPropagation()}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          type="button"
-                          onClick={() => {
-                            setCreating(false);
-                            setEditing(e);
-                          }}
-                        >
-                          编辑
-                        </Button>
+                      <td className="py-2 px-3" onClick={(ev) => ev.stopPropagation()}>
+                        <div className="flex flex-wrap gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            onClick={() => {
+                              setCreating(false);
+                              setEditing(e);
+                            }}
+                          >
+                            编辑
+                          </Button>
+                          <Button variant="ghost" size="sm" type="button" onClick={() => del([e.id])}>
+                            删除
+                          </Button>
+                        </div>
                       </td>
-                      <td className="p-3 tabular-nums text-muted">{(pager.page - 1) * pager.size + i + 1}</td>
-                      <td className="p-3 font-medium">{e.name}</td>
-                      <td className="p-3">{e.period || e.date}</td>
-                      <td className="p-3 text-right tabular-nums font-medium">{money(e.amount)}</td>
-                      <td className="p-3">{e.claimant || "—"}</td>
-                      <td className="p-3">{e.forWhom || "—"}</td>
-                      <td className="p-3 text-xs">{accountOf(e) || "—"}</td>
-                      <td className="p-3">
+                      <td className="py-2 px-3 tabular-nums text-muted">{(pager.page - 1) * pager.size + i + 1}</td>
+                      <td className="py-2 px-3 font-medium">{e.name}</td>
+                      <td className="py-2 px-3">{e.period || e.date}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-medium">{money(e.amount)}</td>
+                      <td className="py-2 px-3">{e.claimant || "—"}</td>
+                      <td className="py-2 px-3">{e.forWhom || "—"}</td>
+                      <td className="max-w-48 truncate py-2 px-3 text-xs">{accountOf(e) || "—"}</td>
+                      <td className="py-2 px-3">
                         <Badge tone={e.status === "已报销" ? "ok" : "warn"}>{e.status}</Badge>
                       </td>
-                      <td className="p-3 text-xs" onClick={(ev) => ev.stopPropagation()}>
+                      <td className="py-2 px-3 text-xs" onClick={(ev) => ev.stopPropagation()}>
                         {e.voucherFileName ? (
                           <DocActions id={e.voucherId || e.id} kind="expense" fileName={e.voucherFileName} />
                         ) : e.payMethod === "现金" ? (
@@ -742,7 +749,7 @@ function ExpensesPage() {
                           <span className="text-warn">缺</span>
                         )}
                       </td>
-                      <td className="p-3 text-xs" onClick={(ev) => ev.stopPropagation()}>
+                      <td className="py-2 px-3 text-xs" onClick={(ev) => ev.stopPropagation()}>
                         {e.payoutFileName ? (
                           <div className="flex flex-wrap items-center gap-1">
                             <DocActions id={e.payoutId || e.id} kind="payout" fileName={e.payoutFileName} />
@@ -754,7 +761,7 @@ function ExpensesPage() {
                           "—"
                         )}
                       </td>
-                      <td className="max-w-40 truncate p-3 text-muted">{e.remark}</td>
+                      <td className="max-w-40 truncate py-2 px-3 text-muted">{e.remark}</td>
                     </tr>
                   );
                 })}
@@ -762,11 +769,11 @@ function ExpensesPage() {
               {shown.length ? (
                 <tfoot>
                   <tr className="border-t-2 border-ink bg-bg-elevated text-sm font-medium">
-                    <td className="p-3" colSpan={5}>
+                    <td className="py-2 px-3" colSpan={5}>
                       合计（{sumTip}）
                     </td>
-                    <td className="p-3 text-right tabular-nums">{money(totals.amount)}</td>
-                    <td className="p-3 text-xs font-normal text-muted" colSpan={7}>
+                    <td className="py-2 px-3 text-right tabular-nums">{money(totals.amount)}</td>
+                    <td className="py-2 px-3 text-xs font-normal text-muted" colSpan={7}>
                       未报销 ¥{money(totals.open)}　已报销 ¥{money(totals.done)}
                     </td>
                   </tr>
