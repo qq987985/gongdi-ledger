@@ -245,7 +245,7 @@ function ExpensesPage() {
   const [editing, setEditing] = React.useState<any | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [printStatus, setPrintStatus] = React.useState("未报销");
-  const [printVoucher, setPrintVoucher] = React.useState(true);
+  const [printVoucher, setPrintVoucher] = React.useState(false);
   const [batch, setBatch] = React.useState<any>({
     claimant: "",
     forWhom: "",

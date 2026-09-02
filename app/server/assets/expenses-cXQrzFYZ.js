@@ -232,7 +232,7 @@ function ExpensesPage() {
 	const [editing, setEditing] = import_react.useState(null);
 	const [creating, setCreating] = import_react.useState(false);
 	const [printStatus, setPrintStatus] = import_react.useState("未报销");
-	const [printVoucher, setPrintVoucher] = import_react.useState(true);
+	const [printVoucher, setPrintVoucher] = import_react.useState(false);
 	const [batch, setBatch] = import_react.useState({
 		claimant: "",
 		forWhom: "",
