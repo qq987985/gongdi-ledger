@@ -476,7 +476,7 @@ function ExpensesPage() {
             <div>
               <h1 className="font-display text-2xl font-semibold">报销单</h1>
               <p className="mt-1 max-w-2xl text-sm text-muted">
-                每笔记下报销人、收款人、开户行和打款账户。几笔一起报就勾选后填打款，共用一张打款凭证。收款人填过一次下次能选，不跟人员名单挂钩。
+                点「编辑」编辑。点一行勾选。勾几笔可一起报销、记打款。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -497,86 +497,89 @@ function ExpensesPage() {
             </div>
           </header>
           <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4">
-            <label className="text-sm">
-              <span className="text-xs text-muted">年份</span>
-              <select className="field-select mt-1 w-auto" value={scope} onChange={(e) => setScope(e.target.value)}>
-                <option value="year">{year}年</option>
-                <option value="all">全部年份</option>
-              </select>
-            </label>
-            <label className="text-sm">
-              <span className="text-xs text-muted">状态</span>
-              <select className="field-select mt-1 w-auto" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="all">全部</option>
-                <option value="未报销">未报销</option>
-                <option value="已报销">已报销</option>
-              </select>
-            </label>
-            <label className="text-sm">
-              <span className="text-xs text-muted">报销人</span>
-              <select className="field-select mt-1 w-auto" value={claimant} onChange={(e) => setClaimant(e.target.value)}>
-                <option value="all">全部</option>
-                {claimantOpts.map((n) => (
-                  <option value={n} key={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="min-w-48 flex-1 text-sm">
-              <span className="text-xs text-muted">搜索</span>
-              <Input className="mt-1" value={q} onChange={(e) => setQ(e.target.value)} placeholder="项目 / 报销人 / 收款人 / 开户行 / 打款账户 / 凭证" />
-            </label>
+            <select className="field-select w-auto" value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="year">{year}年</option>
+              <option value="all">全部年份</option>
+            </select>
+            <select className="field-select w-auto" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="all">全部状态</option>
+              <option value="未报销">未报销</option>
+              <option value="已报销">已报销</option>
+            </select>
+            <select className="field-select w-auto" value={claimant} onChange={(e) => setClaimant(e.target.value)}>
+              <option value="all">全部报销人</option>
+              {claimantOpts.map((n) => (
+                <option value={n} key={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <Input className="max-w-xs" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索项目 / 报销人 / 收款人 / 账户" />
             {selected.length ? (
               <Button variant="danger" type="button" onClick={() => del(selected)}>
                 删除所选（{selected.length}）
               </Button>
             ) : null}
+            <div className="w-full" />
+            <select className="field-select w-auto" value={printStatus} onChange={(e) => setPrintStatus(e.target.value)}>
+              <option value="未报销">打印未报销</option>
+              <option value="已报销">打印已报销</option>
+              <option value="all">打印全部</option>
+            </select>
+            <Button variant="outline" type="button" onClick={doPrint}>
+              打印报销单{printRows.length ? `（${printRows.length}）` : ""}
+            </Button>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={printVoucher} onChange={(e) => setPrintVoucher(e.target.checked)} />
+              打印票据列
+            </label>
+            <span className="text-sm text-muted">
+              {shown.length} 笔 · 合计 ¥{money(totals.amount)} · 未报销 ¥{money(totals.open)} · 已报销 ¥{money(totals.done)}
+              {totals.missing + totals.missPay ? ` · 缺凭证 ${totals.missing + totals.missPay}` : ""}
+            </span>
           </div>
           {selected.length ? (
-            <div className="space-y-3 rounded-xl border-2 border-dashed border-accent bg-accent-soft p-4">
+            <div className="rounded-xl border border-line bg-surface p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <div className="text-sm font-semibold">这几笔一起报销</div>
-                  <p className="mt-0.5 text-xs text-muted">
-                    已勾 {batchRows.length} 笔，合计 ¥{money(batchTotal)}。同一报销人、打到同一个账户，共用一张打款凭证。
-                  </p>
+                  <div className="text-sm font-semibold">已勾选 {batchRows.length} 笔 · 合计 ¥{money(batchTotal)}</div>
+                  <p className="text-xs text-muted">同一报销人、打到同一个账户，可共用一张打款凭证。</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" type="button" onClick={() => applyBatch(false)}>
+                  <Button variant="outline" size="sm" type="button" onClick={() => applyBatch(false)}>
                     挂账
                   </Button>
                   {anyHung ? (
-                    <Button variant="outline" type="button" onClick={unhangBatch}>
+                    <Button variant="outline" size="sm" type="button" onClick={unhangBatch}>
                       取消挂账
                     </Button>
                   ) : null}
-                  <Button type="button" onClick={() => applyBatch(true)}>
+                  <Button size="sm" type="button" onClick={() => applyBatch(true)}>
                     记为已报销
                   </Button>
                   {anyDone ? (
-                    <Button variant="outline" type="button" onClick={markOpen}>
+                    <Button variant="outline" size="sm" type="button" onClick={markOpen}>
                       标为未报销
                     </Button>
                   ) : null}
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <Field label="报销人 *（谁来报）">
+              <div className="mt-3 grid gap-3 md:grid-cols-4">
+                <Field label="报销人 *">
                   <NameInput
                     value={batch.claimant}
                     names={names}
                     listId="exp-claimant"
-                    placeholder="人员名单里选，也可手填"
+                    placeholder="选或填"
                     onChange={(v) => setBatch((b: any) => ({ ...b, claimant: v }))}
                   />
                 </Field>
-                <Field label="收款人 *（打到谁的账户）">
+                <Field label="收款人 *">
                   <NameInput
                     value={batch.forWhom}
                     names={payees.map((p) => p.name)}
                     listId="exp-payee"
-                    placeholder="填过的可下拉选，不跟人员名单关联"
+                    placeholder="填过可下拉"
                     onChange={(v) => setBatch((b: any) => applyPayee(b, payees, v))}
                   />
                 </Field>
@@ -594,11 +597,11 @@ function ExpensesPage() {
                     value={batch.payCardNo}
                     names={[...new Set(payees.map((p) => p.card).filter(Boolean))]}
                     listId="exp-card"
-                    placeholder="银行卡号，填过可下拉选"
+                    placeholder="银行卡号"
                     onChange={(v) => setBatch((b: any) => ({ ...b, payCardNo: v, payAccount: formatPayAccount(b.payBank, v) }))}
                   />
                 </Field>
-                <Field label="打款日期（记为已报销后填）">
+                <Field label="打款日期">
                   <Input type="date" value={batch.payoutDate} onChange={(e) => setBatch((b: any) => ({ ...b, payoutDate: e.target.value }))} />
                 </Field>
                 <Field label="打款方式">
@@ -608,9 +611,11 @@ function ExpensesPage() {
                     ))}
                   </select>
                 </Field>
-                <div className="rounded-lg border border-line bg-surface p-3 text-sm">
-                  <div className="text-xs text-muted">这批合计</div>
-                  <div className="font-display text-lg font-semibold tabular-nums">¥{money(batchTotal)}</div>
+                <div className="flex items-end rounded-lg border border-line bg-bg-elevated p-3 text-sm">
+                  <div>
+                    <div className="text-xs text-muted">这批合计</div>
+                    <div className="font-display text-lg font-semibold tabular-nums">¥{money(batchTotal)}</div>
+                  </div>
                 </div>
               </div>
               <VoucherSlot
@@ -628,32 +633,6 @@ function ExpensesPage() {
               />
             </div>
           ) : null}
-          <div className="flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-accent bg-accent-soft p-4">
-            <label className="text-sm">
-              <span className="text-xs text-muted">打印哪些</span>
-              <select className="field-select mt-1 w-auto" value={printStatus} onChange={(e) => setPrintStatus(e.target.value)}>
-                <option value="未报销">未报销</option>
-                <option value="已报销">已报销</option>
-                <option value="all">全部状态</option>
-              </select>
-            </label>
-            <Button variant="outline" type="button" onClick={doPrint}>
-              打印报销单{printRows.length ? `（${printRows.length}）` : ""}
-            </Button>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={printVoucher} onChange={(e) => setPrintVoucher(e.target.checked)} />
-              打印票据列
-            </label>
-            <p className="w-full text-xs text-muted">
-              {selected.length ? `已勾选 ${selected.length} 笔，打印时只用勾选的。` : "没勾选就打印当前列表里符合条件的。"}
-            </p>
-          </div>
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Mini label={picked.length ? "已选合计" : "本表合计"} hint={sumTip} value={totals.amount} />
-            <Mini label="未报销" value={totals.open} />
-            <Mini label="已报销" value={totals.done} />
-            <Mini label="缺凭证" hint="购买或缺打款" value={totals.missing + totals.missPay} />
-          </section>
           {editing ? (
             <ExpenseEditor
               draft={editing}
@@ -731,7 +710,7 @@ function ExpensesPage() {
                           aria-label={`选择 ${e.name}`}
                         />
                       </td>
-                      <td className="p-2" onClick={(ev) => ev.stopPropagation()}>
+                      <td className="p-3" onClick={(ev) => ev.stopPropagation()}>
                         <Button
                           variant="outline"
                           size="sm"
@@ -744,17 +723,17 @@ function ExpensesPage() {
                           编辑
                         </Button>
                       </td>
-                      <td className="p-2 tabular-nums text-muted">{(pager.page - 1) * pager.size + i + 1}</td>
-                      <td className="p-2 font-medium">{e.name}</td>
-                      <td className="p-2">{e.period || e.date}</td>
-                      <td className="p-2 text-right tabular-nums font-medium">{money(e.amount)}</td>
-                      <td className="p-2">{e.claimant || "—"}</td>
-                      <td className="p-2">{e.forWhom || "—"}</td>
-                      <td className="p-2 text-xs">{accountOf(e) || "—"}</td>
-                      <td className="p-2">
+                      <td className="p-3 tabular-nums text-muted">{(pager.page - 1) * pager.size + i + 1}</td>
+                      <td className="p-3 font-medium">{e.name}</td>
+                      <td className="p-3">{e.period || e.date}</td>
+                      <td className="p-3 text-right tabular-nums font-medium">{money(e.amount)}</td>
+                      <td className="p-3">{e.claimant || "—"}</td>
+                      <td className="p-3">{e.forWhom || "—"}</td>
+                      <td className="p-3 text-xs">{accountOf(e) || "—"}</td>
+                      <td className="p-3">
                         <Badge tone={e.status === "已报销" ? "ok" : "warn"}>{e.status}</Badge>
                       </td>
-                      <td className="p-2 text-xs" onClick={(ev) => ev.stopPropagation()}>
+                      <td className="p-3 text-xs" onClick={(ev) => ev.stopPropagation()}>
                         {e.voucherFileName ? (
                           <DocActions id={e.voucherId || e.id} kind="expense" fileName={e.voucherFileName} />
                         ) : e.payMethod === "现金" ? (
@@ -763,7 +742,7 @@ function ExpensesPage() {
                           <span className="text-warn">缺</span>
                         )}
                       </td>
-                      <td className="p-2 text-xs" onClick={(ev) => ev.stopPropagation()}>
+                      <td className="p-3 text-xs" onClick={(ev) => ev.stopPropagation()}>
                         {e.payoutFileName ? (
                           <div className="flex flex-wrap items-center gap-1">
                             <DocActions id={e.payoutId || e.id} kind="payout" fileName={e.payoutFileName} />
@@ -775,7 +754,7 @@ function ExpensesPage() {
                           "—"
                         )}
                       </td>
-                      <td className="max-w-40 truncate p-2 text-muted">{e.remark}</td>
+                      <td className="max-w-40 truncate p-3 text-muted">{e.remark}</td>
                     </tr>
                   );
                 })}
@@ -783,11 +762,11 @@ function ExpensesPage() {
               {shown.length ? (
                 <tfoot>
                   <tr className="border-t-2 border-ink bg-bg-elevated text-sm font-medium">
-                    <td className="p-2" colSpan={5}>
+                    <td className="p-3" colSpan={5}>
                       合计（{sumTip}）
                     </td>
-                    <td className="p-2 text-right tabular-nums">{money(totals.amount)}</td>
-                    <td className="p-2 text-xs font-normal text-muted" colSpan={7}>
+                    <td className="p-3 text-right tabular-nums">{money(totals.amount)}</td>
+                    <td className="p-3 text-xs font-normal text-muted" colSpan={7}>
                       未报销 ¥{money(totals.open)}　已报销 ¥{money(totals.done)}
                     </td>
                   </tr>
