@@ -1,10 +1,9 @@
-# 国内环境默认用此文件，镜像走 ghcr.1ms.run 加速。
-# 如需 GitHub 官方源，用 docker-compose.ghcr.yml。
+# GitHub 官方镜像源。国内网络可能拉不动，建议用 docker-compose.yml（ghcr.1ms.run 加速）。
 # 只挂 data，不要挂 VERSION.txt。
 # docker.sock 给软件里「检查更新 / 更新」用，台账仍只在 data。
 services:
   attendance:
-    image: ghcr.1ms.run/qq987985/gongdi-ledger:latest
+    image: ghcr.io/qq987985/gongdi-ledger:latest
     container_name: attendance-app
     restart: unless-stopped
     ports:
@@ -22,4 +21,4 @@ services:
       NITRO_PORT: "8080"
       HOST: 0.0.0.0
       PORT: "8080"
-      GONGDI_IMAGE: ghcr.1ms.run/qq987985/gongdi-ledger:latest
+      GONGDI_IMAGE: ghcr.io/qq987985/gongdi-ledger:latest

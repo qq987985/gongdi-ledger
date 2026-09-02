@@ -1,7 +1,7 @@
-1.2.28
+1.2.29
 
-[1.2.28] 2026-09-02
-软件内一键更新拉镜像时，Docker API 同时尝试 fromImage+tag 和完整 repo:tag 两种调用方式，并把失败原因返回给前端，解决部分镜像源报 invalid JSON 的问题。
+[1.2.29] 2026-09-02
+docker-compose.yml 默认使用国内加速镜像 ghcr.1ms.run，新增 docker-compose.ghcr.yml 给需要 GitHub 官方源的用户。一键拉取脚本兼容 docker-compose.github.yml / docker-compose.yml。
 
 [1.2.25] 2026-09-02
 修复软件内「检查更新/更新」时空请求体导致 invalid JSON 报错，升级 POST 请求改为发送空 JSON body。
