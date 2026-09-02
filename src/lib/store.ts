@@ -30,8 +30,6 @@ function person(partial: Partial<Person> & { name: string }): Person {
     name: partial.name,
     team: partial.team || "",
     personNo: partial.personNo || "",
-    batchNo: partial.batchNo || "",
-    cardType: partial.cardType || "",
     idCard: partial.idCard || "",
     gender: parsed.gender || partial.gender || "",
     age: parsed.age,
@@ -48,11 +46,6 @@ function person(partial: Partial<Person> & { name: string }): Person {
     idValidFrom: normalizeIdDate(partial.idValidFrom),
     idValidTo: normalizeIdDate(partial.idValidTo, true),
     remark: partial.remark || "示例人员，可删",
-    nation: partial.nation || "",
-    nativePlace: partial.nativePlace || "",
-    livePlace: partial.livePlace || "",
-    icValidFrom: partial.icValidFrom || "",
-    icValidTo: partial.icValidTo || "",
   };
 }
 

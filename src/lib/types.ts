@@ -7,8 +7,6 @@ export interface Person {
   name: string;
   team: string;
   personNo: string;
-  batchNo: string;
-  cardType: string;
   idCard: string;
   gender: string;
   age: number | null;
@@ -25,11 +23,6 @@ export interface Person {
   idValidFrom: string;
   idValidTo: string;
   remark: string;
-  nation: string;
-  nativePlace: string;
-  livePlace: string;
-  icValidFrom: string;
-  icValidTo: string;
 }
 
 export interface AttendanceRow {

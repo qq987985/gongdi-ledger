@@ -700,14 +700,6 @@ function AcctLogin({ onOk }: { onOk: () => void }) {
   );
 }
 
-function PreviewHostBridge() {
-  return null;
-}
-
-function AuthProvider({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
-}
-
 export function AppShell() {
   useHydrateStore();
   const pathname = useRouterState({ select: (s) => s.location.pathname });

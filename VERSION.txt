@@ -1,7 +1,7 @@
-1.2.38
+1.2.39
 
-[1.2.38] 2026-09-02
-统一操作习惯（续）：合同管理列表去掉「删除」按钮，删除功能移到编辑弹窗内。人员编辑弹窗增加「删除」按钮。现在所有页面（人员、发放、报销、合同）操作逻辑完全一致。
+[1.2.39] 2026-09-02
+代码清理：删除人员类型中未使用的字段（batchNo、cardType、nation、nativePlace、livePlace、icValidFrom、icValidTo），这些字段在编辑器中从未显示。删除 shell.tsx 中未使用的空占位组件（PreviewHostBridge、AuthProvider）。
 
 [1.2.25] 2026-09-02
 修复软件内「检查更新/更新」时空请求体导致 invalid JSON 报错，升级 POST 请求改为发送空 JSON body。

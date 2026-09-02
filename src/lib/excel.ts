@@ -131,8 +131,6 @@ export function rowToPerson(row: Row): Person | null {
     name,
     team: pick(row, ["班组", "team"]),
     personNo: pick(row, ["IC卡号", "IC卡", "人员编号", "personNo"]),
-    batchNo: pick(row, ["批单号", "batchNo"]),
-    cardType: pick(row, ["卡类别", "cardType"]),
     idCard,
     gender: parsed.gender || pick(row, ["性别"]),
     age: parsed.age,
@@ -152,11 +150,6 @@ export function rowToPerson(row: Row): Person | null {
       true,
     ),
     remark: pick(row, ["备注"]),
-    nation: pick(row, ["民族"]),
-    nativePlace: pick(row, ["籍贯"]),
-    livePlace: pick(row, ["实际居住地"]),
-    icValidFrom: pick(row, ["有效期起始日期"]),
-    icValidTo: pick(row, ["有效期截止日期", "ic卡有效期"]),
   };
 }
 
@@ -252,19 +245,19 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
 
 export const DEMO_PEOPLE: unknown[][] = [
   [
-    "姓名", "班组", "IC卡号", "批单号", "身份证号", "身份证签发机关", "身份证有效期开始",
+    "姓名", "班组", "IC卡号", "身份证号", "身份证签发机关", "身份证有效期开始",
     "身份证有效期结束", "联系电话", "计薪方式", "日工资", "月工资", "加班规则", "开户行",
-    "银行卡号", "户籍地址", "民族", "籍贯", "实际居住地", "备注",
+    "银行卡号", "户籍地址", "备注",
   ],
   [
-    "张三", "一班", "DEMO001", "", "110101199001011210", "北京市公安局东城分局", "2020-01-01",
+    "张三", "一班", "DEMO001", "110101199001011210", "北京市公安局东城分局", "2020-01-01",
     "2040-01-01", "13800001234", "按工天", "280", "", "按小时:25", "中国工商银行北京分行",
-    "6222021234567890123", "北京市东城区示例路1号", "汉", "北京", "", "示例数据，导入前请改成自己的人",
+    "6222021234567890123", "北京市东城区示例路1号", "示例数据，导入前请改成自己的人",
   ],
   [
-    "李四", "二班", "DEMO002", "", "320106198506154512", "上海市公安局浦东分局", "2018-06-15",
+    "李四", "二班", "DEMO002", "320106198506154512", "上海市公安局浦东分局", "2018-06-15",
     "长期", "13900005678", "按工天", "260", "", "折算:8", "中国农业银行上海分行",
-    "6228481234567890123", "上海市浦东新区示例路8号", "汉", "上海", "", "示例数据，导入前请改成自己的人",
+    "6228481234567890123", "上海市浦东新区示例路8号", "示例数据，导入前请改成自己的人",
   ],
 ];
 
@@ -440,18 +433,18 @@ function peopleSheetAoa(people: Person[]): unknown[][] {
   const peopleAoa: unknown[][] = [
     ["人员信息表"],
     [
-      "序号", "姓名", "班组", "IC卡号", "批单号", "联系电话", "计薪方式", "日工资", "月工资",
+      "序号", "姓名", "班组", "IC卡号", "联系电话", "计薪方式", "日工资", "月工资",
       "加班规则", "性别", "年龄", "生日", "身份证号", "身份证签发机关", "身份证有效期开始",
-      "身份证有效期结束", "开户行", "银行卡号", "户籍地址", "民族", "籍贯", "实际居住地", "备注",
+      "身份证有效期结束", "开户行", "银行卡号", "户籍地址", "备注",
     ],
   ];
   people.forEach((p, i) => {
     peopleAoa.push([
-      i + 1, p.name, p.team, p.personNo || "", p.batchNo || "", p.phone || "",
+      i + 1, p.name, p.team, p.personNo || "", p.phone || "",
       p.payType === "month" ? "按月" : "按工天", p.dailyWage || "", p.monthWage || "",
       p.otRule || "", p.gender || "", p.age ?? "", p.birthday || "", p.idCard || "",
       p.idIssuer || "", p.idValidFrom || "", p.idValidTo || "", p.bank || "", p.cardNo || "",
-      p.address || "", p.nation || "", p.nativePlace || "", p.livePlace || "", p.remark || "",
+      p.address || "", p.remark || "",
     ]);
   });
   return peopleAoa;

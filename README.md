@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.2.38**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.2.39**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -24,6 +24,11 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.2.39
+
+- 代码清理：删除人员类型中未使用的字段（batchNo、cardType、nation、nativePlace、livePlace、icValidFrom、icValidTo），这些字段在编辑器中从未显示。
+- 删除 shell.tsx 中未使用的空占位组件（PreviewHostBridge、AuthProvider）。
 
 ### 1.2.38
 

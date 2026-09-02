@@ -25,8 +25,6 @@ function emptyPerson(): Person {
     name: "",
     team: "",
     personNo: "",
-    batchNo: "",
-    cardType: "",
     idCard: "",
     gender: "",
     age: null,
@@ -43,11 +41,6 @@ function emptyPerson(): Person {
     idValidFrom: "",
     idValidTo: "",
     remark: "",
-    nation: "",
-    nativePlace: "",
-    livePlace: "",
-    icValidFrom: "",
-    icValidTo: "",
   };
 }
 
