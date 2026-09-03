@@ -12,6 +12,10 @@ import handler from "./server.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = resolve(join(here, "..", "public"));
 
+console.log("[debug] here:", here);
+console.log("[debug] publicDir:", publicDir);
+console.log("[debug] DATA_DIR:", process.env.DATA_DIR);
+
 // 默认数据目录在 app 同级的 data/；可通过环境变量 DATA_DIR 覆盖
 process.env.DATA_DIR ??= join(here, "..", "..", "data");
 
@@ -103,8 +107,13 @@ async function serveStatic(req) {
 }
 
 async function nodeFetch(req) {
+  console.log("[debug] nodeFetch:", req.url);
   const staticRes = await serveStatic(req);
-  if (staticRes) return staticRes;
+  if (staticRes) {
+    console.log("[debug] static file served");
+    return staticRes;
+  }
+  console.log("[debug] calling server.js handler");
   return fetch(req);
 }
 
@@ -146,6 +155,7 @@ const server = createServer(async (req, res) => {
     res.end();
   } catch (e) {
     console.error("[server error]", e);
+    console.error(e.stack);
     if (!res.headersSent) {
       res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
       res.end("Internal Server Error");
