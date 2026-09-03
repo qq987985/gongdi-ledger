@@ -7,8 +7,9 @@ import { WideTable, usePager } from "~/components/wide-table";
 import { Need, Can, useCan } from "~/components/can";
 import { useApp } from "~/lib/store";
 import { daysBetween } from "~/lib/dates";
-import { uid } from "~/lib/utils";
+import { uid, money } from "~/lib/utils";
 import { TplLink, InsuranceMemberImport } from "~/components/excel-import";
+import { DocActions, setDoc } from "~/components/doc-actions";
 import type { InsuranceMember, InsurancePolicy } from "~/lib/types";
 
 function today() {
@@ -22,7 +23,20 @@ function memberDays(m: InsuranceMember): number {
 }
 
 function emptyPolicy(): InsurancePolicy {
-  return { id: "", policyNo: "", name: "", company: "", periodStart: today(), periodEnd: "", remark: "" };
+  return {
+    id: "",
+    policyNo: "",
+    buyer: "",
+    name: "",
+    company: "",
+    premiumPerPerson: 0,
+    headcount: 0,
+    coverage: 0,
+    periodStart: today(),
+    periodEnd: "",
+    contracts: [],
+    remark: "",
+  };
 }
 
 function emptyMember(policyId: string): InsuranceMember {
@@ -90,8 +104,15 @@ function InsurancePage() {
   const memberPager = usePager("insurance-members", shownMembers, [selId, leader].join("|"));
 
   const periodDays = selected ? daysBetween(selected.periodStart, selected.periodEnd) : 0;
+  const premiumPerPerson = selected?.premiumPerPerson || 0;
+  const headcount = selected?.headcount || 0;
+  const coverage = selected?.coverage || 0;
+  const totalPremium = premiumPerPerson * headcount;
+  const perPersonDaily = periodDays > 0 ? premiumPerPerson / periodDays : 0;
   const activeCount = policyMembers.filter((m) => !m.endDate).length;
   const totalPersonDays = policyMembers.reduce((s, m) => s + memberDays(m), 0);
+  const totalSettle = policyMembers.reduce((s, m) => s + (perPersonDaily * memberDays(m)), 0);
+  const settleOf = (m: InsuranceMember) => Math.round(perPersonDaily * memberDays(m) * 100) / 100;
 
   function savePolicy() {
     if (!policyEdit) return;
@@ -184,6 +205,7 @@ function InsurancePage() {
                   <th className="p-3">保险公司</th>
                   <th className="p-3">保险期</th>
                   <th className="p-3">天数</th>
+                  <th className="p-3">总保费</th>
                   <th className="p-3">在保/总</th>
                   <th className="p-3">备注</th>
                   <Can perm="insurance.edit">
@@ -209,6 +231,7 @@ function InsurancePage() {
                         {p.periodStart || "—"} ~ {p.periodEnd || "—"}
                       </td>
                       <td className="p-3 tabular-nums">{daysBetween(p.periodStart, p.periodEnd) || ""}</td>
+                      <td className="p-3 tabular-nums">{(p.premiumPerPerson || 0) * (p.headcount || 0) ? money((p.premiumPerPerson || 0) * (p.headcount || 0)) : ""}</td>
                       <td className="p-3 tabular-nums">
                         {active} / {pm.length}
                       </td>
@@ -228,7 +251,7 @@ function InsurancePage() {
                 })}
                 {!policies.length ? (
                   <tr>
-                    <td colSpan={canEdit ? 9 : 8} className="py-8 text-center text-sm text-muted">
+                    <td colSpan={canEdit ? 10 : 9} className="py-8 text-center text-sm text-muted">
                       还没有保单。点右上角「新增保单」。
                     </td>
                   </tr>
@@ -242,10 +265,16 @@ function InsurancePage() {
           <h2 className="font-semibold">被保人{selected ? ` · ${selected.policyNo}` : ""}</h2>
           {selected ? (
             <>
-              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted">
+              <div className="mt-2 grid gap-x-6 gap-y-1 text-sm text-muted sm:grid-cols-2 lg:grid-cols-3">
                 <span>保险期天数 <b className="tabular-nums text-ink">{periodDays || "—"}</b></span>
+                <span>每人保费 <b className="tabular-nums text-ink">{money(premiumPerPerson)}</b> 元</span>
+                <span>人数 <b className="tabular-nums text-ink">{headcount}</b></span>
+                <span>保额/人 <b className="tabular-nums text-ink">{money(coverage)}</b> 元</span>
+                <span>总保费 <b className="tabular-nums text-ink">{money(totalPremium)}</b> 元</span>
+                <span>每人每天 <b className="tabular-nums text-ink">{money(Math.round(perPersonDaily * 100) / 100)}</b> 元</span>
                 <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> / {policyMembers.length}</span>
                 <span>累计人天 <b className="tabular-nums text-ink">{totalPersonDays}</b></span>
+                <span>结算合计 <b className="tabular-nums text-ink">{money(Math.round(totalSettle * 100) / 100)}</b> 元</span>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <select className="field-select h-9 w-auto" value={leader} onChange={(e) => setLeader(e.target.value)} aria-label="按队长筛选">
@@ -274,6 +303,7 @@ function InsurancePage() {
                       <th className="p-3">开始日期</th>
                       <th className="p-3">结束日期</th>
                       <th className="p-3">使用天数</th>
+                      <th className="p-3">结算(元)</th>
                       <th className="p-3">备注</th>
                       <Can perm="insurance.edit">
                         <th className="p-3">操作</th>
@@ -289,6 +319,7 @@ function InsurancePage() {
                         <td className="p-3 whitespace-nowrap">{m.startDate || "—"}</td>
                         <td className="p-3 whitespace-nowrap">{m.endDate || <span className="text-ok">在保</span>}</td>
                         <td className="p-3 tabular-nums">{memberDays(m) || ""}</td>
+                        <td className="p-3 tabular-nums">{money(settleOf(m))}</td>
                         <td className="p-3 text-muted">{m.remark}</td>
                         <Can perm="insurance.edit">
                           <td className="whitespace-nowrap p-3">
@@ -312,7 +343,7 @@ function InsurancePage() {
                     ))}
                     {!shownMembers.length ? (
                       <tr>
-                        <td colSpan={canEdit ? 8 : 7} className="py-8 text-center text-sm text-muted">
+                        <td colSpan={canEdit ? 9 : 8} className="py-8 text-center text-sm text-muted">
                           {leader ? "这个队长下面还没有人" : "还没有被保人。点「新增人员」或「导入人员」。"}
                         </td>
                       </tr>
@@ -332,12 +363,26 @@ function InsurancePage() {
               <Field label="保单号" required>
                 <Input value={policyEdit.policyNo} onChange={(e) => setPolicyEdit({ ...policyEdit, policyNo: e.target.value })} />
               </Field>
+              <Field label="购买保险的公司">
+                <Input value={policyEdit.buyer} onChange={(e) => setPolicyEdit({ ...policyEdit, buyer: e.target.value })} />
+              </Field>
               <Field label="名称（团体/项目）">
                 <Input value={policyEdit.name} onChange={(e) => setPolicyEdit({ ...policyEdit, name: e.target.value })} />
               </Field>
               <Field label="保险公司">
                 <Input value={policyEdit.company} onChange={(e) => setPolicyEdit({ ...policyEdit, company: e.target.value })} />
               </Field>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="每人保费(元)">
+                  <Input type="number" min={0} value={policyEdit.premiumPerPerson || ""} onChange={(e) => setPolicyEdit({ ...policyEdit, premiumPerPerson: Number(e.target.value) })} />
+                </Field>
+                <Field label="人数">
+                  <Input type="number" min={0} value={policyEdit.headcount || ""} onChange={(e) => setPolicyEdit({ ...policyEdit, headcount: Number(e.target.value) })} />
+                </Field>
+                <Field label="保额/人(元)">
+                  <Input type="number" min={0} value={policyEdit.coverage || ""} onChange={(e) => setPolicyEdit({ ...policyEdit, coverage: Number(e.target.value) })} />
+                </Field>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="保险期开始">
                   <Input type="date" value={policyEdit.periodStart} onChange={(e) => setPolicyEdit({ ...policyEdit, periodStart: e.target.value })} />
@@ -346,6 +391,44 @@ function InsurancePage() {
                   <Input type="date" value={policyEdit.periodEnd} onChange={(e) => setPolicyEdit({ ...policyEdit, periodEnd: e.target.value })} />
                 </Field>
               </div>
+              <Field label="保险合同（可多份）">
+                <div className="space-y-2">
+                  {policyEdit.contracts.map((c) => (
+                    <DocActions
+                      key={c.id}
+                      id={c.id}
+                      kind="insurance"
+                      fileName={c.fileName}
+                      onDeleted={() =>
+                        setPolicyEdit({ ...policyEdit, contracts: policyEdit.contracts.filter((x) => x.id !== c.id) })
+                      }
+                      onReplaced={(saved) =>
+                        setPolicyEdit({
+                          ...policyEdit,
+                          contracts: policyEdit.contracts.map((x) => (x.id === c.id ? { ...x, fileName: saved } : x)),
+                        })
+                      }
+                    />
+                  ))}
+                  <label className="btn inline-flex cursor-pointer items-center rounded-sm border border-line bg-surface text-xs hover:bg-accent-soft">
+                    上传合同
+                    <input
+                      type="file"
+                      accept=".pdf,.ofd,.xml,.jpg,.jpeg,.png,.webp"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!f) return;
+                        const id = uid();
+                        const saved = (await setDoc(id, "insurance", f)) || f.name;
+                        setPolicyEdit({ ...policyEdit, contracts: [...policyEdit.contracts, { id, fileName: saved }] });
+                        toast.success(`已上传 ${saved}`);
+                      }}
+                    />
+                  </label>
+                </div>
+              </Field>
               <Field label="备注">
                 <Input value={policyEdit.remark} onChange={(e) => setPolicyEdit({ ...policyEdit, remark: e.target.value })} />
               </Field>

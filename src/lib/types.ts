@@ -124,13 +124,23 @@ export interface AuditEntry {
   module: string;
 }
 
+export interface InsuranceContract {
+  id: string;
+  fileName: string;
+}
+
 export interface InsurancePolicy {
   id: string;
   policyNo: string; // 保单号
+  buyer: string; // 购买保险的公司
   name: string; // 团体/项目名称
   company: string; // 保险公司
+  premiumPerPerson: number; // 每人保费（元）
+  headcount: number; // 人数
+  coverage: number; // 保额/额度（每人，元）
   periodStart: string; // 保险期开始 YYYY-MM-DD
   periodEnd: string; // 保险期结束 YYYY-MM-DD
+  contracts: InsuranceContract[]; // 保险合同文件（可多份）
   remark: string;
 }
 

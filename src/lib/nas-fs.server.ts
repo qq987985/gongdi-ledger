@@ -165,6 +165,7 @@ const DOC_CN: Record<string, string> = {
   contract: "合同扫描件",
   expense: "报销凭证",
   payout: "报销打款",
+  insurance: "保险合同",
 };
 
 function photosBase(): string {
@@ -194,6 +195,7 @@ async function ensureDirs(): Promise<void> {
     "合同扫描件",
     "报销凭证",
     "报销打款",
+    "保险合同",
   ])
     await mkdir(join(photos, sub), { recursive: true });
   const book = bookRoot();

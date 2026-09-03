@@ -503,7 +503,21 @@ export const useApp = create<AppStore>()(
       upsertPolicy: (p) => {
         const list = get().insurancePolicies || [];
         const i = list.findIndex((x) => x.id === p.id);
-        const next = { ...p, id: p.id || uid(), policyNo: (p.policyNo || "").trim() };
+        const next: InsurancePolicy = {
+          ...p,
+          id: p.id || uid(),
+          policyNo: (p.policyNo || "").trim(),
+          buyer: p.buyer || "",
+          name: p.name || "",
+          company: p.company || "",
+          premiumPerPerson: Number(p.premiumPerPerson) || 0,
+          headcount: Number(p.headcount) || 0,
+          coverage: Number(p.coverage) || 0,
+          periodStart: p.periodStart || "",
+          periodEnd: p.periodEnd || "",
+          contracts: Array.isArray(p.contracts) ? p.contracts : [],
+          remark: p.remark || "",
+        };
         if (i >= 0) {
           const copy = list.slice();
           copy[i] = { ...next, id: list[i].id };

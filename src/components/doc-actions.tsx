@@ -15,6 +15,7 @@ export const DOC_KIND_LABEL: Record<string, string> = {
   contract: "合同扫描件",
   expense: "报销凭证",
   payout: "报销打款",
+  insurance: "保险合同",
 };
 
 interface DocBlob {

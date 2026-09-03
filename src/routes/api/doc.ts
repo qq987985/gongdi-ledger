@@ -3,7 +3,7 @@ import { persistOn, saveDoc, removeDocFile, findDoc } from "~/lib/nas-fs.server"
 import { withTenant } from "~/lib/accounts.server";
 
 function kindOf(v: string | null) {
-  if (v === "report" || v === "invoice" || v === "receipt" || v === "attendance" || v === "contract" || v === "expense" || v === "payout") return v;
+  if (v === "report" || v === "invoice" || v === "receipt" || v === "attendance" || v === "contract" || v === "expense" || v === "payout" || v === "insurance") return v;
   return null;
 }
 
