@@ -2,6 +2,16 @@ import type { ContractRecord, ContractEntry } from "./contracts";
 
 export type { ContractRecord, ContractEntry, EntryKind } from "./contracts";
 
+export interface WageHistory {
+  id: string;
+  fromDate: string; // 生效日期，格式 YYYY-MM-DD
+  payType: "day" | "month";
+  dailyWage: number;
+  monthWage: number;
+  otRule: string;
+  remark: string;
+}
+
 export interface Person {
   id: string;
   name: string;
@@ -12,10 +22,13 @@ export interface Person {
   age: number | null;
   birthday: string;
   phone: string;
+  // 兼容旧数据：保留当前工资字段作为最新值
   dailyWage: number;
   monthWage: number;
   payType: "day" | "month";
   otRule: string;
+  // 工资历史记录
+  wageHistory?: WageHistory[];
   bank: string;
   cardNo: string;
   address: string;

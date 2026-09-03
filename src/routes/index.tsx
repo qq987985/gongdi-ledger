@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useApp } from "~/lib/store";
-import { derivedYears, monthStatus } from "~/lib/dates";
-import { monthPay } from "~/lib/wage";
-import { paymentsInYear } from "~/lib/dates";
+import { derivedYears, monthStatus, paymentsInYear } from "~/lib/dates";
+import { monthPay, getWageAt } from "~/lib/wage";
 import { overAgeLabel } from "~/lib/idcard";
 import { contractRollup } from "~/lib/contracts";
 import { money } from "~/lib/utils";
@@ -18,7 +17,8 @@ function Home() {
   let should = 0;
   for (const a of yearAtt) {
     const p = map[a.name];
-    should += monthPay(a, p).pay;
+    const wage = getWageAt(p, a.year, a.month);
+    should += monthPay(a, wage).pay;
   }
   const paid = yearPays.filter((p) => p.date).reduce((s, p) => s + p.amount, 0);
   const pendingAmt = yearPays.filter((p) => !p.date).reduce((s, p) => s + p.amount, 0);

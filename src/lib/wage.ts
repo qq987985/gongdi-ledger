@@ -1,3 +1,5 @@
+import type { Person, WageHistory } from "./types";
+
 export interface OtRule {
   kind: "none" | "hour" | "fold";
   param: number;
@@ -46,6 +48,46 @@ export interface MonthPayResult {
   base: number;
   pay: number;
   monthly: boolean;
+}
+
+/** 根据年月获取人员当时的工资配置 */
+export function getWageAt(person: Person | null | undefined, year: number, month: number): WageSource {
+  if (!person) return {};
+  
+  // 构建查询日期（该月最后一天）
+  const queryDate = `${year}-${String(month).padStart(2, "0")}-28`;
+  
+  // 如果有工资历史，找匹配的记录
+  const history = person.wageHistory || [];
+  if (history.length > 0) {
+    // 按生效日期排序（从早到晚）
+    const sorted = [...history].sort((a, b) => a.fromDate.localeCompare(b.fromDate));
+    // 找最后一条生效日期 <= 查询日期的记录
+    let matched: WageHistory | undefined;
+    for (const h of sorted) {
+      if (h.fromDate <= queryDate) {
+        matched = h;
+      } else {
+        break;
+      }
+    }
+    if (matched) {
+      return {
+        payType: matched.payType,
+        dailyWage: matched.dailyWage,
+        monthWage: matched.monthWage,
+        otRule: matched.otRule,
+      };
+    }
+  }
+  
+  // 没有历史记录，返回当前工资字段（兼容旧数据）
+  return {
+    payType: person.payType,
+    dailyWage: person.dailyWage,
+    monthWage: person.monthWage,
+    otRule: person.otRule,
+  };
 }
 
 export function isMonthly(p: WageSource | null | undefined): boolean {

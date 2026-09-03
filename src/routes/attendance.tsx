@@ -11,7 +11,7 @@ import { AttendanceImport, TplLink } from "~/components/excel-import";
 import { DocActions, prepareNamedFile, setDoc, attendanceBase } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear, paymentsInYear } from "~/lib/dates";
-import { hasWork, monthPay, parseOtRule, wageLabel } from "~/lib/wage";
+import { hasWork, monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import type { AttendanceDoc } from "~/lib/types";
 
@@ -57,6 +57,8 @@ function AttendancePage() {
         </header>
         <MonthFiles year={year} month={month} />
         <MonthTable
+          year={year}
+          month={month}
           people={people}
           existing={existing}
           onSave={(rows) => {
@@ -86,7 +88,8 @@ function YearOverview({
     .map((p) => {
       const months = Array.from({ length: 12 }, (_, i) => {
         const a = attendance.find((x) => x.year === year && x.month === i + 1 && x.name === p.name);
-        const calc = monthPay(a, p);
+        const wage = getWageAt(p, year, i + 1);
+        const calc = monthPay(a, wage);
         return { days: calc.days, pay: calc.pay, otHours: calc.otHours, allowance: calc.allowance, deduction: calc.deduction };
       });
       const yearPayAmt = months.reduce((s, m) => s + m.pay, 0);
@@ -285,10 +288,14 @@ interface MonthRow {
 }
 
 function MonthTable({
+  year,
+  month,
   people,
   existing,
   onSave,
 }: {
+  year: number;
+  month: number;
   people: ReturnType<typeof useApp.getState>["people"];
   existing: ReturnType<typeof useApp.getState>["attendance"];
   onSave: (rows: MonthRow[]) => void;
@@ -349,16 +356,17 @@ function MonthTable({
   }
   const calcRows = rows.map((r) => {
     const p = pmap[r.name];
-    const calc = monthPay(r, p);
+    const wage = getWageAt(p, year, month);
+    const calc = monthPay(r, wage);
     return {
       ...r,
-      wageLabel: wageLabel(p),
-      rule: p?.otRule || "",
+      wageLabel: wageLabel(wage),
+      rule: wage.otRule || "",
       ot: calc.ot,
       pay: calc.pay,
-      parsed: parseOtRule(p?.otRule || ""),
+      parsed: parseOtRule(wage.otRule || ""),
       known: Boolean(p),
-      monthly: p?.payType === "month",
+      monthly: wage.payType === "month",
     };
   });
   const totalPay = calcRows.reduce((s, r) => s + r.pay, 0);

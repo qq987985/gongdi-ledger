@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, History } from "lucide-react";
 import { toast } from "sonner";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
@@ -17,7 +17,19 @@ import { wageLabel, parseOtRule } from "~/lib/wage";
 import { overAgeLabel } from "~/lib/idcard";
 import { confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { useApp } from "~/lib/store";
-import type { Person } from "~/lib/types";
+import type { Person, WageHistory } from "~/lib/types";
+
+function emptyWageHistory(): WageHistory {
+  return {
+    id: uid(),
+    fromDate: "",
+    payType: "day",
+    dailyWage: 0,
+    monthWage: 0,
+    otRule: "",
+    remark: "",
+  };
+}
 
 function emptyPerson(): Person {
   return {
@@ -34,6 +46,7 @@ function emptyPerson(): Person {
     monthWage: 0,
     payType: "day",
     otRule: "",
+    wageHistory: [],
     bank: "",
     cardNo: "",
     address: "",
@@ -461,6 +474,110 @@ function PersonEditor({
           <Field label="备注" className="md:col-span-2">
             <Input value={form.remark} onChange={(e) => set("remark", e.target.value)} />
           </Field>
+        </div>
+        {/* 工资历史管理 */}
+        <div className="mt-6 border-t border-line pt-4">
+          <div className="flex items-center justify-between">
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+              <History className="size-4" />
+              工资变更历史
+              <span className="text-xs font-normal text-muted">（可选，用于记录工资调整）</span>
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const history = [...(form.wageHistory || []), emptyWageHistory()];
+                setForm((f) => ({ ...f, wageHistory: history }));
+              }}
+            >
+              添加工资记录
+            </Button>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            设置后，考勤会自动按生效日期匹配对应的工资。不填则一直使用当前工资。
+          </p>
+          {(form.wageHistory || []).length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {(form.wageHistory || []).map((h, i) => (
+                <div key={h.id} className="flex flex-wrap items-end gap-2 rounded-md border border-line bg-accent-soft/30 p-3">
+                  <div className="flex-1 min-w-[120px]">
+                    <Label className="text-xs">生效日期</Label>
+                    <Input
+                      type="date"
+                      className="mt-1 h-9"
+                      value={h.fromDate}
+                      onChange={(e) => {
+                        const history = [...(form.wageHistory || [])];
+                        history[i] = { ...h, fromDate: e.target.value };
+                        setForm((f) => ({ ...f, wageHistory: history }));
+                      }}
+                    />
+                  </div>
+                  <div className="w-28">
+                    <Label className="text-xs">计薪</Label>
+                    <PayTypePick
+                      value={h.payType}
+                      onChange={(v) => {
+                        const history = [...(form.wageHistory || [])];
+                        history[i] = { ...h, payType: v };
+                        setForm((f) => ({ ...f, wageHistory: history }));
+                      }}
+                    />
+                  </div>
+                  <div className="w-28">
+                    <Label className="text-xs">{h.payType === "month" ? "月工资" : "日工资"}</Label>
+                    <Input
+                      type="number"
+                      className="mt-1 h-9"
+                      value={h.payType === "month" ? h.monthWage || "" : h.dailyWage || ""}
+                      onChange={(e) => {
+                        const history = [...(form.wageHistory || [])];
+                        const val = Number(e.target.value) || 0;
+                        history[i] = { ...h, [h.payType === "month" ? "monthWage" : "dailyWage"]: val };
+                        setForm((f) => ({ ...f, wageHistory: history }));
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[150px]">
+                    <Label className="text-xs">加班规则</Label>
+                    <OtRulePick
+                      value={h.otRule}
+                      onChange={(s) => {
+                        const history = [...(form.wageHistory || [])];
+                        history[i] = { ...h, otRule: s };
+                        setForm((f) => ({ ...f, wageHistory: history }));
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[100px]">
+                    <Label className="text-xs">备注</Label>
+                    <Input
+                      className="mt-1 h-9"
+                      value={h.remark}
+                      placeholder="如：涨薪、调岗"
+                      onChange={(e) => {
+                        const history = [...(form.wageHistory || [])];
+                        history[i] = { ...h, remark: e.target.value };
+                        setForm((f) => ({ ...f, wageHistory: history }));
+                      }}
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-danger hover:bg-danger/10"
+                    onClick={() => {
+                      const history = (form.wageHistory || []).filter((_, idx) => idx !== i);
+                      setForm((f) => ({ ...f, wageHistory: history }));
+                    }}
+                  >
+                    删除
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
         {form.name ? (
           <div className="mt-6 grid gap-4 md:grid-cols-3">

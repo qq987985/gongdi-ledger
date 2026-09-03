@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import { uid } from "./utils";
 import { normalizeIdDate, parseIdCard } from "./idcard";
-import { hasWork, monthPay } from "./wage";
+import { hasWork, monthPay, getWageAt } from "./wage";
 import { parseDateYmd, paymentsInYear } from "./dates";
 import {
   contractRollup,
@@ -534,12 +534,13 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
     ];
     monthRows.forEach((a, i) => {
       const p = people.find((x) => x.name === a.name);
-      const calc = monthPay(a, p);
+      const wage = getWageAt(p, y, m);
+      const calc = monthPay(a, wage);
       aoa.push([
         i + 1, a.name, a.team || p?.team || "", calc.days || "", calc.otHours || "",
-        calc.allowance || "", calc.deduction || "", p?.payType === "month" ? "按月" : "按工天",
-        p?.payType === "month" ? p.monthWage || "" : p?.dailyWage || "", calc.ot || "",
-        calc.pay || "", p?.otRule || "", a.remark || "",
+        calc.allowance || "", calc.deduction || "", wage.payType === "month" ? "按月" : "按工天",
+        wage.payType === "month" ? wage.monthWage || "" : wage.dailyWage || "", calc.ot || "",
+        calc.pay || "", wage.otRule || "", a.remark || "",
       ]);
     });
     const sheetName = singleYear ? `${m}月考勤` : `${y}年${m}月考勤`;
@@ -563,7 +564,8 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
       const months: (number | string)[] = [];
       for (let m = 1; m <= 12; m++) {
         const a = attendance.find((x) => x.year === y && x.month === m && x.name === p.name);
-        months.push(monthPay(a, p).pay);
+        const wage = getWageAt(p, y, m);
+        months.push(monthPay(a, wage).pay);
       }
       const total = months.reduce<number>((s, n) => s + (n as number), 0);
       const paid = yearPays.filter((x) => x.owner === p.name && x.date).reduce((s, x) => s + x.amount, 0);

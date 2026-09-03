@@ -10,7 +10,7 @@ import { PhotoSlot } from "~/components/photo-slot";
 import { DocActions } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
 import { derivedYears } from "~/lib/dates";
-import { monthPay, parseOtRule, wageLabel, hasWork } from "~/lib/wage";
+import { monthPay, parseOtRule, wageLabel, hasWork, getWageAt } from "~/lib/wage";
 import { overAgeLabel } from "~/lib/idcard";
 import { money, copyText } from "~/lib/utils";
 import type { Person, Payment, Attendance, MonthAttendance } from "~/lib/types";
@@ -71,7 +71,8 @@ function buildSlips({
       for (const { year, month } of span) {
         const a = attendance.find((x) => x.year === year && x.month === month && x.name === name);
         if (!hasWork(a)) continue;
-        const calc = monthPay(a as MonthAttendance, p);
+        const wage = getWageAt(p, year, month);
+        const calc = monthPay(a as MonthAttendance, wage);
         months.push({
           year,
           month,
@@ -255,7 +256,8 @@ function QueryPage() {
   }, [toY, toM, toD]);
   const rows = span.map(({ year: y, month: m }) => {
     const a = attendance.find((x) => x.year === y && x.month === m && x.name === name);
-    const calc = monthPay(a, p);
+    const wage = getWageAt(p, y, m);
+    const calc = monthPay(a, wage);
     return {
       year: y,
       month: m,
