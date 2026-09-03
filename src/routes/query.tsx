@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Copy, X } from "lucide-react";
+import { Check, ChevronDown, Copy, X } from "lucide-react";
 import { toast } from "sonner";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
@@ -237,6 +237,7 @@ function QueryPage() {
   const [name, setName] = React.useState("");
   const [printNames, setPrintNames] = React.useState<string[]>([]);
   const [printPays, setPrintPays] = React.useState(true);
+  const [showPicker, setShowPicker] = React.useState(false);
   const [fromY, setFromY] = React.useState(year);
   const [fromM, setFromM] = React.useState(1);
   const [fromD, setFromD] = React.useState(1);
@@ -333,17 +334,15 @@ function QueryPage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" type="button" onClick={() => setPrintNames(people.map((x) => x.name))}>
-                  全选
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => setShowPicker((v) => !v)}
+                >
+                  选择人员{printNames.length ? `（已选 ${printNames.length}）` : ""}
+                  <ChevronDown className={`size-3.5 transition-transform ${showPicker ? "rotate-180" : ""}`} />
                 </Button>
-                <Button variant="outline" size="sm" type="button" onClick={() => setPrintNames([])}>
-                  清空
-                </Button>
-                {teams.map((t) => (
-                  <Button key={t} variant="outline" size="sm" type="button" onClick={() => setPrintNames(people.filter((x) => x.team === t).map((x) => x.name))}>
-                    {t}
-                  </Button>
-                ))}
                 <label className="inline-flex items-center gap-1.5 text-sm">
                   <input type="checkbox" className="size-4" checked={printPays} onChange={(e) => setPrintPays(e.target.checked)} /> 打印打款记录
                 </label>
@@ -366,24 +365,40 @@ function QueryPage() {
                 </Button>
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-              {people.map((x) => (
-                <label key={x.id} className="inline-flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    className="size-4"
-                    checked={printNames.includes(x.name)}
-                    onChange={(e) =>
-                      setPrintNames((s) =>
-                        e.target.checked ? [...new Set([...s, x.name])] : s.filter((n) => n !== x.name),
-                      )
-                    }
-                  />
-                  {x.name}
-                  <span className="text-xs text-muted">{x.team}</span>
-                </label>
-              ))}
-            </div>
+            {showPicker ? (
+              <div className="mt-3 rounded-lg border border-line bg-bg-elevated p-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="ghost" size="sm" type="button" onClick={() => setPrintNames(people.map((x) => x.name))}>
+                    全选
+                  </Button>
+                  <Button variant="ghost" size="sm" type="button" onClick={() => setPrintNames([])}>
+                    清空
+                  </Button>
+                  {teams.map((t) => (
+                    <Button key={t} variant="ghost" size="sm" type="button" onClick={() => setPrintNames(people.filter((x) => x.team === t).map((x) => x.name))}>
+                      {t}
+                    </Button>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                  {people.map((x) => (
+                    <label key={x.id} className="inline-flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        className="size-4"
+                        checked={printNames.includes(x.name)}
+                        onChange={(e) =>
+                          setPrintNames((s) =>
+                            e.target.checked ? [...new Set([...s, x.name])] : s.filter((n) => n !== x.name),
+                          )
+                        }
+                      />
+                      {x.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
           {p ? (
             <>

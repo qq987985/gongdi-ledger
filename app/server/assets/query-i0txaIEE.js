@@ -5,6 +5,7 @@ import { C as wageLabel, S as parseOtRule, b as hasWork, l as overAgeLabel, p as
 import "./excel-bpaUSSNa.js";
 import { t as useApp } from "./store-BP65RtMX.js";
 import "./nas-sync-CjOoadnV.js";
+import { t as createLucideIcon } from "./createLucideIcon-DiDjOefB.js";
 import { t as X } from "./x-CnbYULR9.js";
 import { a as Check, n as PhotoSlot } from "./photo-slot-tbEbaLxG.js";
 import { n as Copy } from "./download-sOIPPxKy.js";
@@ -16,6 +17,10 @@ import { n as Need } from "./can-qr6UNuZ3.js";
 import { t as Badge } from "./badge-Ck_uyNMz.js";
 import { i as ymKey, n as monthsInRange, r as rangeLabel, t as YmPick } from "./ym-pick-Djpt4Mx-.js";
 import "./photos-C1cMvHMr.js";
+var ChevronDown = createLucideIcon("chevron-down", [["path", {
+	d: "m6 9 6 6 6-6",
+	key: "qrunsl"
+}]]);
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = /* @__PURE__ */ __toESM(require_jsx_runtime());
 function CopyField({ label, value, mono = false }) {
@@ -297,6 +302,7 @@ function QueryPage() {
 	const [name, setName] = import_react.useState("");
 	const [printNames, setPrintNames] = import_react.useState([]);
 	const [printPays, setPrintPays] = import_react.useState(true);
+	const [showPicker, setShowPicker] = import_react.useState(false);
 	const [fromY, setFromY] = import_react.useState(year);
 	const [fromM, setFromM] = import_react.useState(1);
 	const [fromD, setFromD] = import_react.useState(1);
@@ -469,27 +475,17 @@ function QueryPage() {
 							})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "flex flex-wrap gap-2",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Button, {
 										variant: "outline",
 										size: "sm",
 										type: "button",
-										onClick: () => setPrintNames(people.map((x) => x.name)),
-										children: "全选"
+										onClick: () => setShowPicker((v) => !v),
+										children: [
+											"选择人员",
+											printNames.length ? `（已选 ${printNames.length}）` : "",
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronDown, { className: `size-3.5 transition-transform ${showPicker ? "rotate-180" : ""}` })
+										]
 									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-										variant: "outline",
-										size: "sm",
-										type: "button",
-										onClick: () => setPrintNames([]),
-										children: "清空"
-									}),
-									teams.map((t) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
-										variant: "outline",
-										size: "sm",
-										type: "button",
-										onClick: () => setPrintNames(people.filter((x) => x.team === t).map((x) => x.name)),
-										children: t
-									}, t)),
 									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
 										className: "inline-flex items-center gap-1.5 text-sm",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
@@ -521,25 +517,46 @@ function QueryPage() {
 									})
 								]
 							})]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm",
-							children: people.map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-								className: "inline-flex items-center gap-1.5",
+						}), showPicker ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "mt-3 rounded-lg border border-line bg-bg-elevated p-3",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex flex-wrap gap-2",
 								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+										variant: "ghost",
+										size: "sm",
+										type: "button",
+										onClick: () => setPrintNames(people.map((x) => x.name)),
+										children: "全选"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+										variant: "ghost",
+										size: "sm",
+										type: "button",
+										onClick: () => setPrintNames([]),
+										children: "清空"
+									}),
+									teams.map((t) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+										variant: "ghost",
+										size: "sm",
+										type: "button",
+										onClick: () => setPrintNames(people.filter((x) => x.team === t).map((x) => x.name)),
+										children: t
+									}, t))
+								]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm",
+								children: people.map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+									className: "inline-flex items-center gap-1.5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 										type: "checkbox",
 										className: "size-4",
 										checked: printNames.includes(x.name),
 										onChange: (e) => setPrintNames((s) => e.target.checked ? [...new Set([...s, x.name])] : s.filter((n) => n !== x.name))
-									}),
-									x.name,
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "text-xs text-muted",
-										children: x.team
-									})
-								]
-							}, x.id))
-						})]
+									}), x.name]
+								}, x.id))
+							})]
+						}) : null]
 					}),
 					p ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
