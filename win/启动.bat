@@ -65,29 +65,14 @@ echo  Close this window to stop
 echo ========================================
 echo.
 
-REM Start Node in background, wait for ready, then open browser
-start /b "" "%CD%\node\node.exe" "%CD%\app\server\index.mjs" >"%CD%\node.log" 2>&1
-
-REM Wait for service to be ready (check up to 10 seconds)
-set /a count=0
-:wait_loop
-timeout /t 1 /nobreak >nul 2>&1
-set /a count+=1
-powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8501/api/health' -TimeoutSec 2 -UseBasicParsing; exit 0 } catch { exit 1 }" >nul 2>&1
-if %errorlevel% == 0 goto service_ready
-if %count% lss 10 goto wait_loop
-
-echo [WARN] Service may still be starting, opening browser anyway...
-
-:service_ready
-REM Service ready, open browser
+REM Start Node and show output in this window
+REM Open browser after a short delay
+timeout /t 2 /nobreak >nul 2>&1
 start "" "http://127.0.0.1:8501"
 
-echo.
-echo Service running. Press any key to stop...
-pause >nul
+REM Run Node (this blocks until user closes window)
+"%CD%\node\node.exe" "%CD%\app\server\index.mjs"
 
-REM Stop Node process
-taskkill /F /IM node.exe >nul 2>&1
+echo.
 echo Stopped.
 timeout /t 2 >nul

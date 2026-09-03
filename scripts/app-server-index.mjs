@@ -15,34 +15,31 @@ const publicDir = resolve(join(here, "..", "public"));
 // 默认数据目录在 app 同级的 data/；可通过环境变量 DATA_DIR 覆盖
 process.env.DATA_DIR ??= join(here, "..", "..", "data");
 
-// 自动创建数据目录结构（首次运行时）
-async function ensureDirs() {
-  const dataDir = process.env.DATA_DIR;
-  const dirs = [
-    join(dataDir, "accounts"),
-    join(dataDir, "books"),
-    join(dataDir, "backups"),
-    join(dataDir, "templates"),
-    join(dataDir, "photos", "id"),
-    join(dataDir, "photos", "bank"),
-    join(dataDir, "photos", "ic"),
-    join(dataDir, "photos", "报量单"),
-    join(dataDir, "photos", "发票"),
-    join(dataDir, "photos", "收款回单"),
-    join(dataDir, "photos", "考勤影像"),
-    join(dataDir, "photos", "合同扫描件"),
-    join(dataDir, "photos", "报销凭证"),
-    join(dataDir, "photos", "报销打款"),
-  ];
-  for (const d of dirs) {
-    try {
-      await mkdir(d, { recursive: true });
-    } catch {
-      // 忽略已存在或其他错误
-    }
+// 同步创建数据目录（首次运行时）
+const dataDir = process.env.DATA_DIR;
+const dirs = [
+  join(dataDir, "accounts"),
+  join(dataDir, "books"),
+  join(dataDir, "backups"),
+  join(dataDir, "templates"),
+  join(dataDir, "photos", "id"),
+  join(dataDir, "photos", "bank"),
+  join(dataDir, "photos", "ic"),
+  join(dataDir, "photos", "报量单"),
+  join(dataDir, "photos", "发票"),
+  join(dataDir, "photos", "收款回单"),
+  join(dataDir, "photos", "考勤影像"),
+  join(dataDir, "photos", "合同扫描件"),
+  join(dataDir, "photos", "报销凭证"),
+  join(dataDir, "photos", "报销打款"),
+];
+for (const d of dirs) {
+  try {
+    await mkdir(d, { recursive: true });
+  } catch {
+    // 忽略已存在或其他错误
   }
 }
-await ensureDirs();
 
 const fetch = typeof handler === "function" ? handler : handler.fetch;
 
