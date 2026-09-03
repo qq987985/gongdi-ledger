@@ -12,10 +12,6 @@ import handler from "./server.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = resolve(join(here, "..", "public"));
 
-console.log("[debug] here:", here);
-console.log("[debug] publicDir:", publicDir);
-console.log("[debug] DATA_DIR:", process.env.DATA_DIR);
-
 // 默认数据目录在 app 同级的 data/；可通过环境变量 DATA_DIR 覆盖
 process.env.DATA_DIR ??= join(here, "..", "..", "data");
 
@@ -90,8 +86,7 @@ async function serveStatic(req) {
   if (pathname.endsWith("/")) pathname += "index.html";
   const filePath = join(publicDir, pathname);
   const resolvedPath = resolve(filePath);
-  console.log("[debug] serveStatic:", pathname, "->", filePath, "resolved:", resolvedPath);
-  console.log("[debug] isWithin:", isWithin(publicDir, resolvedPath));
+  // 安全检查：确保路径在 publicDir 内
   if (!isWithin(publicDir, resolvedPath)) return null;
   try {
     const s = await stat(filePath);
@@ -108,18 +103,14 @@ async function serveStatic(req) {
     }
     return new Response(body, { headers });
   } catch {
+    // 文件不存在或其他错误，返回 null 让 server.js 处理
     return null;
   }
 }
 
 async function nodeFetch(req) {
-  console.log("[debug] nodeFetch:", req.url);
   const staticRes = await serveStatic(req);
-  if (staticRes) {
-    console.log("[debug] static file served");
-    return staticRes;
-  }
-  console.log("[debug] calling server.js handler");
+  if (staticRes) return staticRes;
   return fetch(req);
 }
 
