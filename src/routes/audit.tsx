@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { WideTable } from "~/components/wide-table";
+import { WideTable, usePager } from "~/components/wide-table";
 import { Need, useCan } from "~/components/can";
 import { fetchAudit, logOp } from "~/lib/audit";
 import { authStatus } from "~/lib/auth";
@@ -36,6 +36,8 @@ function AuditPage() {
     if (!s) return rows;
     return rows.filter((e) => [e.userName, e.action, e.detail, e.module, fmt(e.at)].some((x) => x.includes(s)));
   }, [rows, q]);
+  const pager = usePager("audit", list, q);
+  const pageRows = pager.rows;
   return (
     <Need perm="audit.view">
       <div className="space-y-5">
@@ -69,7 +71,7 @@ function AuditPage() {
             </Button>
           </div>
         ) : null}
-        <WideTable id="audit">
+        <WideTable id="audit" pager={pager as any}>
           <table className="wide-table text-sm">
             <thead className="border-b border-line text-xs text-muted">
               <tr>
@@ -82,7 +84,7 @@ function AuditPage() {
               </tr>
             </thead>
             <tbody>
-              {list.map((e) => (
+              {pageRows.map((e) => (
                 <tr key={e.id} className="border-b border-line last:border-0">
                   <td className="whitespace-nowrap p-3">{fmt(e.at)}</td>
                   <td className="p-3">{e.userName}</td>

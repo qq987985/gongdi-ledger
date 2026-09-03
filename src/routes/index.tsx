@@ -39,7 +39,7 @@ function Home() {
         <p className="mt-2 max-w-xl text-sm text-muted">
           {people.length
             ? `当前工作年 ${year}。人员共用；考勤、发放、合同都按年查看。要加新年到「月度考勤」里点新增年。`
-            : "还没有人员。到各模块下载模板导入，或到「导入导出」导入整本。"}
+            : "还没有人员。到各模块下载模板导入，或到「导入」导入整本。"}
         </p>
       </header>
       <section className="flex flex-wrap items-center gap-2">
@@ -90,7 +90,7 @@ function Home() {
             <Quick to="/payments" title="发放记录" desc="实际收款人入账，收款人只是代收" />
             <Quick to="/contracts" title="合同管理" desc="报量、开票、收款分开记，保证金独立" />
             <Quick to="/expenses" title="报销单" desc="未报销可勾选打印，现金不用传凭证" />
-            <Quick to="/import" title="导入导出" desc="按年导出整本 Excel，WPS 可打开" />
+            <Quick to="/export" title="导出" desc="按年导出整本 Excel，WPS 可打开" />
           </div>
           {over > 0 ? <p className="mt-4 text-xs text-warn">超龄提醒：{over} 人（男≥55 / 女≥45）</p> : null}
         </div>

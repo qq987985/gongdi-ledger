@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Download,
   FileText,
   FolderOpen,
   History,
@@ -45,7 +46,8 @@ const NAV = [
   { to: "/files", label: "影像资料", icon: FolderOpen },
   { to: "/query", label: "个人查询", icon: ClipboardList },
   { to: "/audit", label: "操作记录", icon: History },
-  { to: "/import", label: "导入导出", icon: Upload },
+  { to: "/import", label: "导入", icon: Upload },
+  { to: "/export", label: "导出", icon: Download },
   { to: "/settings", label: "设置", icon: Settings },
 ];
 
@@ -749,7 +751,6 @@ export function AppShell() {
   if (gate === "nobook") return <NoBookScreen onOut={() => void refreshGate()} />;
   if (accessHash && !unlocked && gate === "app" && !acct) return <LoginScreen accessHash={accessHash} onOk={() => setUnlocked(true)} />;
   const visNav = NAV.filter((item) => {
-    if (item.to === "/import") return can("import.use") || can("export.use");
     const p = NAV_PERM[item.to];
     return !p || can(p);
   });

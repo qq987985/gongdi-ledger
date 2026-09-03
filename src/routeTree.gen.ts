@@ -14,6 +14,7 @@ import { Route as AttendanceRouteImport } from './routes/attendance'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as ContractsRouteImport } from './routes/contracts'
 import { Route as ExpensesRouteImport } from './routes/expenses'
+import { Route as ExportRouteImport } from './routes/export'
 import { Route as FilesRouteImport } from './routes/files'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as PaymentsRouteImport } from './routes/payments'
@@ -59,6 +60,11 @@ const ContractsRoute = ContractsRouteImport.update({
 const ExpensesRoute = ExpensesRouteImport.update({
   id: '/expenses',
   path: '/expenses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExportRoute = ExportRouteImport.update({
+  id: '/export',
+  path: '/export',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FilesRoute = FilesRouteImport.update({
@@ -173,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/audit': typeof AuditRoute
   '/contracts': typeof ContractsRoute
   '/expenses': typeof ExpensesRoute
+  '/export': typeof ExportRoute
   '/files': typeof FilesRoute
   '/import': typeof ImportRoute
   '/payments': typeof PaymentsRoute
@@ -201,6 +208,7 @@ export interface FileRoutesByTo {
   '/audit': typeof AuditRoute
   '/contracts': typeof ContractsRoute
   '/expenses': typeof ExpensesRoute
+  '/export': typeof ExportRoute
   '/files': typeof FilesRoute
   '/import': typeof ImportRoute
   '/payments': typeof PaymentsRoute
@@ -230,6 +238,7 @@ export interface FileRoutesById {
   '/audit': typeof AuditRoute
   '/contracts': typeof ContractsRoute
   '/expenses': typeof ExpensesRoute
+  '/export': typeof ExportRoute
   '/files': typeof FilesRoute
   '/import': typeof ImportRoute
   '/payments': typeof PaymentsRoute
@@ -260,6 +269,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/contracts'
     | '/expenses'
+    | '/export'
     | '/files'
     | '/import'
     | '/payments'
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/contracts'
     | '/expenses'
+    | '/export'
     | '/files'
     | '/import'
     | '/payments'
@@ -316,6 +327,7 @@ export interface FileRouteTypes {
     | '/audit'
     | '/contracts'
     | '/expenses'
+    | '/export'
     | '/files'
     | '/import'
     | '/payments'
@@ -345,6 +357,7 @@ export interface RootRouteChildren {
   AuditRoute: typeof AuditRoute
   ContractsRoute: typeof ContractsRoute
   ExpensesRoute: typeof ExpensesRoute
+  ExportRoute: typeof ExportRoute
   FilesRoute: typeof FilesRoute
   ImportRoute: typeof ImportRoute
   PaymentsRoute: typeof PaymentsRoute
@@ -403,6 +416,13 @@ declare module '@tanstack/react-router' {
       path: '/expenses'
       fullPath: '/expenses'
       preLoaderRoute: typeof ExpensesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/export': {
+      id: '/export'
+      path: '/export'
+      fullPath: '/export'
+      preLoaderRoute: typeof ExportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/files': {
@@ -561,6 +581,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuditRoute: AuditRoute,
   ContractsRoute: ContractsRoute,
   ExpensesRoute: ExpensesRoute,
+  ExportRoute: ExportRoute,
   FilesRoute: FilesRoute,
   ImportRoute: ImportRoute,
   PaymentsRoute: PaymentsRoute,

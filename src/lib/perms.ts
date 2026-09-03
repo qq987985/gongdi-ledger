@@ -83,7 +83,7 @@ export const PERM_GROUPS: PermGroup[] = [
   },
   {
     key: "io",
-    label: "导入导出",
+    label: "导入 / 导出",
     items: [
       { id: "import.use", label: "导入" },
       { id: "export.use", label: "导出" },
@@ -216,7 +216,8 @@ export const NAV_PERM: Record<string, string> = {
   "/files": "files.view",
   "/query": "query.view",
   "/audit": "audit.view",
-  "/import": "export.use",
+  "/import": "import.use",
+  "/export": "export.use",
   "/settings": "",
 };
 
