@@ -14,11 +14,11 @@ fi
 mkdir -p "$STAGE/node"
 cp -a app "$STAGE/app"
 rm -rf "$STAGE/app/public/__grok" 2>/dev/null || true
-cp win/启动.bat win/停止.bat "$STAGE/"
+cp win/启动.bat win/停止.bat "$STAGE/win/"
 cp VERSION.txt "$STAGE/" 2>/dev/null || true
 cp 使用说明.md "$STAGE/" 2>/dev/null || true
 cp 目录结构.txt "$STAGE/" 2>/dev/null || true
-printf '%s\n' '工地台账 Windows 解压即用' '双击 启动.bat' 'http://127.0.0.1:8501' '数据在 data，不要删。' > "$STAGE/说明.txt"
+printf '%s\n' '工地台账 Windows 解压即用' '双击 win/启动.bat' 'http://127.0.0.1:8501' '数据在 data，不要删。' > "$STAGE/说明.txt"
 
 if [ -f /tmp/node-win/node.exe ]; then
   cp /tmp/node-win/node.exe "$STAGE/node/node.exe"

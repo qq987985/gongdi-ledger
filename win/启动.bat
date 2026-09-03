@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0"
+cd /d "%~dp0.."
 title 工地台账
 
 if not exist "node\node.exe" (
@@ -43,14 +43,14 @@ if not exist "data" (
   echo data 目录已存在，跳过创建。
 )
 
-set "GONGDI_HOME=%~dp0"
+set "GONGDI_HOME=%CD%"
 set GONGDI_PORTABLE=1
 set UPDATE_REPO=qq987985/gongdi-ledger
-set "DATA_DIR=%~dp0data"
-set "PHOTO_DIR=%~dp0data\photos"
-set "PHOTO_ID_DIR=%~dp0data\photos\id"
-set "PHOTO_BANK_DIR=%~dp0data\photos\bank"
-set "PHOTO_IC_DIR=%~dp0data\photos\ic"
+set "DATA_DIR=%CD%\data"
+set "PHOTO_DIR=%CD%\data\photos"
+set "PHOTO_ID_DIR=%CD%\data\photos\id"
+set "PHOTO_BANK_DIR=%CD%\data\photos\bank"
+set "PHOTO_IC_DIR=%CD%\data\photos\ic"
 set NITRO_HOST=127.0.0.1
 set HOST=127.0.0.1
 set NITRO_PORT=8501
@@ -67,7 +67,7 @@ echo.
 echo 等待服务启动...
 
 REM 先启动 Node 服务（后台），然后等待一下再打开浏览器
-start /b "" "%~dp0node\node.exe" "%~dp0app\server\index.mjs"
+start /b "" "%CD%\node\node.exe" "%CD%\app\server\index.mjs"
 
 REM 等待服务启动（最多等 5 秒）
 set /a count=0
