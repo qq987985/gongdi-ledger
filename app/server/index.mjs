@@ -140,7 +140,19 @@ const server = createServer(async (req, res) => {
     const response = await nodeFetch(request);
     res.statusCode = response.status;
     res.statusMessage = response.statusText;
-    response.headers.forEach((v, k) => res.setHeader(k, v));
+    // 正确处理多个相同名称的响应头（如 Set-Cookie）
+    const headerMap = new Map();
+    response.headers.forEach((v, k) => {
+      if (!headerMap.has(k)) headerMap.set(k, []);
+      headerMap.get(k).push(v);
+    });
+    for (const [k, values] of headerMap) {
+      if (values.length === 1) {
+        res.setHeader(k, values[0]);
+      } else {
+        res.setHeader(k, values);
+      }
+    }
     if (response.body) {
       const reader = response.body.getReader();
       while (true) {
