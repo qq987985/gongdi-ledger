@@ -76,7 +76,10 @@ function mimeType(path) {
 }
 
 function isWithin(base, target) {
-  const rel = target.slice(base.length);
+  // 统一使用正斜杠进行比较
+  const baseNorm = base.replace(/\\/g, "/");
+  const targetNorm = target.replace(/\\/g, "/");
+  const rel = targetNorm.slice(baseNorm.length);
   return !rel.includes("..") && rel.startsWith("/");
 }
 
@@ -86,7 +89,10 @@ async function serveStatic(req) {
   let pathname = decodeURIComponent(url.pathname);
   if (pathname.endsWith("/")) pathname += "index.html";
   const filePath = join(publicDir, pathname);
-  if (!isWithin(publicDir, resolve(filePath))) return null;
+  const resolvedPath = resolve(filePath);
+  console.log("[debug] serveStatic:", pathname, "->", filePath, "resolved:", resolvedPath);
+  console.log("[debug] isWithin:", isWithin(publicDir, resolvedPath));
+  if (!isWithin(publicDir, resolvedPath)) return null;
   try {
     const s = await stat(filePath);
     if (!s.isFile()) return null;
