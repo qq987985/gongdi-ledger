@@ -253,6 +253,7 @@ function ExpensesPage() {
   const [creating, setCreating] = React.useState(false);
   const [printStatus, setPrintStatus] = React.useState("未报销");
   const [printVoucher, setPrintVoucher] = React.useState(false);
+  const [printSingle, setPrintSingle] = React.useState<any | null>(null);
   const [batch, setBatch] = React.useState<any>({
     claimant: "",
     forWhom: "",
@@ -661,6 +662,13 @@ function ExpensesPage() {
                 toast.success("报销已保存");
               }}
               onDelete={() => del([editing.id])}
+              onPrintSingle={(row: any) => {
+                setPrintSingle(row);
+                setTimeout(() => {
+                  window.print();
+                  setPrintSingle(null);
+                }, 0);
+              }}
             />
           ) : null}
           <WideTable id="expenses" pager={pager as any}>
@@ -794,7 +802,7 @@ function ExpensesPage() {
             </table>
           </WideTable>
         </div>
-        <ExpenseSheets rows={printRows} showVoucher={printVoucher} />
+        <ExpenseSheets rows={printSingle ? [printSingle] : printRows} showVoucher={printVoucher} />
       </>
     </Need>
   );
@@ -810,6 +818,7 @@ function ExpenseEditor({
   onCancel,
   onSave,
   onDelete,
+  onPrintSingle,
 }: {
   draft: any;
   creating: boolean;
@@ -820,6 +829,7 @@ function ExpenseEditor({
   onCancel: () => void;
   onSave: (row: any) => void;
   onDelete: () => void;
+  onPrintSingle: (row: any) => void;
 }) {
   const [c, setC] = React.useState(() => ({
     ...draft,
@@ -947,7 +957,7 @@ function ExpenseEditor({
               关闭
             </Button>
             {!creating ? (
-              <Button variant="outline" type="button" onClick={() => window.print()}>
+              <Button variant="outline" type="button" onClick={() => onPrintSingle(c)}>
                 打印报销单
               </Button>
             ) : null}

@@ -241,6 +241,16 @@
       display: none !important;
     }
   }
+
+  /* 打印专用内容：屏幕上隐藏，只在打印时显示（报销单/对账单/查询单） */
+  .print-only {
+    display: none;
+  }
+  @media print {
+    .print-only {
+      display: block;
+    }
+  }
 }
 
 @media (width < 48rem) {

@@ -222,6 +222,7 @@ function ExpensesPage() {
 	const [creating, setCreating] = import_react.useState(false);
 	const [printStatus, setPrintStatus] = import_react.useState("未报销");
 	const [printVoucher, setPrintVoucher] = import_react.useState(false);
+	const [printSingle, setPrintSingle] = import_react.useState(null);
 	const [batch, setBatch] = import_react.useState({
 		claimant: "",
 		forWhom: "",
@@ -795,7 +796,14 @@ function ExpensesPage() {
 						setCreating(false);
 						toast.success("报销已保存");
 					},
-					onDelete: () => del([editing.id])
+					onDelete: () => del([editing.id]),
+					onPrintSingle: (row) => {
+						setPrintSingle(row);
+						setTimeout(() => {
+							window.print();
+							setPrintSingle(null);
+						}, 0);
+					}
 				}) : null,
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WideTable, {
 					id: "expenses",
@@ -1027,12 +1035,12 @@ function ExpensesPage() {
 				})
 			]
 		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExpenseSheets, {
-			rows: printRows,
+			rows: printSingle ? [printSingle] : printRows,
 			showVoucher: printVoucher
 		})] })
 	});
 }
-function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCancel, onSave, onDelete }) {
+function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCancel, onSave, onDelete, onPrintSingle }) {
 	const [c, setC] = import_react.useState(() => ({
 		...draft,
 		payBank: draft.payBank || (!draft.payCardNo ? draft.payAccount : "") || "",
@@ -1177,7 +1185,7 @@ function ExpenseEditor({ draft, creating, all, selectedIds, names, payees, onCan
 							!creating ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 								variant: "outline",
 								type: "button",
-								onClick: () => window.print(),
+								onClick: () => onPrintSingle(c),
 								children: "打印报销单"
 							}) : null,
 							!creating ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
