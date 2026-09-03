@@ -11,7 +11,7 @@ import { Can, Need } from "~/components/can";
 import { PeopleImport, TplLink } from "~/components/excel-import";
 import { PhotoSlot, ScanPhotosButton, usePhotoFlags } from "~/components/photo-slot";
 import { PayTypePick, OtRulePick } from "~/components/pay-fields";
-import { parseIdCard, normalizeIdDate } from "~/lib/idcard";
+import { parseIdCard, validateIdCard, normalizeIdDate } from "~/lib/idcard";
 import { parseDateYmd } from "~/lib/dates";
 import { wageLabel, parseOtRule } from "~/lib/wage";
 import { overAgeLabel } from "~/lib/idcard";
@@ -323,11 +323,13 @@ function PersonEditor({
     idValidTo: normalizeIdDate(person.idValidTo, true),
   }));
   const [tried, setTried] = React.useState(false);
+  const [idErr, setIdErr] = React.useState("");
   function set<K extends keyof Person>(k: K, v: Person[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
   function onId(idCard: string) {
     const parsed = parseIdCard(idCard);
+    setIdErr(validateIdCard(idCard));
     setForm((f) => ({ ...f, idCard, gender: parsed.gender || f.gender, age: parsed.age, birthday: parsed.birthday || f.birthday }));
   }
   const errors = {
@@ -342,6 +344,10 @@ function PersonEditor({
       toast.error(
         `必填未完成：${[errors.name && "姓名", errors.team && "班组", errors.monthWage && "月工资"].filter(Boolean).join("、")}`,
       );
+      return;
+    }
+    if (idErr) {
+      toast.error(`身份证号有误：${idErr}`);
       return;
     }
     const next: Person = {
@@ -441,7 +447,7 @@ function PersonEditor({
           <Field label="餐补/天" hint="按正常出勤天数算，加班折算的工天不算。填0表示没有餐补。">
             <Input type="number" min={0} value={form.mealAllowance || ""} onChange={(e) => set("mealAllowance", Number(e.target.value) || 0)} />
           </Field>
-          <Field label="身份证号（自动生成性别年龄生日）">
+          <Field label="身份证号（自动生成性别年龄生日）" error={idErr}>
             <Input value={form.idCard} onChange={(e) => onId(e.target.value)} />
           </Field>
           <Field label="身份证签发机关">
