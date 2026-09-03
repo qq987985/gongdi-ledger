@@ -1,4 +1,5 @@
 import * as React from "react";
+import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
@@ -16,9 +17,33 @@ function fmt(iso: string) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+function datePart(iso: string) {
+  return fmt(iso).slice(0, 10);
+}
+
+function exportAudit(rows: AuditEntry[], from: string, to: string) {
+  const aoa: unknown[][] = [
+    ["操作记录"],
+    ["序号", "时间", "操作人", "模块", "操作", "内容"],
+  ];
+  [...rows]
+    .sort((a, b) => (a.at || "").localeCompare(b.at || ""))
+    .forEach((e, i) => {
+      aoa.push([i + 1, fmt(e.at), e.userName, e.module, e.action, e.detail]);
+    });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 6 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 50 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "操作记录");
+  const name = from || to ? `操作记录_${from || "起始"}_${to || "至今"}.xlsx` : "操作记录_全部.xlsx";
+  XLSX.writeFile(wb, name);
+}
+
 function AuditPage() {
   const [rows, setRows] = React.useState<AuditEntry[]>([]);
   const [q, setQ] = React.useState("");
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
   const [admin, setAdmin] = React.useState(false);
   const [note, setNote] = React.useState("");
   const [edit, setEdit] = React.useState<AuditEntry | null>(null);
@@ -33,11 +58,21 @@ function AuditPage() {
   }, []);
   const list = React.useMemo(() => {
     const s = q.trim();
-    if (!s) return rows;
-    return rows.filter((e) => [e.userName, e.action, e.detail, e.module, fmt(e.at)].some((x) => x.includes(s)));
-  }, [rows, q]);
-  const pager = usePager("audit", list, q);
+    let out = rows;
+    if (from) out = out.filter((e) => datePart(e.at) >= from);
+    if (to) out = out.filter((e) => datePart(e.at) <= to);
+    if (s) out = out.filter((e) => [e.userName, e.action, e.detail, e.module, fmt(e.at)].some((x) => x.includes(s)));
+    return out;
+  }, [rows, q, from, to]);
+  const pager = usePager("audit", list, [q, from, to].join("|"));
   const pageRows = pager.rows;
+  function doExport() {
+    if (!list.length) {
+      toast.error("当前没有可导出的记录");
+      return;
+    }
+    exportAudit(list, from, to);
+  }
   return (
     <Need perm="audit.view">
       <div className="space-y-5">
@@ -48,10 +83,33 @@ function AuditPage() {
             {admin ? "只有管理员能改或删记录。" : "不能改记录，有问题找管理员。"}
           </p>
         </header>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Input className="max-w-xs" placeholder="搜姓名 / 操作 / 内容" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input
+            type="date"
+            className="h-9 w-40"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            aria-label="开始日期"
+          />
+          <span className="text-sm text-muted">至</span>
+          <Input
+            type="date"
+            className="h-9 w-40"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            aria-label="结束日期"
+          />
+          {(from || to) && (
+            <button type="button" className="text-xs text-muted hover:text-ink" onClick={() => { setFrom(""); setTo(""); }}>
+              清除区间
+            </button>
+          )}
           <Button variant="outline" type="button" onClick={() => void load()}>
             刷新
+          </Button>
+          <Button type="button" onClick={doExport}>
+            导出
           </Button>
         </div>
         {admin ? (
