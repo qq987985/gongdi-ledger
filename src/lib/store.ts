@@ -5,7 +5,7 @@ import { normalizeIdDate, parseIdCard } from "./idcard";
 import { derivedYears, nextYear } from "./dates";
 import { normalizeEntry, splitLegacyReceipts, type ContractEntry, type ContractRecord } from "./contracts";
 import { logOp } from "./audit";
-import type { AttendanceDoc, AttendanceRow, Expense, LedgerState, Payment, Person } from "./types";
+import type { AttendanceDoc, AttendanceRow, Expense, InsuranceMember, InsurancePolicy, LedgerState, Payment, Person } from "./types";
 
 export function emptyState(): LedgerState {
   const year = 2026;
@@ -19,6 +19,8 @@ export function emptyState(): LedgerState {
     contracts: [],
     contractEntries: [],
     expenses: [],
+    insurancePolicies: [],
+    insuranceMembers: [],
     accessHash: "",
   };
 }
@@ -219,6 +221,8 @@ export function demoState(): LedgerState {
     contracts,
     contractEntries,
     expenses: [],
+    insurancePolicies: [],
+    insuranceMembers: [],
     accessHash: "",
   };
 }
@@ -258,6 +262,11 @@ export interface AppActions {
   upsertExpense: (row: Partial<Expense> & { name: string }) => void;
   removeExpenses: (ids: string[]) => void;
   replaceExpenses: (expenses: Expense[]) => void;
+  upsertPolicy: (p: InsurancePolicy) => void;
+  removePolicies: (ids: string[]) => void;
+  upsertMember: (m: Partial<InsuranceMember> & { name: string }) => void;
+  removeMembers: (ids: string[]) => void;
+  replaceMembers: (members: InsuranceMember[]) => void;
   setAccessHash: (accessHash: string) => void;
   setAll: (s: LedgerState) => void;
 }
@@ -491,6 +500,58 @@ export const useApp = create<AppStore>()(
         logOp("删除报销", `${ids.length}笔`, "报销");
       },
       replaceExpenses: (expenses) => set({ expenses }),
+      upsertPolicy: (p) => {
+        const list = get().insurancePolicies || [];
+        const i = list.findIndex((x) => x.id === p.id);
+        const next = { ...p, id: p.id || uid(), policyNo: (p.policyNo || "").trim() };
+        if (i >= 0) {
+          const copy = list.slice();
+          copy[i] = { ...next, id: list[i].id };
+          set({ insurancePolicies: copy });
+          logOp("修改保单", next.policyNo, "团体保险");
+        } else {
+          set({ insurancePolicies: [...list, next] });
+          logOp("新增保单", next.policyNo, "团体保险");
+        }
+      },
+      removePolicies: (ids) => {
+        set({
+          insurancePolicies: (get().insurancePolicies || []).filter((p) => !ids.includes(p.id)),
+          insuranceMembers: (get().insuranceMembers || []).filter((m) => !ids.includes(m.policyId)),
+        });
+        logOp("删除保单", `${ids.length}份`, "团体保险");
+      },
+      upsertMember: (m) => {
+        const list = get().insuranceMembers || [];
+        const i = list.findIndex((x) => x.id === m.id);
+        const next = {
+          ...m,
+          id: m.id || uid(),
+          name: (m.name || "").trim(),
+          policyId: m.policyId || "",
+          leader: m.leader || "",
+          startDate: m.startDate || "",
+          endDate: m.endDate || "",
+          remark: m.remark || "",
+        } as InsuranceMember;
+        if (i >= 0) {
+          const copy = list.slice();
+          copy[i] = { ...next, id: list[i].id };
+          set({ insuranceMembers: copy });
+          logOp("修改被保人", next.name, "团体保险");
+        } else {
+          set({ insuranceMembers: [...list, next] });
+          logOp("新增被保人", next.name, "团体保险");
+        }
+      },
+      removeMembers: (ids) => {
+        set({ insuranceMembers: (get().insuranceMembers || []).filter((m) => !ids.includes(m.id)) });
+        logOp("删除被保人", `${ids.length}人`, "团体保险");
+      },
+      replaceMembers: (members) => {
+        set({ insuranceMembers: members });
+        logOp("导入被保人", `${members.length}人`, "团体保险");
+      },
       setAccessHash: (accessHash) => set({ accessHash }),
       setAll: (s) => set({ ...s, years: derivedYears(s) }),
     }),
@@ -539,6 +600,8 @@ export const useApp = create<AppStore>()(
           contractEntries,
           attendanceDocs,
           expenses: s.expenses || [],
+          insurancePolicies: s.insurancePolicies || [],
+          insuranceMembers: s.insuranceMembers || [],
           years: derivedYears({ ...s, attendance, years: s.years || [] }),
           accessHash: s.accessHash || "",
         };
@@ -553,6 +616,8 @@ export const useApp = create<AppStore>()(
         contracts: s.contracts || [],
         contractEntries: s.contractEntries || [],
         expenses: s.expenses || [],
+        insurancePolicies: s.insurancePolicies || [],
+        insuranceMembers: s.insuranceMembers || [],
         accessHash: s.accessHash || "",
       }),
     },

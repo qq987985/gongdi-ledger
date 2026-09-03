@@ -357,10 +357,10 @@ function ContractsPage() {
                     />
                   </th>
                   <th className="p-3">操作</th>
-                  <th className="sticky left-0 z-10 bg-surface p-3">序号</th>
+                  <th className="sticky left-0 z-10 bg-bg-elevated p-3">序号</th>
                   <th className="p-3">年份</th>
                   <th className="p-3">项目号</th>
-                  <th className="sticky left-14 z-10 bg-surface p-3 shadow-[2px_0_0_var(--color-line)]">项目名称</th>
+                  <th className="sticky left-14 z-10 bg-bg-elevated p-3 shadow-[2px_0_0_var(--color-line)]">项目名称</th>
                   <th className="min-w-[5.5rem] whitespace-nowrap p-3">扫描件</th>
                   <th className="p-3">总包</th>
                   <th className="p-3">分包</th>

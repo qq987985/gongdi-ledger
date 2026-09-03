@@ -109,6 +109,8 @@ export interface LedgerState {
   contracts: ContractRecord[];
   contractEntries: ContractEntry[];
   expenses: Expense[];
+  insurancePolicies: InsurancePolicy[];
+  insuranceMembers: InsuranceMember[];
   accessHash: string;
 }
 
@@ -120,4 +122,24 @@ export interface AuditEntry {
   action: string;
   detail: string;
   module: string;
+}
+
+export interface InsurancePolicy {
+  id: string;
+  policyNo: string; // 保单号
+  name: string; // 团体/项目名称
+  company: string; // 保险公司
+  periodStart: string; // 保险期开始 YYYY-MM-DD
+  periodEnd: string; // 保险期结束 YYYY-MM-DD
+  remark: string;
+}
+
+export interface InsuranceMember {
+  id: string;
+  policyId: string; // 所属保单
+  name: string; // 姓名
+  leader: string; // 队长
+  startDate: string; // 开始日期
+  endDate: string; // 结束日期，空 = 仍在保
+  remark: string;
 }

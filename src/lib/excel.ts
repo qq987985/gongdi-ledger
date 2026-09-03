@@ -12,7 +12,7 @@ import {
   type ContractEntry,
   type ContractRecord,
 } from "./contracts";
-import type { AttendanceRow, Expense, Payment, Person } from "./types";
+import type { AttendanceRow, Expense, InsuranceMember, Payment, Person } from "./types";
 
 const { utils } = XLSX;
 const readSync = XLSX.read;
@@ -427,6 +427,51 @@ export function expenseTemplateWb(): XLSX.WorkBook {
     "填写说明",
   );
   return wb;
+}
+
+export function insuranceMemberTemplateWb(): XLSX.WorkBook {
+  const wb = utils.book_new();
+  utils.book_append_sheet(
+    wb,
+    titledSheet("保险人员导入模板", [
+      ["姓名", "队长", "开始日期", "结束日期", "备注"],
+      ["张三", "王队长", "2026-01-01", "2026-06-30", "示例，导入前请改"],
+      ["李四", "王队长", "2026-03-01", "", "仍在保，结束日期留空"],
+    ]),
+    "保险人员",
+  );
+  utils.book_append_sheet(
+    wb,
+    noteSheet([
+      "填写说明（此表不会导入）",
+      "姓名必填；队长手填。",
+      "开始日期必填；结束日期留空表示仍在保，替换时自动填上。",
+      "日期写成 2026/1/1 或 2026-01-01 都可以。",
+      "请把张三、李四改成自己的人再导入。",
+    ]),
+    "填写说明",
+  );
+  return wb;
+}
+
+export function parseInsuranceMembersSheet(buf: ArrayBuffer | Uint8Array): InsuranceMember[] {
+  const wb = readWb(buf);
+  const preferred = wb.SheetNames.find((n) => n.includes("保险")) || wb.SheetNames[0];
+  return sheetRecords(wb.Sheets[preferred])
+    .map((row) => {
+      const name = pick(row, ["姓名", "name"]);
+      if (!name || name === "合计") return null;
+      return {
+        id: uid(),
+        policyId: "",
+        name,
+        leader: pick(row, ["队长", "组长"]),
+        startDate: normalizeDate(pick(row, ["开始日期", "开始时间", "日期"])),
+        endDate: normalizeDate(pick(row, ["结束日期", "结束时间"])),
+        remark: pick(row, ["备注"]),
+      } as InsuranceMember;
+    })
+    .filter((x): x is InsuranceMember => x !== null);
 }
 
 function peopleSheetAoa(people: Person[]): unknown[][] {

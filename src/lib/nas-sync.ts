@@ -38,6 +38,8 @@ function sliceState(s: LedgerState) {
     contracts: s.contracts || [],
     contractEntries: s.contractEntries || [],
     expenses: s.expenses || [],
+    insurancePolicies: s.insurancePolicies || [],
+    insuranceMembers: s.insuranceMembers || [],
     accessHash: s.accessHash || "",
   };
 }
@@ -62,6 +64,8 @@ export async function pullNasLedger(): Promise<void> {
     contracts: j.contracts || [],
     contractEntries: j.contractEntries || [],
     expenses: j.expenses || [],
+    insurancePolicies: j.insurancePolicies || [],
+    insuranceMembers: j.insuranceMembers || [],
     accessHash: j.accessHash || "",
   });
 }

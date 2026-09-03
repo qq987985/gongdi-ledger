@@ -129,3 +129,14 @@ export function confirmRemoveYear(y: number, filledMonths: number): boolean {
 export function nextYear(years: number[]): number {
   return (years.length ? Math.max(...years) : new Date().getFullYear()) + 1;
 }
+
+/** 两个 YYYY-MM-DD 之间的天数（含首尾）。缺任一端返回 0。 */
+export function daysBetween(from: string, to: string): number {
+  const a = parseDateYmd(from);
+  const b = parseDateYmd(to);
+  if (!a || !b) return 0;
+  const da = new Date(`${a}T00:00:00`);
+  const db = new Date(`${b}T00:00:00`);
+  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return 0;
+  return Math.round((db.getTime() - da.getTime()) / 864e5) + 1;
+}

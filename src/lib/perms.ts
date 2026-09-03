@@ -74,6 +74,14 @@ export const PERM_GROUPS: PermGroup[] = [
     ],
   },
   {
+    key: "insurance",
+    label: "团体保险",
+    items: [
+      { id: "insurance.view", label: "查看" },
+      { id: "insurance.edit", label: "新增/修改" },
+    ],
+  },
+  {
     key: "query",
     label: "个人查询",
     items: [
@@ -214,6 +222,7 @@ export const NAV_PERM: Record<string, string> = {
   "/expenses": "expenses.view",
   "/photos": "photos.view",
   "/files": "files.view",
+  "/insurance": "insurance.view",
   "/query": "query.view",
   "/audit": "audit.view",
   "/import": "import.use",

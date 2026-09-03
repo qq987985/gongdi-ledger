@@ -17,6 +17,7 @@ import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as ExportRouteImport } from './routes/export'
 import { Route as FilesRouteImport } from './routes/files'
 import { Route as ImportRouteImport } from './routes/import'
+import { Route as InsuranceRouteImport } from './routes/insurance'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PeopleRouteImport } from './routes/people'
 import { Route as PhotosRouteImport } from './routes/photos'
@@ -75,6 +76,11 @@ const FilesRoute = FilesRouteImport.update({
 const ImportRoute = ImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InsuranceRoute = InsuranceRouteImport.update({
+  id: '/insurance',
+  path: '/insurance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PaymentsRoute = PaymentsRouteImport.update({
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/export': typeof ExportRoute
   '/files': typeof FilesRoute
   '/import': typeof ImportRoute
+  '/insurance': typeof InsuranceRoute
   '/payments': typeof PaymentsRoute
   '/people': typeof PeopleRoute
   '/photos': typeof PhotosRoute
@@ -211,6 +218,7 @@ export interface FileRoutesByTo {
   '/export': typeof ExportRoute
   '/files': typeof FilesRoute
   '/import': typeof ImportRoute
+  '/insurance': typeof InsuranceRoute
   '/payments': typeof PaymentsRoute
   '/people': typeof PeopleRoute
   '/photos': typeof PhotosRoute
@@ -241,6 +249,7 @@ export interface FileRoutesById {
   '/export': typeof ExportRoute
   '/files': typeof FilesRoute
   '/import': typeof ImportRoute
+  '/insurance': typeof InsuranceRoute
   '/payments': typeof PaymentsRoute
   '/people': typeof PeopleRoute
   '/photos': typeof PhotosRoute
@@ -272,6 +281,7 @@ export interface FileRouteTypes {
     | '/export'
     | '/files'
     | '/import'
+    | '/insurance'
     | '/payments'
     | '/people'
     | '/photos'
@@ -301,6 +311,7 @@ export interface FileRouteTypes {
     | '/export'
     | '/files'
     | '/import'
+    | '/insurance'
     | '/payments'
     | '/people'
     | '/photos'
@@ -330,6 +341,7 @@ export interface FileRouteTypes {
     | '/export'
     | '/files'
     | '/import'
+    | '/insurance'
     | '/payments'
     | '/people'
     | '/photos'
@@ -360,6 +372,7 @@ export interface RootRouteChildren {
   ExportRoute: typeof ExportRoute
   FilesRoute: typeof FilesRoute
   ImportRoute: typeof ImportRoute
+  InsuranceRoute: typeof InsuranceRoute
   PaymentsRoute: typeof PaymentsRoute
   PeopleRoute: typeof PeopleRoute
   PhotosRoute: typeof PhotosRoute
@@ -437,6 +450,13 @@ declare module '@tanstack/react-router' {
       path: '/import'
       fullPath: '/import'
       preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/insurance': {
+      id: '/insurance'
+      path: '/insurance'
+      fullPath: '/insurance'
+      preLoaderRoute: typeof InsuranceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/payments': {
@@ -584,6 +604,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExportRoute: ExportRoute,
   FilesRoute: FilesRoute,
   ImportRoute: ImportRoute,
+  InsuranceRoute: InsuranceRoute,
   PaymentsRoute: PaymentsRoute,
   PeopleRoute: PeopleRoute,
   PhotosRoute: PhotosRoute,

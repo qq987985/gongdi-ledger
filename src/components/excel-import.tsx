@@ -8,12 +8,13 @@ import {
   parseContractWorkbook,
   parseExpenseSheet,
   parseFullAttendanceWorkbook,
+  parseInsuranceMembersSheet,
   parsePaymentSheet,
   parsePeopleSheet,
 } from "~/lib/excel";
 import { uid } from "~/lib/utils";
 import { useApp } from "~/lib/store";
-import type { AttendanceRow, Person } from "~/lib/types";
+import type { AttendanceRow, InsuranceMember, Person } from "~/lib/types";
 
 type ImportMode = "add" | "replace";
 
@@ -511,5 +512,115 @@ export function FullBookImport() {
         );
       }}
     />
+  );
+}
+
+/* ───────────── 保险人员导入 ───────────── */
+export function InsuranceMemberImport({ policyId }: { policyId: string }) {
+  const store = useApp();
+  const [mode, setMode] = React.useState<ImportMode>("add");
+  const [conflicts, setConflicts] = React.useState<{ incoming: InsuranceMember; existing: InsuranceMember; action: "skip" | "overwrite" }[]>([]);
+  const [fresh, setFresh] = React.useState<InsuranceMember[]>([]);
+  async function onFile(file: File) {
+    if (!file) return;
+    const rows = parseInsuranceMembersSheet(await file.arrayBuffer());
+    if (!rows.length) {
+      toast.error("没有读到保险人员。模板列：姓名、队长、开始日期、结束日期、备注。");
+      return;
+    }
+    const byName = Object.fromEntries(
+      store.insuranceMembers.filter((m) => m.policyId === policyId).map((m) => [m.name, m]),
+    );
+    const c: { incoming: InsuranceMember; existing: InsuranceMember; action: "skip" | "overwrite" }[] = [];
+    const f: InsuranceMember[] = [];
+    for (const row of rows) {
+      const ex = byName[row.name];
+      if (ex) c.push({ incoming: row, existing: ex, action: "skip" });
+      else f.push(row);
+    }
+    setFresh(f);
+    setConflicts(c);
+    toast.message(`解析到 ${rows.length} 人：新增 ${f.length}，重复 ${c.length}`);
+  }
+  function apply() {
+    const others = store.insuranceMembers.filter((m) => m.policyId !== policyId);
+    let here = store.insuranceMembers.filter((m) => m.policyId === policyId);
+    if (mode === "replace") {
+      const incomingNames = new Set([
+        ...fresh.map((m) => m.name),
+        ...conflicts.filter((c) => c.action === "overwrite").map((c) => c.incoming.name),
+      ]);
+      here = here.filter((m) => !incomingNames.has(m.name));
+    }
+    const result = [...others, ...here];
+    for (const m of fresh) result.push({ ...m, id: uid(), policyId });
+    for (const c of conflicts)
+      if (c.action === "overwrite")
+        for (let i = 0; i < result.length; i++)
+          if (result[i].id === c.existing.id) result[i] = { ...c.incoming, id: c.existing.id, policyId };
+    store.replaceMembers(result);
+    toast.success(mode === "replace" ? "保险人员已替换导入" : "保险人员导入完成");
+    setConflicts([]);
+    setFresh([]);
+  }
+  return (
+    <>
+      <ExcelBtn label="导入人员" onFile={onFile} />
+      {fresh.length || conflicts.length ? (
+        <section className="basis-full mt-3 rounded-xl border border-line bg-surface p-4">
+          <h2 className="font-semibold">保险人员导入确认</h2>
+          <p className="mt-1 text-sm text-muted">
+            新增 {fresh.length} 人，重复 {conflicts.length} 人。
+            {mode === "replace" ? "替换模式：会清空本保单重复人员后重新导入。" : "增加模式：在本保单现有人员基础上追加。"}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="ins-member-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
+            </label>
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input type="radio" name="ins-member-mode" checked={mode === "replace"} onChange={() => setMode("replace")} /> 替换
+            </label>
+          </div>
+          {conflicts.length > 0 ? (
+            <>
+              <div className="mt-3 flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setConflicts((cs) => cs.map((c) => ({ ...c, action: "skip" })))}>
+                  全部跳过
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setConflicts((cs) => cs.map((c) => ({ ...c, action: "overwrite" })))}>
+                  全部覆盖
+                </Button>
+              </div>
+              <ul className="mt-3 space-y-2 text-sm">
+                {conflicts.map((c, i) => (
+                  <li key={c.existing.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2">
+                    <span>
+                      {c.incoming.name} · 现有 {c.existing.leader || "无队长"} → 导入 {c.incoming.leader || "无队长"}
+                    </span>
+                    <select
+                      className="field-select h-9"
+                      value={c.action}
+                      onChange={(e) =>
+                        setConflicts((cs) => {
+                          const n = cs.slice();
+                          n[i] = { ...n[i], action: e.target.value as "skip" | "overwrite" };
+                          return n;
+                        })
+                      }
+                    >
+                      <option value="skip">跳过</option>
+                      <option value="overwrite">覆盖</option>
+                    </select>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          <Button className="mt-4" onClick={apply}>
+            确认导入
+          </Button>
+        </section>
+      ) : null}
+    </>
   );
 }

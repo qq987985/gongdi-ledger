@@ -10,6 +10,7 @@ import {
   attendanceTemplateWb,
   paymentTemplateWb,
   peopleTemplateWb,
+  insuranceMemberTemplateWb,
 } from "~/lib/excel";
 import { hasWork } from "~/lib/wage";
 import { writeCenteredXlsx } from "~/lib/xlsx-center";
@@ -168,6 +169,7 @@ export const Route = createFileRoute("/api/file/$kind")({
         if (kind === "payment-template") return xlsxFile(paymentTemplateWb(), "发放记录导入模板.xlsx");
         if (kind === "expense-template") return xlsxFile(expenseTemplateWb(), "报销单导入模板.xlsx");
         if (kind === "contract-template") return xlsxFile(contractTemplateWb(), "合同导入模板.xlsx");
+        if (kind === "insurance-member-template") return xlsxFile(insuranceMemberTemplateWb(), "保险人员导入模板.xlsx");
         if (
           kind === "contract-export" ||
           kind === "export" ||
