@@ -4,12 +4,12 @@ cd /d "%~dp0.."
 title GongDi Ledger
 
 if not exist "node\node.exe" (
-  echo Missing node\node.exe. Please re-extract the full package.
+  echo [ERROR] Missing node\node.exe. Please re-extract the full package.
   pause
   exit /b 1
 )
 if not exist "app\server\index.mjs" (
-  echo Missing app\server\index.mjs. Please re-extract the full package.
+  echo [ERROR] Missing app\server\index.mjs. Please re-extract the full package.
   pause
   exit /b 1
 )
@@ -59,20 +59,16 @@ set NODE_ENV=production
 
 echo.
 echo ========================================
-echo  GongDi Ledger Started
-echo  Open browser: http://127.0.0.1:8501
-echo  Close this window to stop. Data in data folder.
+echo  GongDi Ledger
+echo  http://127.0.0.1:8501
+echo  Close this window to stop
 echo ========================================
 echo.
 
-REM Start Node service directly (not in background, so we can see errors)
-REM Open browser after a short delay
-timeout /t 2 /nobreak >nul 2>&1
-start "" "http://127.0.0.1:8501"
-
-REM Run Node (this blocks until user presses Ctrl+C or closes window)
+REM Run Node and show errors in console
 "%CD%\node\node.exe" "%CD%\app\server\index.mjs"
-
-echo.
-echo Stopped.
-timeout /t 2 >nul
+if %errorlevel% neq 0 (
+  echo.
+  echo [ERROR] Node exited with code %errorlevel%
+  pause
+)
