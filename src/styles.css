@@ -1,34 +1,86 @@
+/*
+  ════════════════════════════════════════════════════════════════════
+  设计理念：工地账本的现代演绎 ——「工程蓝 × 石灰白」
+  ════════════════════════════════════════════════════════════════════
+
+  这是一个工地台账工具，核心场景是：包工头/财务/劳资员在工地现场
+  用手机记考勤、算工资，回到办公室用电脑导 Excel、核对账目。
+
+  因此，视觉设计服务于三件事：
+  ① 长时间录入不累眼  ② 表格数字一眼看清  ③ 手机上拇指也能点
+
+  一、色彩体系
+  · 主色「工程蓝」#1e56a0 —— 取自工程蓝图与安全帽蓝，传递专业、可靠、
+    冷静的氛围。账目、合同、工资这些需要信任感的内容，蓝色是通用的
+    专业语义色，也让 Excel 导出的蓝色表头与页面观感一致。
+  · 背景「石灰白」#f5f6f8 —— 比纯白柔和、比旧版米黄清爽。工地环境
+    光线复杂，暖中性灰底能减少眩光与视觉疲劳，同时让白色卡片浮起来，
+    形成清晰的层级。
+  · 文字「墨灰蓝」#1b2430 —— 不用死黑，深灰蓝更柔和耐读，适合大量
+    表格文字长时间阅读。
+  · 语义色（绿=已结/成功、橙=待处理/警告、红=危险/欠款）全部降低饱和
+    度、统一明度，避免红绿色盲用户混淆，也避免刺眼。
+
+  二、字体层级
+  · 正文用系统中文黑体（苹方/雅黑），保证工地各种 Windows/手机都清晰。
+  · 金额、人数、日期用 DIN 等宽数字体，让表格数字竖排对齐、金额一目了然。
+
+  三、圆角与阴影
+  · 圆角放大到 6/10/14/20px，比旧版更圆润现代，但保留直角表格的严谨感。
+  · 卡片用极轻的阴影代替粗边框，让信息分层更柔和。
+
+  四、动效节奏
+  · 所有交互 150ms 过渡，快速不拖沓；按钮按下有轻微缩放反馈；
+    焦点用柔和的同色光环，既醒目又不刺眼。数据密集型工具不需要花哨
+    动效，需要的是「快、准、稳」的反馈。
+
+  五、响应式
+  · 桌面端左侧固定导航 + 宽表格，信息密度高；
+  · 移动端底部标签栏 + 顶部吸顶工具条，输入控件放大到 16px 防止
+    iOS 自动缩放，按钮高度增大到 44px 触控友好。
+  ════════════════════════════════════════════════════════════════════
+*/
 @import "tailwindcss";
 
 @theme {
   --font-sans: "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", "Noto Sans SC", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
-  --font-display: "DIN Alternate", "DIN", "Arial Black", system-ui, sans-serif;
+  --font-display: "DIN Alternate", "DIN", "Roboto Condensed", "Arial Black", system-ui, sans-serif;
 
-  --color-bg: #f4efe6;
-  --color-bg-elevated: #faf7f0;
+  /* 背景与表面 */
+  --color-bg: #f5f6f8;
+  --color-bg-elevated: #eef1f5;
   --color-surface: #ffffff;
-  --color-ink: #1c1915;
-  --color-muted: #5c564c;
-  --color-subtle: #8c8378;
-  --color-line: #d7cfc2;
-  --color-line-strong: #bdb3a3;
 
-  --color-accent: #2f4f3e;
-  --color-accent-fg: #f4efe6;
-  --color-accent-soft: #e7eee9;
+  /* 文字 */
+  --color-ink: #1b2430;
+  --color-muted: #4b5563;
+  --color-subtle: #8a94a3;
 
-  --color-ok: #2a7a43;
-  --color-warn: #a35a00;
-  --color-warn-bg: #fff2db;
-  --color-danger: #b02a2a;
-  --color-danger-bg: #ffe8e6;
-  --color-danger-fg: #f4efe6;
+  /* 边框 */
+  --color-line: #e3e7ee;
+  --color-line-strong: #c9d2dd;
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  /* 主色：工程蓝 */
+  --color-accent: #1e56a0;
+  --color-accent-fg: #ffffff;
+  --color-accent-soft: #e7eef8;
+  --color-accent-strong: #17467f;
+
+  /* 语义色 */
+  --color-ok: #177245;
+  --color-ok-bg: #e6f2eb;
+  --color-warn: #a35d00;
+  --color-warn-bg: #fdf1e2;
+  --color-danger: #c23737;
+  --color-danger-bg: #fdecec;
+  --color-danger-fg: #ffffff;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
 }
 
 @layer base {
@@ -38,6 +90,16 @@
   body {
     background-color: var(--color-bg);
     color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+  }
+  * {
+    border-color: var(--color-line);
   }
 }
 
@@ -45,6 +107,7 @@
   .btn {
     height: 2rem;
     padding-inline: 0.625rem;
+    border-radius: var(--radius-sm);
   }
   .btn-sm {
     height: 1.75rem;
@@ -74,15 +137,21 @@
     color: var(--color-ink);
     padding-inline: 0.75rem;
     font-size: 0.875rem;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .field-select:hover {
+    border-color: var(--color-line-strong);
   }
   .field-select:focus {
     border-color: var(--color-accent);
     outline: none;
-    box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 20%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 18%, transparent);
   }
 
   .shadow-panel {
-    box-shadow: 0 1px 2px #1c19140f;
+    box-shadow:
+      0 1px 2px rgba(27, 36, 48, 0.04),
+      0 4px 16px -4px rgba(27, 36, 48, 0.06);
   }
 
   .min-w-ledger {
@@ -93,6 +162,7 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
     touch-action: pan-x pan-y;
+    scrollbar-color: var(--color-line-strong) var(--color-bg-elevated);
   }
   .wide-scroll::-webkit-scrollbar {
     height: 12px;
@@ -120,6 +190,12 @@
   .wide-table thead th {
     text-align: center !important;
   }
+  .wide-table thead {
+    background: var(--color-bg-elevated);
+  }
+  .wide-table thead th {
+    border-bottom: 1px solid var(--color-line-strong);
+  }
   .wide-table .th-title {
     white-space: nowrap;
     color: var(--color-ink);
@@ -146,6 +222,12 @@
     top: 20%;
     right: 0;
   }
+  .wide-table tbody tr {
+    transition: background-color 120ms ease;
+  }
+  .wide-table tbody tr:hover {
+    background: color-mix(in oklab, var(--color-accent-soft) 55%, transparent);
+  }
   .wide-table td {
     white-space: nowrap;
   }
@@ -163,20 +245,20 @@
 
 @media (width < 48rem) {
   .btn {
-    height: 2.25rem;
-    padding-inline: 0.75rem;
-  }
-  .btn-sm {
-    height: 2rem;
-    padding-inline: 0.625rem;
-  }
-  .btn-lg {
     height: 2.5rem;
     padding-inline: 0.875rem;
   }
-  .btn-icon {
-    width: 2.25rem;
+  .btn-sm {
     height: 2.25rem;
+    padding-inline: 0.75rem;
+  }
+  .btn-lg {
+    height: 2.75rem;
+    padding-inline: 1rem;
+  }
+  .btn-icon {
+    width: 2.5rem;
+    height: 2.5rem;
   }
   input,
   select,
