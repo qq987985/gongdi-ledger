@@ -64,31 +64,15 @@ echo  Open browser: http://127.0.0.1:8501
 echo  Close this window to stop. Data in data folder.
 echo ========================================
 echo.
-echo Waiting for service to start...
 
-REM Start Node service in background, then wait before opening browser
-start /b "gongdi-node" "%CD%\node\node.exe" "%CD%\app\server\index.mjs"
-
-REM Wait for service to be ready (max 5 seconds)
-set /a count=0
-:wait_loop
-timeout /t 1 /nobreak >nul 2>&1
-set /a count+=1
-powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8501/api/health' -TimeoutSec 2 -UseBasicParsing; exit 0 } catch { exit 1 }" >nul 2>&1
-if %errorlevel% == 0 goto service_ready
-if %count% lss 5 goto wait_loop
-
-:service_ready
-REM Service ready, open browser
+REM Start Node service directly (not in background, so we can see errors)
+REM Open browser after a short delay
+timeout /t 2 /nobreak >nul 2>&1
 start "" "http://127.0.0.1:8501"
 
-REM Wait for Node process to end
-echo.
-echo Service running, press any key to stop...
-pause >nul
+REM Run Node (this blocks until user presses Ctrl+C or closes window)
+"%CD%\node\node.exe" "%CD%\app\server\index.mjs"
 
-REM Stop Node process
-taskkill /F /IM node.exe >nul 2>&1
 echo.
 echo Stopped.
 timeout /t 2 >nul
