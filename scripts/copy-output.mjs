@@ -28,6 +28,12 @@ await copyFile(
   join(appDir, "server", "index.mjs"),
 );
 
+// 复制 VERSION.txt 到 app 根目录，供 Windows 打包使用
+await copyFile(
+  join(root, "VERSION.txt"),
+  join(appDir, "VERSION.txt"),
+).catch(() => {});
+
 await cp(join(dist, "client"), join(appDir, "public"), { recursive: true });
 
 const files = await readdir(join(appDir, "public"));
