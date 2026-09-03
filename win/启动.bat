@@ -1,28 +1,28 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0.."
-title 工地台账
+title GongDi Ledger
 
 if not exist "node\node.exe" (
-  echo 缺少 node\node.exe，请重新解压完整压缩包。
+  echo Missing node\node.exe. Please re-extract the full package.
   pause
   exit /b 1
 )
 if not exist "app\server\index.mjs" (
-  echo 缺少 app\server\index.mjs，请重新解压完整压缩包。
+  echo Missing app\server\index.mjs. Please re-extract the full package.
   pause
   exit /b 1
 )
 
 if exist "data\VERSION.txt" (
-  echo 清理 data\VERSION.txt 旧挂载残留...
+  echo Cleaning up old data\VERSION.txt mount residue...
   rmdir /S /Q "data\VERSION.txt" 2>nul
   del /F /Q "data\VERSION.txt" 2>nul
 )
 
-echo 正在初始化数据目录...
+echo Initializing data directory...
 if not exist "data" (
-  echo 首次运行，创建 data 目录结构...
+  echo First run, creating data directory structure...
   mkdir "data"
   mkdir "data\accounts"
   mkdir "data\books"
@@ -31,16 +31,16 @@ if not exist "data" (
   mkdir "data\photos\id"
   mkdir "data\photos\bank"
   mkdir "data\photos\ic"
-  mkdir "data\photos\报量单"
-  mkdir "data\photos\发票"
-  mkdir "data\photos\收款回单"
-  mkdir "data\photos\考勤影像"
-  mkdir "data\photos\合同扫描件"
-  mkdir "data\photos\报销凭证"
-  mkdir "data\photos\报销打款"
-  echo 目录创建完成。
+  mkdir "data\photos\report"
+  mkdir "data\photos\invoice"
+  mkdir "data\photos\receipt"
+  mkdir "data\photos\attendance"
+  mkdir "data\photos\contract"
+  mkdir "data\photos\expense"
+  mkdir "data\photos\payout"
+  echo Directory creation complete.
 ) else (
-  echo data 目录已存在，跳过创建。
+  echo data directory exists, skipping creation.
 )
 
 set "GONGDI_HOME=%CD%"
@@ -59,17 +59,17 @@ set NODE_ENV=production
 
 echo.
 echo ========================================
-echo  工地台账已启动
-echo  浏览器打开: http://127.0.0.1:8501
-echo  关掉本窗口即停止。数据在 data 文件夹。
+echo  GongDi Ledger Started
+echo  Open browser: http://127.0.0.1:8501
+echo  Close this window to stop. Data in data folder.
 echo ========================================
 echo.
-echo 等待服务启动...
+echo Waiting for service to start...
 
-REM 先启动 Node 服务（后台），然后等待一下再打开浏览器
+REM Start Node service in background, then wait before opening browser
 start /b "gongdi-node" "%CD%\node\node.exe" "%CD%\app\server\index.mjs"
 
-REM 等待服务启动（最多等 5 秒）
+REM Wait for service to be ready (max 5 seconds)
 set /a count=0
 :wait_loop
 timeout /t 1 /nobreak >nul 2>&1
@@ -79,16 +79,16 @@ if %errorlevel% == 0 goto service_ready
 if %count% lss 5 goto wait_loop
 
 :service_ready
-REM 服务已就绪，打开浏览器
+REM Service ready, open browser
 start "" "http://127.0.0.1:8501"
 
-REM 等待 Node 进程结束
+REM Wait for Node process to end
 echo.
-echo 服务运行中，按任意键停止...
+echo Service running, press any key to stop...
 pause >nul
 
-REM 停止 Node 进程
+REM Stop Node process
 taskkill /F /IM node.exe >nul 2>&1
 echo.
-echo 已停止。
+echo Stopped.
 timeout /t 2 >nul
