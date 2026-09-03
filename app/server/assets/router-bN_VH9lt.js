@@ -865,7 +865,7 @@ var $$splitComponentImporter$2 = () => import("./photos-D3KbVXug.js");
 const Route$10 = createFileRoute("/photos")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
 var $$splitComponentImporter$1 = () => import("./query-ClT9s6ek.js");
 const Route$11 = createFileRoute("/query")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./settings--k9hME-t.js");
+var $$splitComponentImporter = () => import("./settings-iKXgXVJ1.js");
 const Route$12 = createFileRoute("/settings")({ component: lazyRouteComponent($$splitComponentImporter, "component") });
 const Route$13 = createFileRoute("/api/audit")({ server: { handlers: {
 	GET: async ({ request }) => {

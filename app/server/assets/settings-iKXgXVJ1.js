@@ -25,6 +25,10 @@ function SettingsPage() {
 	const [rule, setRule] = import_react.useState("按小时:25");
 	const [clearPwd, setClearPwd] = import_react.useState("");
 	const [showClearConfirm, setShowClearConfirm] = import_react.useState(false);
+	const [isAdmin, setIsAdmin] = import_react.useState(false);
+	import_react.useEffect(() => {
+		authStatus().then((s) => setIsAdmin(s.user?.role === "admin"));
+	}, []);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "max-w-3xl space-y-8",
 		children: [
@@ -171,7 +175,7 @@ function SettingsPage() {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 							className: "mt-1 text-sm text-muted",
-							children: ["清空全部数据后可用模板导入。示例数据请在「导入」页面下载模板查看。", nasEnabled() ? " 全部个人数据只在 NAS 的 data 目录：accounts、books、photos、backups、templates。软件删了重装，只要 data 还在就能恢复。" : ""]
+							children: [isAdmin ? "清空全部数据后可用模板导入。示例数据请在「导入」页面下载模板查看。" : "示例数据请在「导入」页面下载模板查看。", nasEnabled() ? " 全部个人数据只在 NAS 的 data 目录：accounts、books、photos、backups、templates。软件删了重装，只要 data 还在就能恢复。" : ""]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "mt-3 flex flex-wrap gap-2",
@@ -186,7 +190,7 @@ function SettingsPage() {
 									}
 								},
 								children: "立即备份 Excel"
-							}) : null, !showClearConfirm ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
+							}) : null, isAdmin && (!showClearConfirm ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Button, {
 								variant: "danger",
 								type: "button",
 								onClick: () => setShowClearConfirm(true),
@@ -245,7 +249,7 @@ function SettingsPage() {
 										children: "取消"
 									})
 								]
-							})]
+							}))]
 						})
 					]
 				})

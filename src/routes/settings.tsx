@@ -26,6 +26,12 @@ function SettingsPage() {
   const [rule, setRule] = React.useState("按小时:25");
   const [clearPwd, setClearPwd] = React.useState("");
   const [showClearConfirm, setShowClearConfirm] = React.useState(false);
+  const [isAdmin, setIsAdmin] = React.useState(false);
+  
+  React.useEffect(() => {
+    authStatus().then((s) => setIsAdmin(s.user?.role === "admin"));
+  }, []);
+  
   return (
     <div className="max-w-3xl space-y-8">
       <header>
@@ -131,7 +137,9 @@ function SettingsPage() {
         <section className="rounded-xl border border-line bg-surface p-5">
           <h2 className="font-semibold">数据</h2>
           <p className="mt-1 text-sm text-muted">
-            清空全部数据后可用模板导入。示例数据请在「导入」页面下载模板查看。
+            {isAdmin 
+              ? "清空全部数据后可用模板导入。示例数据请在「导入」页面下载模板查看。"
+              : "示例数据请在「导入」页面下载模板查看。"}
             {nasEnabled()
               ? " 全部个人数据只在 NAS 的 data 目录：accounts、books、photos、backups、templates。软件删了重装，只要 data 还在就能恢复。"
               : ""}
@@ -152,66 +160,68 @@ function SettingsPage() {
                 立即备份 Excel
               </Button>
             ) : null}
-            {!showClearConfirm ? (
-              <Button
-                variant="danger"
-                type="button"
-                onClick={() => setShowClearConfirm(true)}
-              >
-                清空全部数据
-              </Button>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
-                <span className="text-sm text-red-700">此操作不可恢复，请输入访问密码确认：</span>
-                <Input
-                  type="password"
-                  value={clearPwd}
-                  onChange={(e) => setClearPwd(e.target.value)}
-                  placeholder="输入访问密码"
-                  className="w-40"
-                />
+            {isAdmin && (
+              !showClearConfirm ? (
                 <Button
                   variant="danger"
-                  size="sm"
                   type="button"
-                  onClick={async () => {
-                    try {
-                      const { user } = await authOp("verify", { password: clearPwd });
-                      if (!user) {
-                        toast.error("密码错误");
-                        return;
-                      }
-                      if (user.role !== "admin") {
-                        toast.error("只有管理员才能清空全部数据");
+                  onClick={() => setShowClearConfirm(true)}
+                >
+                  清空全部数据
+                </Button>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <span className="text-sm text-red-700">此操作不可恢复，请输入访问密码确认：</span>
+                  <Input
+                    type="password"
+                    value={clearPwd}
+                    onChange={(e) => setClearPwd(e.target.value)}
+                    placeholder="输入访问密码"
+                    className="w-40"
+                  />
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const { user } = await authOp("verify", { password: clearPwd });
+                        if (!user) {
+                          toast.error("密码错误");
+                          return;
+                        }
+                        if (user.role !== "admin") {
+                          toast.error("只有管理员才能清空全部数据");
+                          setShowClearConfirm(false);
+                          setClearPwd("");
+                          return;
+                        }
+                        if (!confirm("确定清空全部人员、考勤、发放和照片？此操作不可恢复！")) return;
+                        clearAll();
+                        await clearAllPhotos();
+                        toast.success("已清空全部数据");
                         setShowClearConfirm(false);
                         setClearPwd("");
-                        return;
+                      } catch (e: any) {
+                        toast.error(e.message || "验证失败");
                       }
-                      if (!confirm("确定清空全部人员、考勤、发放和照片？此操作不可恢复！")) return;
-                      clearAll();
-                      await clearAllPhotos();
-                      toast.success("已清空全部数据");
+                    }}
+                  >
+                    确认清空
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => {
                       setShowClearConfirm(false);
                       setClearPwd("");
-                    } catch (e: any) {
-                      toast.error(e.message || "验证失败");
-                    }
-                  }}
-                >
-                  确认清空
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={() => {
-                    setShowClearConfirm(false);
-                    setClearPwd("");
-                  }}
-                >
-                  取消
-                </Button>
-              </div>
+                    }}
+                  >
+                    取消
+                  </Button>
+                </div>
+              )
             )}
           </div>
         </section>
