@@ -67,7 +67,7 @@ echo.
 echo 等待服务启动...
 
 REM 先启动 Node 服务（后台），然后等待一下再打开浏览器
-start /b "" "%CD%\node\node.exe" "%CD%\app\server\index.mjs"
+start /b "gongdi-node" "%CD%\node\node.exe" "%CD%\app\server\index.mjs"
 
 REM 等待服务启动（最多等 5 秒）
 set /a count=0
