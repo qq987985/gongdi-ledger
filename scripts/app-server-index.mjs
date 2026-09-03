@@ -4,7 +4,7 @@
  * 不依赖外部 npm 包，保证 Docker 镜像里只需 COPY app 即可运行。
  */
 import { createServer } from "node:http";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, mkdir } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import handler from "./server.js";
@@ -14,6 +14,35 @@ const publicDir = resolve(join(here, "..", "public"));
 
 // 默认数据目录在 app 同级的 data/；可通过环境变量 DATA_DIR 覆盖
 process.env.DATA_DIR ??= join(here, "..", "..", "data");
+
+// 自动创建数据目录结构（首次运行时）
+async function ensureDirs() {
+  const dataDir = process.env.DATA_DIR;
+  const dirs = [
+    join(dataDir, "accounts"),
+    join(dataDir, "books"),
+    join(dataDir, "backups"),
+    join(dataDir, "templates"),
+    join(dataDir, "photos", "id"),
+    join(dataDir, "photos", "bank"),
+    join(dataDir, "photos", "ic"),
+    join(dataDir, "photos", "报量单"),
+    join(dataDir, "photos", "发票"),
+    join(dataDir, "photos", "收款回单"),
+    join(dataDir, "photos", "考勤影像"),
+    join(dataDir, "photos", "合同扫描件"),
+    join(dataDir, "photos", "报销凭证"),
+    join(dataDir, "photos", "报销打款"),
+  ];
+  for (const d of dirs) {
+    try {
+      await mkdir(d, { recursive: true });
+    } catch {
+      // 忽略已存在或其他错误
+    }
+  }
+}
+await ensureDirs();
 
 const fetch = typeof handler === "function" ? handler : handler.fetch;
 
