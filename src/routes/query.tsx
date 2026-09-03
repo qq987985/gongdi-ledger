@@ -109,6 +109,33 @@ function buildSlips({
     .filter(Boolean);
 }
 
+function groupSlips(slips: any[], showPays: boolean): any[][] {
+  const groups: any[][] = [];
+  const isBig = (s: any) => {
+    // 内容行数 = 月份数 + 打款记录数（打印打款时），超过 8 行视为内容多，单人一张
+    const lines = s.months.length + (showPays ? s.pays.length : 0);
+    return lines > 8;
+  };
+  let i = 0;
+  while (i < slips.length) {
+    const first = slips[i];
+    if (isBig(first) || i + 1 >= slips.length) {
+      groups.push([first]);
+      i += 1;
+    } else {
+      const second = slips[i + 1];
+      if (isBig(second)) {
+        groups.push([first]);
+        i += 1;
+      } else {
+        groups.push([first, second]);
+        i += 2;
+      }
+    }
+  }
+  return groups;
+}
+
 function PayslipSheets({
   slips,
   rangeLabel: label,
@@ -118,20 +145,23 @@ function PayslipSheets({
   rangeLabel: string;
   showPays: boolean;
 }) {
+  const groups = React.useMemo(() => groupSlips(slips as any[], showPays), [slips, showPays]);
   return (
-    <div className="print-only space-y-8 text-black">
-      {slips.map((s: any) => (
-        <article key={s.person.id} className="payslip border border-black p-4">
-          <header className="border-b border-black pb-2 text-center">
-            <div className="text-lg font-semibold tracking-widest">台账 · 工资条</div>
-            <div className="mt-1 text-sm">{label}</div>
-          </header>
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm md:grid-cols-4">
-            <div>姓名：{s.person.name}</div>
-            <div>班组：{s.person.team || "—"}</div>
-            <div>工资：{wageLabel(s.person)}</div>
-            <div>加班：{parseOtRule(s.person.otRule).label || "—"}</div>
-          </div>
+    <div className="print-only text-black">
+      {groups.map((group, gi) => (
+        <div key={gi} className="payslip-page">
+          {group.map((s: any) => (
+            <article key={s.person.id} className="payslip border border-black p-4">
+              <header className="border-b border-black pb-2 text-center">
+                <div className="text-lg font-semibold tracking-widest">台账 · 工资条</div>
+                <div className="mt-1 text-sm">{label}</div>
+              </header>
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm md:grid-cols-4">
+                <div>姓名：{s.person.name}</div>
+                <div>班组：{s.person.team || "—"}</div>
+                <div>工资：{wageLabel(s.person)}</div>
+                <div>加班：{parseOtRule(s.person.otRule).label || "—"}</div>
+              </div>
           {s.months.length ? (
             <table className="mt-3 w-full border-collapse text-center text-xs">
               <thead>
@@ -223,7 +253,9 @@ function PayslipSheets({
             <div>领款人签字：________________</div>
             <div>日期：______年____月____日</div>
           </div>
-        </article>
+            </article>
+          ))}
+        </div>
       ))}
     </div>
   );

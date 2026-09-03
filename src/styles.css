@@ -252,15 +252,25 @@
     }
   }
 
-  /* 打印工资条：每人一张 A4，避免同一个人被拆到两页 */
+  /* 打印工资条：内容少的两人一张 A4（上下两半，中间裁切），内容多的单人一张 */
   @media print {
+    .payslip-page {
+      break-after: page;
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+    }
+    .payslip-page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
     .payslip {
+      flex: 1 1 0;
       break-inside: avoid;
       page-break-inside: avoid;
     }
     .payslip + .payslip {
-      break-before: page;
-      page-break-before: always;
+      border-top: 1px dashed #888;
       margin-top: 0;
     }
   }

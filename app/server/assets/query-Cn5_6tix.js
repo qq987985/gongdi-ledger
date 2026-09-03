@@ -99,199 +99,226 @@ function buildSlips({ people, names, span, attendance, payments }) {
 		};
 	}).filter(Boolean);
 }
+function groupSlips(slips, showPays) {
+	const groups = [];
+	const isBig = (s) => {
+		return s.months.length + (showPays ? s.pays.length : 0) > 8;
+	};
+	let i = 0;
+	while (i < slips.length) {
+		const first = slips[i];
+		if (isBig(first) || i + 1 >= slips.length) {
+			groups.push([first]);
+			i += 1;
+		} else {
+			const second = slips[i + 1];
+			if (isBig(second)) {
+				groups.push([first]);
+				i += 1;
+			} else {
+				groups.push([first, second]);
+				i += 2;
+			}
+		}
+	}
+	return groups;
+}
 function PayslipSheets({ slips, rangeLabel: label, showPays }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-		className: "print-only space-y-8 text-black",
-		children: slips.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", {
-			className: "payslip border border-black p-4",
-			children: [
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", {
-					className: "border-b border-black pb-2 text-center",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "text-lg font-semibold tracking-widest",
-						children: "台账 · 工资条"
-					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "mt-1 text-sm",
-						children: label
-					})]
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm md:grid-cols-4",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["姓名：", s.person.name] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["班组：", s.person.team || "—"] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["工资：", wageLabel(s.person)] }),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["加班：", parseOtRule(s.person.otRule).label || "—"] })
-					]
-				}),
-				s.months.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-					className: "mt-3 w-full border-collapse text-center text-xs",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: [
-						"年月",
-						"出勤",
-						"底薪",
-						"加班小时",
-						"加班费",
-						"补助",
-						"扣款",
-						"应发",
-						"备注"
-					].map((h) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
-						className: "border border-black px-1 py-1 font-medium",
-						children: h
-					}, h)) }) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [s.months.map((m) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-							className: "border border-black px-1 py-1",
-							children: [
-								m.year,
-								"年",
-								m.month,
-								"月"
-							]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: m.days
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: money(m.base)
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: m.otHours || ""
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: m.ot ? money(m.ot) : ""
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: m.allowance ? money(m.allowance) : ""
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: m.deduction ? money(m.deduction) : ""
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1 font-medium",
-							children: money(m.pay)
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1 text-left",
-							children: m.remark
-						})
-					] }, `${m.year}-${m.month}`)), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1 font-medium",
-							children: "合计"
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: s.months.reduce((n, m) => n + m.days, 0)
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: money(s.months.reduce((n, m) => n + m.base, 0))
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: s.months.reduce((n, m) => n + m.otHours, 0) || ""
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: money(s.months.reduce((n, m) => n + m.ot, 0))
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: money(s.months.reduce((n, m) => n + m.allowance, 0))
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1",
-							children: money(s.months.reduce((n, m) => n + m.deduction, 0))
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
-							className: "border border-black px-1 py-1 font-semibold",
-							children: money(s.total)
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "border border-black px-1 py-1" })
-					] })] })]
-				}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-					className: "mt-3 text-xs",
-					children: "本区间无出勤记录。"
-				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-					className: "mt-2 text-xs",
-					children: [
-						s.person.payType === "month" ? "按月：当月有出勤发月工资 + 加班费 + 补助 − 扣款。" : "按工天：应发 = 出勤×日工资 + 加班费 + 补助 − 扣款。",
-						"本区间应发合计 ¥",
-						money(s.total),
-						"。"
-					]
-				}),
-				showPays ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
-					className: "mt-4",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "text-sm font-medium",
-						children: "打款记录"
-					}), s.pays.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
-						className: "mt-1 w-full border-collapse text-center text-xs",
+		className: "print-only text-black",
+		children: import_react.useMemo(() => groupSlips(slips, showPays), [slips, showPays]).map((group, gi) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+			className: "payslip-page",
+			children: group.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", {
+				className: "payslip border border-black p-4",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", {
+						className: "border-b border-black pb-2 text-center",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "text-lg font-semibold tracking-widest",
+							children: "台账 · 工资条"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "mt-1 text-sm",
+							children: label
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm md:grid-cols-4",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["姓名：", s.person.name] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["班组：", s.person.team || "—"] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["工资：", wageLabel(s.person)] }),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: ["加班：", parseOtRule(s.person.otRule).label || "—"] })
+						]
+					}),
+					s.months.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+						className: "mt-3 w-full border-collapse text-center text-xs",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: [
-							"日期",
-							"金额",
-							"收款人",
-							"来源",
+							"年月",
+							"出勤",
+							"底薪",
+							"加班小时",
+							"加班费",
+							"补助",
+							"扣款",
+							"应发",
 							"备注"
 						].map((h) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
 							className: "border border-black px-1 py-1 font-medium",
 							children: h
-						}, h)) }) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [s.pays.map((x, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+						}, h)) }) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [s.months.map((m) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
 								className: "border border-black px-1 py-1",
-								children: x.date
+								children: [
+									m.year,
+									"年",
+									m.month,
+									"月"
+								]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 								className: "border border-black px-1 py-1",
-								children: money(x.amount)
+								children: m.days
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 								className: "border border-black px-1 py-1",
-								children: x.receiver === s.person.name ? "本人" : `${x.receiver}代收`
+								children: money(m.base)
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 								className: "border border-black px-1 py-1",
-								children: x.source
+								children: m.otHours || ""
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: m.ot ? money(m.ot) : ""
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: m.allowance ? money(m.allowance) : ""
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: m.deduction ? money(m.deduction) : ""
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1 font-medium",
+								children: money(m.pay)
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 								className: "border border-black px-1 py-1 text-left",
-								children: x.remark
+								children: m.remark
 							})
-						] }, `${x.date}-${i}`)), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+						] }, `${m.year}-${m.month}`)), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 								className: "border border-black px-1 py-1 font-medium",
-								children: "已打款合计"
+								children: "合计"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: s.months.reduce((n, m) => n + m.days, 0)
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: money(s.months.reduce((n, m) => n + m.base, 0))
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: s.months.reduce((n, m) => n + m.otHours, 0) || ""
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: money(s.months.reduce((n, m) => n + m.ot, 0))
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: money(s.months.reduce((n, m) => n + m.allowance, 0))
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+								className: "border border-black px-1 py-1",
+								children: money(s.months.reduce((n, m) => n + m.deduction, 0))
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 								className: "border border-black px-1 py-1 font-semibold",
-								children: money(s.paid)
+								children: money(s.total)
 							}),
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
-								className: "border border-black px-1 py-1",
-								colSpan: 3,
-								children: ["未打款 ¥", money(s.total - s.paid)]
-							})
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { className: "border border-black px-1 py-1" })
 						] })] })]
-					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-						className: "mt-1 text-xs",
-						children: ["本区间无打款记录。已打款 ¥0 · 未打款 ¥", money(s.total)]
-					})]
-				}) : null,
-				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "mt-6 grid grid-cols-2 gap-8 text-sm",
-					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: "领款人签字：________________" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: "日期：______年____月____日" })]
-				})
-			]
-		}, s.person.id))
+					}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "mt-3 text-xs",
+						children: "本区间无出勤记录。"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "mt-2 text-xs",
+						children: [
+							s.person.payType === "month" ? "按月：当月有出勤发月工资 + 加班费 + 补助 − 扣款。" : "按工天：应发 = 出勤×日工资 + 加班费 + 补助 − 扣款。",
+							"本区间应发合计 ¥",
+							money(s.total),
+							"。"
+						]
+					}),
+					showPays ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+						className: "mt-4",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "text-sm font-medium",
+							children: "打款记录"
+						}), s.pays.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("table", {
+							className: "mt-1 w-full border-collapse text-center text-xs",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tr", { children: [
+								"日期",
+								"金额",
+								"收款人",
+								"来源",
+								"备注"
+							].map((h) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", {
+								className: "border border-black px-1 py-1 font-medium",
+								children: h
+							}, h)) }) }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tbody", { children: [s.pays.map((x, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "border border-black px-1 py-1",
+									children: x.date
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "border border-black px-1 py-1",
+									children: money(x.amount)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "border border-black px-1 py-1",
+									children: x.receiver === s.person.name ? "本人" : `${x.receiver}代收`
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "border border-black px-1 py-1",
+									children: x.source
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "border border-black px-1 py-1 text-left",
+									children: x.remark
+								})
+							] }, `${x.date}-${i}`)), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "border border-black px-1 py-1 font-medium",
+									children: "已打款合计"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
+									className: "border border-black px-1 py-1 font-semibold",
+									children: money(s.paid)
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", {
+									className: "border border-black px-1 py-1",
+									colSpan: 3,
+									children: ["未打款 ¥", money(s.total - s.paid)]
+								})
+							] })] })]
+						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+							className: "mt-1 text-xs",
+							children: ["本区间无打款记录。已打款 ¥0 · 未打款 ¥", money(s.total)]
+						})]
+					}) : null,
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "mt-6 grid grid-cols-2 gap-8 text-sm",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: "领款人签字：________________" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { children: "日期：______年____月____日" })]
+					})
+				]
+			}, s.person.id))
+		}, gi))
 	});
 }
 function QueryPage() {
