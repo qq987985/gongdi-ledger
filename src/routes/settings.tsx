@@ -20,10 +20,10 @@ function SettingsPage() {
   const { year, setYear, addYear, removeYear, people, replacePeople, clearAll, attendance } = store;
   const years = derivedYears(store);
   const [custom, setCustom] = React.useState(nextYear(years));
-  const [wage, setWage] = React.useState(200);
-  const [monthWage, setMonthWage] = React.useState(8000);
+  const [wage, setWage] = React.useState(0);
+  const [monthWage, setMonthWage] = React.useState(0);
   const [payType, setPayType] = React.useState("day");
-  const [rule, setRule] = React.useState("按小时:25");
+  const [rule, setRule] = React.useState("");
   const [clearPwd, setClearPwd] = React.useState("");
   const [showClearConfirm, setShowClearConfirm] = React.useState(false);
   const [isAdmin, setIsAdmin] = React.useState(false);

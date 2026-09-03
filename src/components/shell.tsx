@@ -585,8 +585,8 @@ function LoginScreen({ accessHash, onOk }: { accessHash: string; onOk: () => voi
 }
 
 function SetupScreen({ onOk }: { onOk: () => void }) {
-  const [username, setUsername] = React.useState("admin");
-  const [name, setName] = React.useState("管理员");
+  const [username, setUsername] = React.useState("");
+  const [name, setName] = React.useState("");
   const [pwd, setPwd] = React.useState("");
   const [again, setAgain] = React.useState("");
   const [busy, setBusy] = React.useState(false);

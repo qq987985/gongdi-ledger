@@ -953,8 +953,8 @@ function LoginScreen({ accessHash, onOk }) {
 	});
 }
 function SetupScreen({ onOk }) {
-	const [username, setUsername] = import_react.useState("admin");
-	const [name, setName] = import_react.useState("管理员");
+	const [username, setUsername] = import_react.useState("");
+	const [name, setName] = import_react.useState("");
 	const [pwd, setPwd] = import_react.useState("");
 	const [again, setAgain] = import_react.useState("");
 	const [busy, setBusy] = import_react.useState(false);

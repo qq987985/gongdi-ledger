@@ -1,4 +1,4 @@
-import { n as WinUpdate } from "./shell-BlVEnWhR.js";
+import { n as WinUpdate } from "./shell-DW_f08Q6.js";
 import { F as require_react, V as __toESM, c as require_jsx_runtime } from "../server.js";
 import { i as PRESETS, r as PERM_GROUPS } from "./perms-CYLuVN7r.js";
 import { a as lockGate, i as hashPassword, n as authStatus, o as unlockGate, t as authOp } from "./auth-CTHz_Bd5.js";
@@ -19,10 +19,10 @@ function SettingsPage() {
 	const { year, setYear, addYear, removeYear, people, replacePeople, clearAll, attendance } = store;
 	const years = derivedYears(store);
 	const [custom, setCustom] = import_react.useState(nextYear(years));
-	const [wage, setWage] = import_react.useState(200);
-	const [monthWage, setMonthWage] = import_react.useState(8e3);
+	const [wage, setWage] = import_react.useState(0);
+	const [monthWage, setMonthWage] = import_react.useState(0);
 	const [payType, setPayType] = import_react.useState("day");
-	const [rule, setRule] = import_react.useState("按小时:25");
+	const [rule, setRule] = import_react.useState("");
 	const [clearPwd, setClearPwd] = import_react.useState("");
 	const [showClearConfirm, setShowClearConfirm] = import_react.useState(false);
 	const [isAdmin, setIsAdmin] = import_react.useState(false);

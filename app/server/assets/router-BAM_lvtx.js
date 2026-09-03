@@ -1,5 +1,5 @@
 import { t as Link } from "./link-C8A9580o.js";
-import { r as parseChangelog, t as AppShell } from "./shell-BlVEnWhR.js";
+import { r as parseChangelog, t as AppShell } from "./shell-DW_f08Q6.js";
 import { D as deepEqual, E as invariant, F as require_react, M as isModuleNotFoundError, N as redirect, O as escapeHtml, P as rootRouteId, S as joinPaths, T as trimPathRight, V as __toESM, _ as _getAssetMatches, a as useStore, b as createNonReactiveReadonlyStore, c as require_jsx_runtime, d as getScriptPreloadAttrs, f as resolveManifestCssLink, g as isServer, l as appendUniqueUserTags, o as useRouter, p as reactUse, r as useMatch, s as useHydrated, u as getAssetCrossOrigin, v as RouterCore, w as trimPathLeft, y as createNonReactiveMutableStore } from "../server.js";
 import { C as writeLedger, _ as saveBackup, b as scanPhotoFolder, c as readAudit, d as readVersionText, i as findPhotoPath, m as removePhoto, o as persistOn, p as removeDocFile, r as findDoc, s as photoFlags, t as appendAudit, u as readLedger, v as saveDoc, x as writeAudit, y as savePhoto } from "./nas-fs.server-DUo_iPsw.js";
 import "./perms-CYLuVN7r.js";
@@ -865,7 +865,7 @@ var $$splitComponentImporter$2 = () => import("./photos-D3KbVXug.js");
 const Route$10 = createFileRoute("/photos")({ component: lazyRouteComponent($$splitComponentImporter$2, "component") });
 var $$splitComponentImporter$1 = () => import("./query-ClT9s6ek.js");
 const Route$11 = createFileRoute("/query")({ component: lazyRouteComponent($$splitComponentImporter$1, "component") });
-var $$splitComponentImporter = () => import("./settings-iKXgXVJ1.js");
+var $$splitComponentImporter = () => import("./settings-BQ6dbRZX.js");
 const Route$12 = createFileRoute("/settings")({ component: lazyRouteComponent($$splitComponentImporter, "component") });
 const Route$13 = createFileRoute("/api/audit")({ server: { handlers: {
 	GET: async ({ request }) => {
