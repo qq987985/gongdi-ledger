@@ -72,7 +72,7 @@ function mimeType(path) {
 }
 
 function isWithin(base, target) {
-  // 统一使用正斜杠进行比较
+  // 统一使用正斜杠进行比较，兼容 Windows 反斜杠
   const baseNorm = base.replace(/\\/g, "/");
   const targetNorm = target.replace(/\\/g, "/");
   const rel = targetNorm.slice(baseNorm.length);

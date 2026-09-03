@@ -286,6 +286,17 @@ export async function handleAuthPost(request: Request): Promise<Response> {
       cookieHeaders(user, books[0]?.id || "", token),
     );
   }
+  if (op === "verify") {
+    // 验证密码，返回用户信息（用于敏感操作确认）
+    const password = (body.password || "").trim();
+    const c = cookies(request);
+    const userId = c.gongdi_u || "";
+    const user = data.users.find((u) => u.id === userId);
+    if (!user || user.hash !== (await hashPassword(password)))
+      return Response.json({ error: "密码错误" }, { status: 401 });
+    if (user.disabled) return Response.json({ error: "账户已停用" }, { status: 403 });
+    return Response.json({ ok: true, user: publicUser(user) });
+  }
   const tenant = await resolveTenant(request);
   if (!tenant.user) return Response.json({ error: "请先登录" }, { status: 401 });
   const me = tenant.user;

@@ -72,7 +72,10 @@ function mimeType(path) {
 }
 
 function isWithin(base, target) {
-  const rel = target.slice(base.length);
+  // 统一使用正斜杠进行比较，兼容 Windows 反斜杠
+  const baseNorm = base.replace(/\\/g, "/");
+  const targetNorm = target.replace(/\\/g, "/");
+  const rel = targetNorm.slice(baseNorm.length);
   return !rel.includes("..") && rel.startsWith("/");
 }
 
@@ -82,7 +85,9 @@ async function serveStatic(req) {
   let pathname = decodeURIComponent(url.pathname);
   if (pathname.endsWith("/")) pathname += "index.html";
   const filePath = join(publicDir, pathname);
-  if (!isWithin(publicDir, resolve(filePath))) return null;
+  const resolvedPath = resolve(filePath);
+  // 安全检查：确保路径在 publicDir 内
+  if (!isWithin(publicDir, resolvedPath)) return null;
   try {
     const s = await stat(filePath);
     if (!s.isFile()) return null;
@@ -98,6 +103,7 @@ async function serveStatic(req) {
     }
     return new Response(body, { headers });
   } catch {
+    // 文件不存在或其他错误，返回 null 让 server.js 处理
     return null;
   }
 }
@@ -134,7 +140,19 @@ const server = createServer(async (req, res) => {
     const response = await nodeFetch(request);
     res.statusCode = response.status;
     res.statusMessage = response.statusText;
-    response.headers.forEach((v, k) => res.setHeader(k, v));
+    // 正确处理多个相同名称的响应头（如 Set-Cookie）
+    const headerMap = new Map();
+    response.headers.forEach((v, k) => {
+      if (!headerMap.has(k)) headerMap.set(k, []);
+      headerMap.get(k).push(v);
+    });
+    for (const [k, values] of headerMap) {
+      if (values.length === 1) {
+        res.setHeader(k, values[0]);
+      } else {
+        res.setHeader(k, values);
+      }
+    }
     if (response.body) {
       const reader = response.body.getReader();
       while (true) {
@@ -146,6 +164,7 @@ const server = createServer(async (req, res) => {
     res.end();
   } catch (e) {
     console.error("[server error]", e);
+    console.error(e.stack);
     if (!res.headersSent) {
       res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
       res.end("Internal Server Error");
