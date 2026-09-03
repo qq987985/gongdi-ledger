@@ -530,7 +530,7 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
     );
     const aoa: unknown[][] = [
       [`${y}年${m}月考勤`],
-      ["序号", "姓名", "班组", "出勤天数", "加班小时", "补助", "扣款", "计薪", "工资", "加班费", "应发工资", "加班规则", "备注"],
+      ["序号", "姓名", "班组", "出勤天数", "加班小时", "补助", "扣款", "餐补", "计薪", "工资", "加班费", "应发工资", "加班规则", "备注"],
     ];
     monthRows.forEach((a, i) => {
       const p = people.find((x) => x.name === a.name);
@@ -538,7 +538,7 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
       const calc = monthPay(a, wage);
       aoa.push([
         i + 1, a.name, a.team || p?.team || "", calc.days || "", calc.otHours || "",
-        calc.allowance || "", calc.deduction || "", wage.payType === "month" ? "按月" : "按工天",
+        calc.allowance || "", calc.deduction || "", calc.meal || "", wage.payType === "month" ? "按月" : "按工天",
         wage.payType === "month" ? wage.monthWage || "" : wage.dailyWage || "", calc.ot || "",
         calc.pay || "", wage.otRule || "", a.remark || "",
       ]);

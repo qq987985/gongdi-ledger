@@ -363,6 +363,7 @@ function MonthTable({
       wageLabel: wageLabel(wage),
       rule: wage.otRule || "",
       ot: calc.ot,
+      meal: calc.meal,
       pay: calc.pay,
       parsed: parseOtRule(wage.otRule || ""),
       known: Boolean(p),
@@ -371,6 +372,7 @@ function MonthTable({
   });
   const totalPay = calcRows.reduce((s, r) => s + r.pay, 0);
   const totalOt = calcRows.reduce((s, r) => s + r.ot, 0);
+  const totalMeal = calcRows.reduce((s, r) => s + (r.meal || 0), 0);
   const totalDays = calcRows.reduce((s, r) => s + r.days, 0);
   const totalAllowance = calcRows.reduce((s, r) => s + (r.allowance || 0), 0);
   const totalDeduction = calcRows.reduce((s, r) => s + (r.deduction || 0), 0);
@@ -433,6 +435,9 @@ function MonthTable({
             加班费 <b className="tabular-nums">¥{money(totalOt)}</b>
           </span>
           <span>
+            餐补 <b className="tabular-nums">¥{money(totalMeal)}</b>
+          </span>
+          <span>
             补助 <b className="tabular-nums">¥{money(totalAllowance)}</b>
           </span>
           <span>
@@ -471,6 +476,7 @@ function MonthTable({
               <th className="p-3">工资（人员表）</th>
               <th className="p-3">加班规则（人员表）</th>
               <th className="p-3">加班费</th>
+              <th className="p-3">餐补</th>
               <th className="p-3">应发</th>
               <th className="p-3">备注</th>
               <th className="p-3" />
@@ -479,7 +485,7 @@ function MonthTable({
           <tbody>
             {calcRows.length === 0 ? (
               <tr>
-                <td colSpan={13} className="p-6 text-muted">
+                <td colSpan={14} className="p-6 text-muted">
                   本月还没人。从上方人员表把实际出勤的人加进来，填出勤天数、加班小时、补助、扣款。
                 </td>
               </tr>
@@ -524,6 +530,7 @@ function MonthTable({
                 <td className="p-2 tabular-nums">{r.wageLabel}</td>
                 <td className="p-2 text-xs">{r.parsed.label || "未设"}</td>
                 <td className="p-2 tabular-nums">¥{money(r.ot)}</td>
+                <td className="p-2 tabular-nums">¥{money(r.meal)}</td>
                 <td className="p-2 font-medium tabular-nums">¥{money(r.pay)}</td>
                 <td className="p-2">
                   <Input className="h-9 w-36" value={r.remark} onChange={(e) => patch(i, "remark", e.target.value)} />

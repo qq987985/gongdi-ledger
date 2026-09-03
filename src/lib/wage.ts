@@ -30,6 +30,7 @@ export interface WageSource {
   dailyWage?: number;
   monthWage?: number;
   otRule?: string;
+  mealAllowance?: number; // 餐补/天
 }
 
 export interface MonthAttendance {
@@ -46,6 +47,7 @@ export interface MonthPayResult {
   deduction: number;
   ot: number;
   base: number;
+  meal: number; // 餐补
   pay: number;
   monthly: boolean;
 }
@@ -77,6 +79,7 @@ export function getWageAt(person: Person | null | undefined, year: number, month
         dailyWage: matched.dailyWage,
         monthWage: matched.monthWage,
         otRule: matched.otRule,
+        mealAllowance: matched.mealAllowance,
       };
     }
   }
@@ -87,6 +90,7 @@ export function getWageAt(person: Person | null | undefined, year: number, month
     dailyWage: person.dailyWage,
     monthWage: person.monthWage,
     otRule: person.otRule,
+    mealAllowance: person.mealAllowance,
   };
 }
 
@@ -127,6 +131,8 @@ export function monthPay(
   const deduction = a?.deduction || 0;
   const monthly = isMonthly(p);
   const ot = overtimePay(otHours, foldDaily(p), p.otRule || otRule || "");
+  // 餐补 = 正常出勤天数 × 餐补标准（加班折算的工天不算）
+  const meal = round2(days * (p.mealAllowance || 0));
   const base = monthly
     ? days > 0 || otHours > 0 || allowance !== 0 || deduction !== 0
       ? p.monthWage || 0
@@ -139,7 +145,8 @@ export function monthPay(
     deduction,
     ot,
     base,
-    pay: round2(base + ot + allowance - deduction),
+    meal,
+    pay: round2(base + ot + meal + allowance - deduction),
     monthly,
   };
 }

@@ -9,6 +9,7 @@ export interface WageHistory {
   dailyWage: number;
   monthWage: number;
   otRule: string;
+  mealAllowance: number; // 餐补/天，按正常出勤天数算
   remark: string;
 }
 
@@ -27,6 +28,7 @@ export interface Person {
   monthWage: number;
   payType: "day" | "month";
   otRule: string;
+  mealAllowance: number; // 餐补/天
   // 工资历史记录
   wageHistory?: WageHistory[];
   bank: string;

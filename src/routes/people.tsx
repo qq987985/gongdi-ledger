@@ -27,6 +27,7 @@ function emptyWageHistory(): WageHistory {
     dailyWage: 0,
     monthWage: 0,
     otRule: "",
+    mealAllowance: 0,
     remark: "",
   };
 }
@@ -46,6 +47,7 @@ function emptyPerson(): Person {
     monthWage: 0,
     payType: "day",
     otRule: "",
+    mealAllowance: 0,
     wageHistory: [],
     bank: "",
     cardNo: "",
@@ -175,6 +177,7 @@ function PeoplePage() {
                   工资 <span className="text-danger">*</span>
                 </th>
                 <th className="p-3">加班</th>
+                <th className="p-3">餐补</th>
                 <th className="p-3">年龄</th>
                 <th className="p-3">电话</th>
                 <th className="p-3">照片</th>
@@ -183,7 +186,7 @@ function PeoplePage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="p-8 text-center text-sm text-muted">
+                  <td colSpan={12} className="p-8 text-center text-sm text-muted">
                     没有匹配的人员
                   </td>
                 </tr>
@@ -219,6 +222,7 @@ function PeoplePage() {
                     <td className="p-3 text-muted">{p.payType === "month" ? "按月" : "按工天"}</td>
                     <td className="p-3 tabular-nums">{wageLabel(p)}</td>
                     <td className="p-3">{parseOtRule(p.otRule).label}</td>
+                    <td className="p-3 tabular-nums">{p.mealAllowance ? `¥${p.mealAllowance}/天` : "—"}</td>
                     <td className="p-3">
                       <span className="tabular-nums">{p.age ?? "—"}</span>{" "}
                       {overAgeLabel(p.age, p.gender) === "超龄" ? <Badge tone="warn">超龄</Badge> : null}
@@ -353,6 +357,7 @@ function PersonEditor({
         dailyWage: "日工资",
         monthWage: "月工资",
         otRule: "加班",
+        mealAllowance: "餐补",
         idCard: "身份证号",
         idIssuer: "签发机关",
         idValidFrom: "有效期起",
@@ -432,6 +437,9 @@ function PersonEditor({
           )}
           <Field label="加班规则" hint="选按小时填元/小时；选按折算填几小时算一天。可不计加班。">
             <OtRulePick value={form.otRule} onChange={(s) => set("otRule", s)} />
+          </Field>
+          <Field label="餐补/天" hint="按正常出勤天数算，加班折算的工天不算。填0表示没有餐补。">
+            <Input type="number" min={0} value={form.mealAllowance || ""} onChange={(e) => set("mealAllowance", Number(e.target.value) || 0)} />
           </Field>
           <Field label="身份证号（自动生成性别年龄生日）">
             <Input value={form.idCard} onChange={(e) => onId(e.target.value)} />
@@ -546,6 +554,19 @@ function PersonEditor({
                       onChange={(s) => {
                         const history = [...(form.wageHistory || [])];
                         history[i] = { ...h, otRule: s };
+                        setForm((f) => ({ ...f, wageHistory: history }));
+                      }}
+                    />
+                  </div>
+                  <div className="w-24">
+                    <Label className="text-xs">餐补/天</Label>
+                    <Input
+                      type="number"
+                      className="mt-1 h-9"
+                      value={h.mealAllowance || ""}
+                      onChange={(e) => {
+                        const history = [...(form.wageHistory || [])];
+                        history[i] = { ...h, mealAllowance: Number(e.target.value) || 0 };
                         setForm((f) => ({ ...f, wageHistory: history }));
                       }}
                     />
