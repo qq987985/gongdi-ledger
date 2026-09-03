@@ -251,6 +251,19 @@
       display: block;
     }
   }
+
+  /* 打印工资条：每人一张 A4，避免同一个人被拆到两页 */
+  @media print {
+    .payslip {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .payslip + .payslip {
+      break-before: page;
+      page-break-before: always;
+      margin-top: 0;
+    }
+  }
 }
 
 @media (width < 48rem) {
