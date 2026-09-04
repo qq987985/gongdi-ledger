@@ -35,6 +35,13 @@ function memberDays(m: InsuranceMember): number {
   return daysBetween(m.startDate, m.endDate || today());
 }
 
+/** 是否仍在保：没有结束日期，或结束日期还没到今天。 */
+function isActive(m: InsuranceMember): boolean {
+  if (!m.endDate) return true;
+  const end = datePart(m.endDate);
+  return end ? end >= today() : true;
+}
+
 function emptyPolicy(): InsurancePolicy {
   return {
     id: "",
@@ -188,7 +195,7 @@ function InsurancePage() {
   const coverage = selected?.coverage || 0;
   const totalPremium = premiumPerPerson * headcount;
   const perPersonDaily = periodDays > 0 ? premiumPerPerson / periodDays : 0;
-  const activeCount = policyMembers.filter((m) => !m.endDate).length;
+  const activeCount = policyMembers.filter((m) => isActive(m)).length;
   const totalPersonDays = policyMembers.reduce((s, m) => s + memberDays(m), 0);
   const totalSettle = policyMembers.reduce((s, m) => s + (perPersonDaily * memberDays(m)), 0);
   const settleOf = (m: InsuranceMember) => Math.round(perPersonDaily * memberDays(m) * 100) / 100;
@@ -298,7 +305,7 @@ function InsurancePage() {
               <tbody>
                 {policies.map((p, i) => {
                   const pm = members.filter((m) => m.policyId === p.id);
-                  const active = pm.filter((m) => !m.endDate).length;
+                  const active = pm.filter((m) => isActive(m)).length;
                   return (
                     <tr
                       key={p.id}
@@ -415,7 +422,16 @@ function InsurancePage() {
                         <td className="p-3 font-medium">{m.name}</td>
                         <td className="p-3">{m.leader}</td>
                         <td className="p-3 whitespace-nowrap">{m.startDate || "—"}</td>
-                        <td className="p-3 whitespace-nowrap">{m.endDate || <span className="text-ok">在保</span>}</td>
+                        <td className="p-3 whitespace-nowrap">
+                          {m.endDate ? (
+                            <>
+                              {m.endDate}
+                              {isActive(m) ? <span className="ml-1 text-ok">在保</span> : null}
+                            </>
+                          ) : (
+                            <span className="text-ok">在保</span>
+                          )}
+                        </td>
                         <td className="p-3 tabular-nums">{memberDays(m) || ""}</td>
                         <td className="p-3 tabular-nums">{money(settleOf(m))}</td>
                         <td className="p-3 text-muted">{m.remark}</td>

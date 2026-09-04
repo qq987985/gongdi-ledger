@@ -523,7 +523,13 @@ export function InsuranceMemberImport({ policyId, onImported }: { policyId: stri
   const [fresh, setFresh] = React.useState<InsuranceMember[]>([]);
   async function onFile(file: File) {
     if (!file) return;
-    const rows = parseInsuranceMembersSheet(await file.arrayBuffer());
+    const policy = store.insurancePolicies.find((p) => p.id === policyId);
+    const rows = parseInsuranceMembersSheet(await file.arrayBuffer()).map((m) => ({
+      ...m,
+      // 没填开始/结束日期的，默认用这个保单的保险期起止
+      startDate: m.startDate || policy?.periodStart || "",
+      endDate: m.endDate || policy?.periodEnd || "",
+    }));
     if (!rows.length) {
       toast.error("没有读到保险人员。模板列：姓名、队长、开始日期、结束日期、备注。");
       return;
