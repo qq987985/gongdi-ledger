@@ -182,6 +182,7 @@ function InsurancePage() {
 
   const [selectedId, setSelectedId] = React.useState("");
   const [leader, setLeader] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState("");
   const [policyEdit, setPolicyEdit] = React.useState<InsurancePolicy | null>(null);
   const [memberEdit, setMemberEdit] = React.useState<InsuranceMember | null>(null);
   const [replaceState, setReplaceState] = React.useState<{ target: InsuranceMember; name: string; leader: string; startDate: string; remark: string } | null>(null);
@@ -194,11 +195,14 @@ function InsurancePage() {
     () => [...new Set(members.map((m) => m.leader).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh")),
     [members],
   );
-  const shownMembers = React.useMemo(
-    () => (leader ? policyMembers.filter((m) => m.leader === leader) : policyMembers),
-    [policyMembers, leader],
-  );
-  const memberPager = usePager("insurance-members", shownMembers, [selId, leader].join("|"));
+  const shownMembers = React.useMemo(() => {
+    let list = policyMembers;
+    if (leader) list = list.filter((m) => m.leader === leader);
+    if (statusFilter === "active") list = list.filter((m) => isActive(m));
+    if (statusFilter === "ended") list = list.filter((m) => !isActive(m));
+    return list;
+  }, [policyMembers, leader, statusFilter]);
+  const memberPager = usePager("insurance-members", shownMembers, [selId, leader, statusFilter].join("|"));
 
   const periodDays = selected ? daysBetween(selected.periodStart, selected.periodEnd) : 0;
   const premiumPerPerson = selected?.premiumPerPerson || 0;
@@ -206,10 +210,10 @@ function InsurancePage() {
   const coverage = selected?.coverage || 0;
   const totalPremium = premiumPerPerson * headcount;
   const perPersonDaily = periodDays > 0 ? premiumPerPerson / periodDays : 0;
-  const activeCount = policyMembers.filter((m) => isActive(m)).length;
-  const totalPersonDays = policyMembers.reduce((s, m) => s + memberDays(m), 0);
-  const totalSettle = policyMembers.reduce((s, m) => s + (perPersonDaily * memberDays(m)), 0);
   const settleOf = (m: InsuranceMember) => Math.round(perPersonDaily * memberDays(m) * 100) / 100;
+  const activeCount = policyMembers.filter((m) => isActive(m)).length;
+  const shownPersonDays = shownMembers.reduce((s, m) => s + memberDays(m), 0);
+  const shownSettle = shownMembers.reduce((s, m) => s + settleOf(m), 0);
 
   function savePolicy() {
     if (!policyEdit) return;
@@ -399,8 +403,8 @@ function InsurancePage() {
                 <span>总保费 <b className="tabular-nums text-ink">{money(totalPremium)}</b> 元</span>
                 <span>每人每天 <b className="tabular-nums text-ink">{money(Math.round(perPersonDaily * 100) / 100)}</b> 元</span>
                 <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> 人 · 已结束 <b className="tabular-nums text-ink">{policyMembers.length - activeCount}</b> 人</span>
-                <span>累计人天 <b className="tabular-nums text-ink">{totalPersonDays}</b></span>
-                <span>保费合计 <b className="tabular-nums text-ink">{money(Math.round(totalSettle * 100) / 100)}</b> 元</span>
+                <span>累计人天 <b className="tabular-nums text-ink">{Math.round(shownPersonDays * 100) / 100}</b></span>
+                <span>保费合计 <b className="tabular-nums text-ink">{money(Math.round(shownSettle * 100) / 100)}</b> 元</span>
               </div>
               <p className="mt-1 text-xs text-subtle">
                 每人每天 = 每人保费 ÷ 保险期天数；每人保费 = 每人每天 × 使用天数。
@@ -416,6 +420,11 @@ function InsurancePage() {
                       {l}
                     </option>
                   ))}
+                </select>
+                <select className="field-select h-9 w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="按在保状态筛选">
+                  <option value="">全部状态</option>
+                  <option value="active">在保</option>
+                  <option value="ended">已结束</option>
                 </select>
                 <Button size="sm" variant="outline" type="button" onClick={() => window.print()}>
                   打印清单
@@ -704,6 +713,7 @@ function InsurancePage() {
                 {selected.policyNo}
                 {selected.name ? ` · ${selected.name}` : ""}
                 {leader ? ` · 队长：${leader}` : ""}
+                {statusFilter === "active" ? " · 在保" : statusFilter === "ended" ? " · 已结束" : ""}
               </div>
             </header>
             <table className="mt-3 w-full border-collapse text-center text-sm">
@@ -731,6 +741,15 @@ function InsurancePage() {
                     </tr>
                   ))}
               </tbody>
+              <tfoot>
+                <tr className="font-semibold">
+                  <td className="border border-black px-2 py-1 text-right" colSpan={5}>
+                    合计
+                  </td>
+                  <td className="border border-black px-2 py-1">{Math.round(shownPersonDays * 100) / 100}</td>
+                  <td className="border border-black px-2 py-1">{money(Math.round(shownSettle * 100) / 100)}</td>
+                </tr>
+              </tfoot>
             </table>
           </article>
         </div>
