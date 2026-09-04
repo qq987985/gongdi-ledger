@@ -10,6 +10,7 @@ import { daysBetween } from "~/lib/dates";
 import { uid, money } from "~/lib/utils";
 import { TplLink, InsuranceMemberImport } from "~/components/excel-import";
 import { DocActions, setDoc } from "~/components/doc-actions";
+import { useGuardedClose } from "~/lib/confirm-close";
 import type { InsuranceMember, InsurancePolicy } from "~/lib/types";
 
 function today() {
@@ -56,11 +57,13 @@ function Field({ label, children, required }: { label: string; children: React.R
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const { markDirty, requestClose } = useGuardedClose(onClose);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={requestClose}>
       <div
         className="max-h-[85vh] w-full max-w-md overflow-auto rounded-xl border border-line bg-surface p-5 shadow-panel"
         onClick={(e) => e.stopPropagation()}
+        onChange={markDirty}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold">{title}</h2>
@@ -274,8 +277,14 @@ function InsurancePage() {
                 <span>每人每天 <b className="tabular-nums text-ink">{money(Math.round(perPersonDaily * 100) / 100)}</b> 元</span>
                 <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> / {policyMembers.length}</span>
                 <span>累计人天 <b className="tabular-nums text-ink">{totalPersonDays}</b></span>
-                <span>结算合计 <b className="tabular-nums text-ink">{money(Math.round(totalSettle * 100) / 100)}</b> 元</span>
+                <span>保费合计 <b className="tabular-nums text-ink">{money(Math.round(totalSettle * 100) / 100)}</b> 元</span>
               </div>
+              <p className="mt-1 text-xs text-subtle">
+                每人每天 = 每人保费 ÷ 保险期天数；每人保费 = 每人每天 × 使用天数。
+              </p>
+              <p className="mt-1 text-xs text-subtle">
+                同一人被替换后又回来会分成多段，各段实际天数、保费自动累加（下表按段显示）。
+              </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <select className="field-select h-9 w-auto" value={leader} onChange={(e) => setLeader(e.target.value)} aria-label="按队长筛选">
                   <option value="">全部队长</option>
@@ -303,7 +312,7 @@ function InsurancePage() {
                       <th className="p-3">开始日期</th>
                       <th className="p-3">结束日期</th>
                       <th className="p-3">使用天数</th>
-                      <th className="p-3">结算(元)</th>
+                      <th className="p-3">保费(元)</th>
                       <th className="p-3">备注</th>
                       <Can perm="insurance.edit">
                         <th className="p-3">操作</th>

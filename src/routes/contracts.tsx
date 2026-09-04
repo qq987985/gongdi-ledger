@@ -15,6 +15,7 @@ import { useApp } from "~/lib/store";
 import { emptyContract, contractRollup, splitTax, normalizeEntry, CONTRACT_STATUSES } from "~/lib/contracts";
 import { buildContractWorkbook } from "~/lib/excel";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
+import { useGuardedClose } from "~/lib/confirm-close";
 import type { ContractRecord, ContractEntry } from "~/lib/types";
 
 function sortByDate(a: any, b: any) {
@@ -549,22 +550,24 @@ function ContractEditor({
 }) {
   const [c, setC] = React.useState(draft);
   const roll = contractRollup(c, entries);
+  const { markDirty, requestClose } = useGuardedClose(onCancel);
   function patch(key: keyof ContractRecord, value: any) {
     setC((prev) => ({ ...prev, [key]: value }));
   }
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [requestClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6" onClick={requestClose}>
       <section
         id="contract-editor"
         className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-5 shadow-panel md:rounded-xl"
         onClick={(e) => e.stopPropagation()}
+        onChange={markDirty}
       >
         <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-5 py-3">
           <h2 className="font-semibold">{creating ? "新增合同" : c.name || "编辑合同"}</h2>

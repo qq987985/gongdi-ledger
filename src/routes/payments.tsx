@@ -12,6 +12,7 @@ import { YmPick, ymKey, monthsInRange, rangeLabel } from "~/components/ym-pick";
 import { useApp } from "~/lib/store";
 import { dateYear, derivedYears, parseDateYmd } from "~/lib/dates";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
+import { useGuardedClose } from "~/lib/confirm-close";
 import type { Payment } from "~/lib/types";
 
 function emptyPayment(): Payment {
@@ -358,13 +359,14 @@ function PaymentEditor({
   onDelete: () => void;
 }) {
   const [c, setC] = React.useState<Payment>(() => ({ ...draft }));
+  const { markDirty, requestClose } = useGuardedClose(onCancel);
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, [requestClose]);
   React.useEffect(() => {
     setC({ ...draft });
   }, [draft.id]);
@@ -414,12 +416,13 @@ function PaymentEditor({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6"
-      onClick={onCancel}
+      onClick={requestClose}
     >
       <section
         id="payment-editor"
         className="max-h-screen w-full max-w-5xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-6 shadow-panel md:rounded-xl"
         onClick={(e) => e.stopPropagation()}
+        onChange={markDirty}
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-3">
           <h2 className="font-display text-lg font-semibold">{creating ? "新增发放" : c.owner ? `编辑发放 · ${c.owner}` : "编辑发放"}</h2>

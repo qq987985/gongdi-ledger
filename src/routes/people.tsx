@@ -16,6 +16,7 @@ import { parseDateYmd } from "~/lib/dates";
 import { wageLabel, parseOtRule } from "~/lib/wage";
 import { overAgeLabel } from "~/lib/idcard";
 import { confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
+import { useGuardedClose } from "~/lib/confirm-close";
 import { useApp } from "~/lib/store";
 import type { Person, WageHistory } from "~/lib/types";
 
@@ -324,6 +325,7 @@ function PersonEditor({
   }));
   const [tried, setTried] = React.useState(false);
   const [idErr, setIdErr] = React.useState("");
+  const { markDirty, requestClose } = useGuardedClose(onClose);
   function set<K extends keyof Person>(k: K, v: Person[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
@@ -381,16 +383,17 @@ function PersonEditor({
   }
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [requestClose]);
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 md:items-center md:p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 md:items-center md:p-6" onClick={requestClose}>
       <div
         className="max-h-screen w-full max-w-3xl overflow-y-auto rounded-t-xl bg-surface p-5 shadow-panel md:rounded-xl"
         onClick={(e) => e.stopPropagation()}
+        onChange={markDirty}
       >
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold">{creating ? "新增人员" : form.name}</h2>

@@ -32,6 +32,7 @@ const dirs = [
   join(dataDir, "photos", "合同扫描件"),
   join(dataDir, "photos", "报销凭证"),
   join(dataDir, "photos", "报销打款"),
+  join(dataDir, "photos", "保险合同"),
 ];
 for (const d of dirs) {
   try {
