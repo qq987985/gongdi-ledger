@@ -42,6 +42,16 @@ function isActive(m: InsuranceMember): boolean {
   return end ? end >= today() : true;
 }
 
+/** 给定某天，返回前一天 23:59（用于被替换人的结束时间）。 */
+function prevDayEnd(dt: string): string {
+  const d = datePart(dt);
+  if (!d) return "";
+  const t = new Date(`${d}T00:00:00`);
+  t.setDate(t.getDate() - 1);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())} 23:59`;
+}
+
 function emptyPolicy(): InsurancePolicy {
   return {
     id: "",
@@ -236,14 +246,18 @@ function InsurancePage() {
       return;
     }
     const { target } = replaceState;
-    upsertMember({ ...target, endDate: replaceState.startDate });
+    const startDay = datePart(replaceState.startDate);
+    const policy = policies.find((p) => p.id === target.policyId);
+    // 被替换人：结束 = 前一天 23:59
+    upsertMember({ ...target, endDate: prevDayEnd(replaceState.startDate) });
+    // 替换人：开始 = 当天 00:00，结束 = 保险到期时间
     upsertMember({
       id: uid(),
       policyId: target.policyId,
       name: replaceState.name.trim(),
       leader: replaceState.leader,
-      startDate: replaceState.startDate,
-      endDate: "",
+      startDate: `${startDay} 00:00`,
+      endDate: policy?.periodEnd || "",
       remark: replaceState.remark,
     });
     syncLinked(target.policyId);
@@ -295,7 +309,7 @@ function InsurancePage() {
                   <th className="p-3">保险期</th>
                   <th className="p-3">天数</th>
                   <th className="p-3">总保费</th>
-                  <th className="p-3">在保/共</th>
+                  <th className="p-3">在保/已结束</th>
                   <th className="p-3">备注</th>
                   <Can perm="insurance.edit">
                     <th className="p-3">操作</th>
@@ -329,7 +343,7 @@ function InsurancePage() {
                       <td className="p-3 tabular-nums">{daysBetween(p.periodStart, p.periodEnd) || ""}</td>
                       <td className="p-3 tabular-nums">{(p.premiumPerPerson || 0) * (p.headcount || 0) ? money((p.premiumPerPerson || 0) * (p.headcount || 0)) : ""}</td>
                       <td className="p-3 tabular-nums">
-                        {active} / {pm.length}
+                        {active} / {pm.length - active}
                       </td>
                       <td className="p-3 text-muted">{p.remark}</td>
                       <Can perm="insurance.edit">
@@ -368,7 +382,7 @@ function InsurancePage() {
                 <span>保额/人 <b className="tabular-nums text-ink">{money(coverage)}</b> 元</span>
                 <span>总保费 <b className="tabular-nums text-ink">{money(totalPremium)}</b> 元</span>
                 <span>每人每天 <b className="tabular-nums text-ink">{money(Math.round(perPersonDaily * 100) / 100)}</b> 元</span>
-                <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> 人 / 共 <b className="tabular-nums text-ink">{policyMembers.length}</b> 人</span>
+                <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> 人 · 已结束 <b className="tabular-nums text-ink">{policyMembers.length - activeCount}</b> 人</span>
                 <span>累计人天 <b className="tabular-nums text-ink">{totalPersonDays}</b></span>
                 <span>保费合计 <b className="tabular-nums text-ink">{money(Math.round(totalSettle * 100) / 100)}</b> 元</span>
               </div>
@@ -444,7 +458,7 @@ function InsurancePage() {
                               size="sm"
                               variant="outline"
                               type="button"
-                              onClick={() => setReplaceState({ target: m, name: "", leader: m.leader, startDate: `${today()} 00:00`, remark: "" })}
+                              onClick={() => setReplaceState({ target: m, name: "", leader: m.leader, startDate: today(), remark: "" })}
                             >
                               替换
                             </Button>
@@ -628,7 +642,7 @@ function InsurancePage() {
         {replaceState ? (
           <Modal title={`替换「${replaceState.target.name}」`} onClose={() => setReplaceState(null)}>
             <p className="text-sm text-muted">
-              新加入的人从 {replaceState.startDate || "所选日期"} 起保；原「{replaceState.target.name}」的结束日期会自动填成这一天。
+              新加入的人从「{replaceState.startDate || "所选日期"} 00:00」起保，到保险到期结束；原「{replaceState.target.name}」的结束时间自动填成前一天 23:59。
             </p>
             <div className="mt-3 space-y-3">
               <Field label="新姓名" required>
@@ -642,13 +656,13 @@ function InsurancePage() {
                   ))}
                 </datalist>
               </Field>
-              <DateTimeField
-                label="开始时间（也是原人员的结束时间）"
-                value={replaceState.startDate}
-                defaultTime="00:00"
-                onChange={(v) => setReplaceState({ ...replaceState, startDate: v })}
-                required
-              />
+              <Field label="替换生效日期（当天 00:00 起）" required>
+                <Input
+                  type="date"
+                  value={datePart(replaceState.startDate)}
+                  onChange={(e) => setReplaceState({ ...replaceState, startDate: e.target.value })}
+                />
+              </Field>
               <Field label="备注">
                 <Input value={replaceState.remark} onChange={(e) => setReplaceState({ ...replaceState, remark: e.target.value })} />
               </Field>
