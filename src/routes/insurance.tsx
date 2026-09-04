@@ -266,7 +266,7 @@ function InsurancePage() {
 
   return (
     <Need perm="insurance.view">
-      <div className="space-y-5">
+      <div className="no-print space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold">团体保险</h1>
@@ -663,57 +663,48 @@ function InsurancePage() {
             </div>
           </Modal>
         ) : null}
-
-        {selected ? (
-          <div className="print-only text-black">
-            <article className="p-2">
-              <header className="border-b border-black pb-2 text-center">
-                <div className="text-xl font-semibold tracking-widest">团体保险人员清单</div>
-                <div className="mt-1 text-sm">
-                  {selected.policyNo}
-                  {selected.name ? ` · ${selected.name}` : ""}
-                </div>
-              </header>
-              <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                <div>购买公司：{selected.buyer || "—"}</div>
-                <div>保险公司：{selected.company || "—"}</div>
-                <div>保险期：{selected.periodStart || "—"} ~ {selected.periodEnd || "—"}</div>
-                <div>保险期天数：{periodDays || "—"}</div>
-                <div>每人保费：{money(premiumPerPerson)} 元</div>
-                <div>人数：{headcount}</div>
-                <div>总保费：{money(totalPremium)} 元</div>
-                <div>每人每天：{money(Math.round(perPersonDaily * 100) / 100)} 元</div>
-              </div>
-              <table className="mt-4 w-full border-collapse text-center text-xs">
-                <thead>
-                  <tr>
-                    {["序号", "姓名", "队长", "开始时间", "结束时间", "使用天数", "保费金额(元)"].map((h) => (
-                      <th key={h} className="border border-black px-1 py-1 font-medium">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...policyMembers]
-                    .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "") || a.name.localeCompare(b.name, "zh"))
-                    .map((m, i) => (
-                      <tr key={m.id}>
-                        <td className="border border-black px-1 py-1">{i + 1}</td>
-                        <td className="border border-black px-1 py-1">{m.name}</td>
-                        <td className="border border-black px-1 py-1">{m.leader}</td>
-                        <td className="border border-black px-1 py-1 whitespace-nowrap">{m.startDate || "—"}</td>
-                        <td className="border border-black px-1 py-1 whitespace-nowrap">{m.endDate || "在保"}</td>
-                        <td className="border border-black px-1 py-1">{memberDays(m) || ""}</td>
-                        <td className="border border-black px-1 py-1">{money(settleOf(m))}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </article>
-          </div>
-        ) : null}
       </div>
+
+      {selected ? (
+        <div className="print-only text-black">
+          <article className="p-2">
+            <header className="border-b-2 border-black pb-2 text-center">
+              <div className="text-xl font-semibold">团体保险人员清单</div>
+              <div className="mt-1 text-sm">
+                {selected.policyNo}
+                {selected.name ? ` · ${selected.name}` : ""}
+                {leader ? ` · 队长：${leader}` : ""}
+              </div>
+            </header>
+            <table className="mt-3 w-full border-collapse text-center text-sm">
+              <thead>
+                <tr>
+                  {["序号", "姓名", "队长", "开始时间", "结束时间", "使用天数", "保费(元)"].map((h) => (
+                    <th key={h} className="border border-black px-2 py-1 font-semibold">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...shownMembers]
+                  .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "") || a.name.localeCompare(b.name, "zh"))
+                  .map((m, i) => (
+                    <tr key={m.id}>
+                      <td className="border border-black px-2 py-1">{i + 1}</td>
+                      <td className="border border-black px-2 py-1">{m.name}</td>
+                      <td className="border border-black px-2 py-1">{m.leader}</td>
+                      <td className="border border-black px-2 py-1 whitespace-nowrap">{m.startDate || "—"}</td>
+                      <td className="border border-black px-2 py-1 whitespace-nowrap">{m.endDate || "在保"}</td>
+                      <td className="border border-black px-2 py-1">{memberDays(m) || ""}</td>
+                      <td className="border border-black px-2 py-1">{money(settleOf(m))}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </article>
+        </div>
+      ) : null}
     </Need>
   );
 }

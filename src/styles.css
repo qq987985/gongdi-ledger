@@ -320,3 +320,9 @@
     flex: 1 1 calc(50% - 0.25rem);
   }
 }
+
+/* 打印页：A4 竖版、统一页边距，减少浏览器默认页眉页脚挤占 */
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
