@@ -1,4 +1,4 @@
-import { S as writeBookMeta, a as listBookIds, h as runWithBook, l as readBookMeta, n as dataDir, o as persistOn, t as appendAudit } from "./nas-fs.server-C1GWD3P2.js";
+import { S as writeBookMeta, a as listBookIds, h as runWithBook, l as readBookMeta, n as dataDir, o as persistOn, t as appendAudit } from "./nas-fs.server-BAGLBrj2.js";
 import { i as PRESETS, o as canWriteLedger, s as hasPerm, t as ALL_PERMS } from "./perms-BlHKQb24.js";
 import { o as uid } from "./utils-DPLvt0U2.js";
 import { i as hashPassword } from "./auth-CTHz_Bd5.js";
@@ -371,7 +371,7 @@ async function handleAuthPost(request) {
 		if (book.id === "default") return Response.json({ error: "默认台账请留着，里面是原来的数据" }, { status: 400 });
 		data.books = data.books.filter((b) => b.id !== book.id);
 		await writeFileShape(data);
-		const { removeBookDir } = await import("./nas-fs.server-DC8reYHb.js");
+		const { removeBookDir } = await import("./nas-fs.server-CCb6pwKy.js");
 		await removeBookDir(book.id);
 		const rest = booksOf(me, data.books);
 		const nextId = rest[0]?.id || "default";
@@ -491,7 +491,7 @@ async function handleAuthPost(request) {
 		const drop = data.books.filter((b) => b.ownerId === target.id && b.id !== "default");
 		data.books = data.books.filter((b) => b.ownerId !== target.id || b.id === "default");
 		await writeFileShape(data);
-		const { removeBookDir } = await import("./nas-fs.server-DC8reYHb.js");
+		const { removeBookDir } = await import("./nas-fs.server-CCb6pwKy.js");
 		for (const b of drop) await removeBookDir(b.id);
 		return Response.json({
 			ok: true,

@@ -1,5 +1,5 @@
 import { c as livePerms, o as canWriteLedger } from "./perms-BlHKQb24.js";
-import { l as buildFullWorkbook } from "./excel-C0fQvQEc.js";
+import { l as buildFullWorkbook } from "./excel-fr0oALCj.js";
 import { t as useApp } from "./store-DN67JpqK.js";
 var nas = false;
 function nasEnabled() {

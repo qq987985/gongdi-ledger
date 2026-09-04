@@ -1,4 +1,4 @@
-import { n as nasEnabled } from "./nas-sync-B1-z7PkM.js";
+import { n as nasEnabled } from "./nas-sync-BqMlfi5u.js";
 var DB_NAME = "gongdi-photos";
 var STORE = "photos";
 function openDb() {

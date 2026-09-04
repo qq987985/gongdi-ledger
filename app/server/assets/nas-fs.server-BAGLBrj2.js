@@ -268,7 +268,7 @@ async function seedTemplates() {
 	];
 	if (needed.every(([name]) => existsSync(join(dir, name)))) return;
 	try {
-		const excel = await import("./excel-CDntRT6V.js");
+		const excel = await import("./excel-SPSZPmyc.js");
 		const { writeCenteredXlsx } = await import("./xlsx-center-DmiNFhAt.js");
 		const year = (/* @__PURE__ */ new Date()).getFullYear();
 		const wbs = {

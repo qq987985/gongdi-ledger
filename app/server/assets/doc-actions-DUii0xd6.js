@@ -1,6 +1,6 @@
 import { F as require_react, V as __toESM, c as require_jsx_runtime } from "../server.js";
 import { r as copyText } from "./utils-DPLvt0U2.js";
-import { n as nasEnabled } from "./nas-sync-B1-z7PkM.js";
+import { n as nasEnabled } from "./nas-sync-BqMlfi5u.js";
 import { t as createLucideIcon } from "./createLucideIcon-DiDjOefB.js";
 import { t as Copy } from "./copy-CwPuJKIP.js";
 import { t as Download } from "./download-DgHKRnkF.js";

@@ -5,7 +5,7 @@ import { t as cn } from "./utils-DPLvt0U2.js";
 import { a as lockGate, i as hashPassword, n as authStatus, o as unlockGate, r as gateUnlocked, t as authOp } from "./auth-CTHz_Bd5.js";
 import { _ as nextYear, f as confirmRemoveYear, g as monthStatus } from "./contracts-DHzcdfHV.js";
 import { t as useApp } from "./store-DN67JpqK.js";
-import { n as nasEnabled, r as pullNasLedger } from "./nas-sync-B1-z7PkM.js";
+import { n as nasEnabled, r as pullNasLedger } from "./nas-sync-BqMlfi5u.js";
 import { t as createLucideIcon } from "./createLucideIcon-DiDjOefB.js";
 import { n as CalendarDays, t as RotateCcwClock } from "./rotate-ccw-clock-1dRRhyJ8.js";
 import { n as Camera, t as X } from "./x-CnbYULR9.js";
@@ -409,7 +409,7 @@ function useHydrateStore() {
 				await useApp.persist.rehydrate();
 			} catch {}
 			try {
-				const { startNasSync } = await import("./nas-sync-By3w2kCO.js");
+				const { startNasSync } = await import("./nas-sync-B74NJ8Xh.js");
 				await startNasSync();
 			} catch {}
 			const add = Number(new URLSearchParams(window.location.search).get("addYear") || 0);
@@ -1174,7 +1174,7 @@ function AppShell() {
 			else {
 				setGate("app");
 				try {
-					const { detectNas, pullNasLedger: pullNasLedger$1 } = await import("./nas-sync-By3w2kCO.js");
+					const { detectNas, pullNasLedger: pullNasLedger$1 } = await import("./nas-sync-B74NJ8Xh.js");
 					await detectNas();
 					await pullNasLedger$1();
 				} catch {}
