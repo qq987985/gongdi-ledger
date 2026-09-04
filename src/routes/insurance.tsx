@@ -392,7 +392,6 @@ function InsurancePage() {
         </section>
 
         <section className="rounded-xl border border-line bg-surface p-5">
-          <h2 className="font-semibold">被保人{selected ? ` · 保单号：${selected.policyNo}` : ""}</h2>
           {selected ? (
             <>
               <div className="mt-2 grid gap-x-6 gap-y-1 text-sm text-muted sm:grid-cols-2 lg:grid-cols-3">
@@ -437,6 +436,7 @@ function InsurancePage() {
                   <InsuranceMemberImport policyId={selId} onImported={() => syncLinked(selId)} />
                 </Can>
               </div>
+              <h3 className="mt-4 font-semibold">参保人员（保单号：{selected.policyNo}）</h3>
               <WideTable id="insurance-members" pager={memberPager as any}>
                 <table className="wide-table text-sm">
                   <thead className="border-b border-line text-xs text-muted">
