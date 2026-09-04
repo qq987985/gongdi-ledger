@@ -172,7 +172,8 @@ function InsurancePage() {
     }
     if (!targets.size) return;
     const others = members.filter((m) => m.policyId !== fromPolicyId && !targets.has(m.policyId));
-    const result = [...others];
+    // 保留来源保单的成员，再把副本同步到挂钩保单
+    const result = [...others, ...fromMembers];
     for (const linkedId of targets) {
       for (const m of fromMembers) result.push({ ...m, id: uid(), policyId: linkedId });
     }
