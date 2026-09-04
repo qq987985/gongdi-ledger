@@ -96,7 +96,9 @@ export function attFromRow(row: Row, year: number, month: number): AttendanceRow
 }
 
 export function readWb(buf: ArrayBuffer | Uint8Array): XLSX.WorkBook {
-  return readSync(buf, { type: "array", cellDates: true });
+  // 不用 cellDates：日期保持为 Excel 序列号，由 excelSerialYmd 用 UTC 解析，
+  // 避免 SheetJS 把日期转成 Date 时因时区差一天（导入后日期提前/延后一天）。
+  return readSync(buf, { type: "array" });
 }
 
 export function detectWorkbookYear(wb: XLSX.WorkBook, fallback: number): number {
