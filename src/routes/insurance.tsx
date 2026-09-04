@@ -141,15 +141,25 @@ function InsurancePage() {
   const replaceMembers = useApp((s) => s.replaceMembers);
   const canEdit = useCan("insurance.edit");
 
-  // 把某个保单的人员清单整体同步到它挂钩的保单（姓名/队长/起止时间一致，只有 policyId 不同）
+  // 挂钩的保单共用一套名单：把某个保单的人员清单同步到所有与之挂钩的保单（双向）
   function syncLinked(fromPolicyId: string) {
     const st = useApp.getState();
-    const from = (st.insurancePolicies || []).find((p) => p.id === fromPolicyId);
-    const linkedId = from?.linkedPolicyId;
-    if (!linkedId) return;
-    const fromMembers = (st.insuranceMembers || []).filter((m) => m.policyId === fromPolicyId);
-    const others = (st.insuranceMembers || []).filter((m) => m.policyId !== linkedId && m.policyId !== fromPolicyId);
-    st.replaceMembers([...others, ...fromMembers.map((m) => ({ ...m, id: uid(), policyId: linkedId }))]);
+    const all = st.insurancePolicies || [];
+    const members = st.insuranceMembers || [];
+    const fromMembers = members.filter((m) => m.policyId === fromPolicyId);
+    const targets = new Set<string>();
+    const from = all.find((p) => p.id === fromPolicyId);
+    if (from?.linkedPolicyId && from.linkedPolicyId !== fromPolicyId) targets.add(from.linkedPolicyId);
+    for (const p of all) {
+      if (p.linkedPolicyId === fromPolicyId && p.id !== fromPolicyId) targets.add(p.id);
+    }
+    if (!targets.size) return;
+    const others = members.filter((m) => m.policyId !== fromPolicyId && !targets.has(m.policyId));
+    const result = [...others];
+    for (const linkedId of targets) {
+      for (const m of fromMembers) result.push({ ...m, id: uid(), policyId: linkedId });
+    }
+    st.replaceMembers(result);
   }
 
   const [selectedId, setSelectedId] = React.useState("");
@@ -370,6 +380,9 @@ function InsurancePage() {
                     </option>
                   ))}
                 </select>
+                <Button size="sm" variant="outline" type="button" onClick={() => window.print()}>
+                  打印清单
+                </Button>
                 <Can perm="insurance.edit">
                   <Button size="sm" variant="outline" type="button" onClick={() => setMemberEdit(emptyMember(selId))}>
                     新增人员
@@ -633,6 +646,56 @@ function InsurancePage() {
               </div>
             </div>
           </Modal>
+        ) : null}
+
+        {selected ? (
+          <div className="print-only text-black">
+            <article className="p-2">
+              <header className="border-b border-black pb-2 text-center">
+                <div className="text-xl font-semibold tracking-widest">团体保险人员清单</div>
+                <div className="mt-1 text-sm">
+                  {selected.policyNo}
+                  {selected.name ? ` · ${selected.name}` : ""}
+                </div>
+              </header>
+              <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                <div>购买公司：{selected.buyer || "—"}</div>
+                <div>保险公司：{selected.company || "—"}</div>
+                <div>保险期：{selected.periodStart || "—"} ~ {selected.periodEnd || "—"}</div>
+                <div>保险期天数：{periodDays || "—"}</div>
+                <div>每人保费：{money(premiumPerPerson)} 元</div>
+                <div>人数：{headcount}</div>
+                <div>总保费：{money(totalPremium)} 元</div>
+                <div>每人每天：{money(Math.round(perPersonDaily * 100) / 100)} 元</div>
+              </div>
+              <table className="mt-4 w-full border-collapse text-center text-xs">
+                <thead>
+                  <tr>
+                    {["序号", "姓名", "队长", "开始时间", "结束时间", "使用天数", "保费金额(元)"].map((h) => (
+                      <th key={h} className="border border-black px-1 py-1 font-medium">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...policyMembers]
+                    .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || "") || a.name.localeCompare(b.name, "zh"))
+                    .map((m, i) => (
+                      <tr key={m.id}>
+                        <td className="border border-black px-1 py-1">{i + 1}</td>
+                        <td className="border border-black px-1 py-1">{m.name}</td>
+                        <td className="border border-black px-1 py-1">{m.leader}</td>
+                        <td className="border border-black px-1 py-1 whitespace-nowrap">{m.startDate || "—"}</td>
+                        <td className="border border-black px-1 py-1 whitespace-nowrap">{m.endDate || "在保"}</td>
+                        <td className="border border-black px-1 py-1">{memberDays(m) || ""}</td>
+                        <td className="border border-black px-1 py-1">{money(settleOf(m))}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </article>
+          </div>
         ) : null}
       </div>
     </Need>
