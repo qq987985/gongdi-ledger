@@ -23,10 +23,6 @@ function datePart(dt: string): string {
   return (dt || "").slice(0, 10);
 }
 
-function timePart(dt: string): string {
-  return (dt || "").slice(11, 16);
-}
-
 function safeFileBase(s: string): string {
   return (s || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "").trim();
 }
@@ -100,29 +96,16 @@ function DateTimeField({
   required?: boolean;
 }) {
   const date = datePart(value);
-  const time = timePart(value) || defaultTime;
   return (
     <Field label={label} required={required}>
-      <div className="flex gap-2">
-        <Input
-          type="date"
-          className="flex-1"
-          value={date}
-          onChange={(e) => {
-            const d = e.target.value;
-            onChange(d ? `${d} ${time}` : "");
-          }}
-        />
-        <Input
-          type="time"
-          className="w-28"
-          value={time}
-          onChange={(e) => {
-            const t = e.target.value;
-            onChange(date ? `${date} ${t}` : "");
-          }}
-        />
-      </div>
+      <Input
+        type="date"
+        value={date}
+        onChange={(e) => {
+          const d = e.target.value;
+          onChange(d ? `${d} ${defaultTime}` : "");
+        }}
+      />
     </Field>
   );
 }
@@ -358,7 +341,7 @@ function InsurancePage() {
                       <td className="p-3">{p.name}</td>
                       <td className="p-3">{p.company}</td>
                       <td className="p-3 whitespace-nowrap">
-                        {p.periodStart || "—"} ~ {p.periodEnd || "—"}
+                        {datePart(p.periodStart) || "—"} ~ {datePart(p.periodEnd) || "—"}
                       </td>
                       <td className="p-3 tabular-nums">{daysBetween(p.periodStart, p.periodEnd) || ""}</td>
                       <td className="p-3 tabular-nums">{(p.premiumPerPerson || 0) * (p.headcount || 0) ? money((p.premiumPerPerson || 0) * (p.headcount || 0)) : ""}</td>
@@ -460,11 +443,11 @@ function InsurancePage() {
                         <td className="p-3 tabular-nums text-muted">{(memberPager.page - 1) * memberPager.size + i + 1}</td>
                         <td className="p-3 font-medium">{m.name}</td>
                         <td className="p-3">{m.leader}</td>
-                        <td className="p-3 whitespace-nowrap">{m.startDate || "—"}</td>
+                        <td className="p-3 whitespace-nowrap">{datePart(m.startDate) || "—"}</td>
                         <td className="p-3 whitespace-nowrap">
                           {m.endDate ? (
                             <>
-                              {m.endDate}
+                              {datePart(m.endDate)}
                               {isActive(m) ? <span className="ml-1 text-ok">在保</span> : null}
                             </>
                           ) : (
@@ -637,14 +620,14 @@ function InsurancePage() {
                 </datalist>
               </Field>
               <DateTimeField
-                label="开始时间"
+                label="开始日期"
                 value={memberEdit.startDate}
                 defaultTime="00:00"
                 onChange={(v) => setMemberEdit({ ...memberEdit, startDate: v })}
                 required
               />
               <DateTimeField
-                label="结束时间（空=在保）"
+                label="结束日期（空=在保）"
                 value={memberEdit.endDate}
                 defaultTime="23:59"
                 onChange={(v) => setMemberEdit({ ...memberEdit, endDate: v })}
@@ -719,7 +702,7 @@ function InsurancePage() {
             <table className="mt-3 w-full border-collapse text-center text-sm">
               <thead>
                 <tr>
-                  {["序号", "姓名", "队长", "开始时间", "结束时间", "使用天数", "保费(元)"].map((h) => (
+                  {["序号", "姓名", "队长", "开始日期", "结束日期", "使用天数", "保费(元)"].map((h) => (
                     <th key={h} className="border border-black px-2 py-1 font-semibold">
                       {h}
                     </th>
@@ -734,8 +717,8 @@ function InsurancePage() {
                       <td className="border border-black px-2 py-1">{i + 1}</td>
                       <td className="border border-black px-2 py-1">{m.name}</td>
                       <td className="border border-black px-2 py-1">{m.leader}</td>
-                      <td className="border border-black px-2 py-1 whitespace-nowrap">{m.startDate || "—"}</td>
-                      <td className="border border-black px-2 py-1 whitespace-nowrap">{m.endDate || "在保"}</td>
+                      <td className="border border-black px-2 py-1 whitespace-nowrap">{datePart(m.startDate) || "—"}</td>
+                      <td className="border border-black px-2 py-1 whitespace-nowrap">{datePart(m.endDate) || "在保"}</td>
                       <td className="border border-black px-2 py-1">{memberDays(m) || ""}</td>
                       <td className="border border-black px-2 py-1">{money(settleOf(m))}</td>
                     </tr>
