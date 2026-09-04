@@ -9,7 +9,7 @@ import { useApp } from "~/lib/store";
 import { daysBetween } from "~/lib/dates";
 import { uid, money } from "~/lib/utils";
 import { TplLink, InsuranceMemberImport } from "~/components/excel-import";
-import { DocActions, setDoc } from "~/components/doc-actions";
+import { DocActions, setDoc, renameFile } from "~/components/doc-actions";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { InsuranceMember, InsurancePolicy } from "~/lib/types";
 
@@ -17,6 +17,18 @@ function today() {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function datePart(dt: string): string {
+  return (dt || "").slice(0, 10);
+}
+
+function timePart(dt: string): string {
+  return (dt || "").slice(11, 16);
+}
+
+function safeFileBase(s: string): string {
+  return (s || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "").trim();
 }
 
 function memberDays(m: InsuranceMember): number {
@@ -33,15 +45,16 @@ function emptyPolicy(): InsurancePolicy {
     premiumPerPerson: 0,
     headcount: 0,
     coverage: 0,
-    periodStart: today(),
+    periodStart: `${today()} 00:00`,
     periodEnd: "",
+    linkedPolicyId: "",
     contracts: [],
     remark: "",
   };
 }
 
 function emptyMember(policyId: string): InsuranceMember {
-  return { id: "", policyId, name: "", leader: "", startDate: today(), endDate: "", remark: "" };
+  return { id: "", policyId, name: "", leader: "", startDate: `${today()} 00:00`, endDate: "", remark: "" };
 }
 
 function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
@@ -53,6 +66,47 @@ function Field({ label, children, required }: { label: string; children: React.R
       </Label>
       <div className="mt-1">{children}</div>
     </div>
+  );
+}
+
+function DateTimeField({
+  label,
+  value,
+  defaultTime,
+  onChange,
+  required,
+}: {
+  label: string;
+  value: string;
+  defaultTime: string;
+  onChange: (v: string) => void;
+  required?: boolean;
+}) {
+  const date = datePart(value);
+  const time = timePart(value) || defaultTime;
+  return (
+    <Field label={label} required={required}>
+      <div className="flex gap-2">
+        <Input
+          type="date"
+          className="flex-1"
+          value={date}
+          onChange={(e) => {
+            const d = e.target.value;
+            onChange(d ? `${d} ${time}` : "");
+          }}
+        />
+        <Input
+          type="time"
+          className="w-28"
+          value={time}
+          onChange={(e) => {
+            const t = e.target.value;
+            onChange(date ? `${date} ${t}` : "");
+          }}
+        />
+      </div>
+    </Field>
   );
 }
 
@@ -84,7 +138,19 @@ function InsurancePage() {
   const removePolicies = useApp((s) => s.removePolicies);
   const upsertMember = useApp((s) => s.upsertMember);
   const removeMembers = useApp((s) => s.removeMembers);
+  const replaceMembers = useApp((s) => s.replaceMembers);
   const canEdit = useCan("insurance.edit");
+
+  // 把某个保单的人员清单整体同步到它挂钩的保单（姓名/队长/起止时间一致，只有 policyId 不同）
+  function syncLinked(fromPolicyId: string) {
+    const st = useApp.getState();
+    const from = (st.insurancePolicies || []).find((p) => p.id === fromPolicyId);
+    const linkedId = from?.linkedPolicyId;
+    if (!linkedId) return;
+    const fromMembers = (st.insuranceMembers || []).filter((m) => m.policyId === fromPolicyId);
+    const others = (st.insuranceMembers || []).filter((m) => m.policyId !== linkedId && m.policyId !== fromPolicyId);
+    st.replaceMembers([...others, ...fromMembers.map((m) => ({ ...m, id: uid(), policyId: linkedId }))]);
+  }
 
   const [selectedId, setSelectedId] = React.useState("");
   const [leader, setLeader] = React.useState("");
@@ -137,6 +203,7 @@ function InsurancePage() {
       return;
     }
     upsertMember({ ...memberEdit, id: memberEdit.id || uid(), policyId: selId });
+    syncLinked(selId);
     setMemberEdit(null);
     toast.success("已保存人员");
   }
@@ -162,6 +229,7 @@ function InsurancePage() {
       endDate: "",
       remark: replaceState.remark,
     });
+    syncLinked(target.policyId);
     setReplaceState(null);
     toast.success(`已用「${replaceState.name.trim()}」替换「${target.name}」`);
   }
@@ -175,6 +243,7 @@ function InsurancePage() {
   function delMember(m: InsuranceMember) {
     if (!confirm(`删除被保人「${m.name}」？`)) return;
     removeMembers([m.id]);
+    syncLinked(m.policyId);
     toast.success("已删除");
   }
 
@@ -227,7 +296,14 @@ function InsurancePage() {
                       onClick={() => setSelectedId(p.id)}
                     >
                       <td className="p-3 tabular-nums text-muted">{i + 1}</td>
-                      <td className="p-3 font-medium">{p.policyNo}</td>
+                      <td className="p-3 font-medium">
+                        {p.policyNo}
+                        {p.linkedPolicyId ? (
+                          <div className="text-[11px] font-normal text-muted">
+                            ↔ 挂钩 {policies.find((x) => x.id === p.linkedPolicyId)?.policyNo || ""}
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="p-3">{p.name}</td>
                       <td className="p-3">{p.company}</td>
                       <td className="p-3 whitespace-nowrap">
@@ -299,7 +375,7 @@ function InsurancePage() {
                     新增人员
                   </Button>
                   <TplLink href="/api/file/insurance-member-template" filename="保险人员导入模板.xlsx" />
-                  <InsuranceMemberImport policyId={selId} />
+                  <InsuranceMemberImport policyId={selId} onImported={() => syncLinked(selId)} />
                 </Can>
               </div>
               <WideTable id="insurance-members" pager={memberPager as any}>
@@ -339,7 +415,7 @@ function InsurancePage() {
                               size="sm"
                               variant="outline"
                               type="button"
-                              onClick={() => setReplaceState({ target: m, name: "", leader: m.leader, startDate: today(), remark: "" })}
+                              onClick={() => setReplaceState({ target: m, name: "", leader: m.leader, startDate: `${today()} 00:00`, remark: "" })}
                             >
                               替换
                             </Button>
@@ -381,6 +457,22 @@ function InsurancePage() {
               <Field label="保险公司">
                 <Input value={policyEdit.company} onChange={(e) => setPolicyEdit({ ...policyEdit, company: e.target.value })} />
               </Field>
+              <Field label="挂钩保单（人员同步，替换一起替换）">
+                <select
+                  className="field-select w-full"
+                  value={policyEdit.linkedPolicyId}
+                  onChange={(e) => setPolicyEdit({ ...policyEdit, linkedPolicyId: e.target.value })}
+                >
+                  <option value="">不挂钩</option>
+                  {policies
+                    .filter((p) => p.id !== policyEdit.id)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.policyNo}{p.name ? ` · ${p.name}` : ""}
+                      </option>
+                    ))}
+                </select>
+              </Field>
               <div className="grid grid-cols-3 gap-3">
                 <Field label="每人保费(元)">
                   <Input type="number" min={0} value={policyEdit.premiumPerPerson || ""} onChange={(e) => setPolicyEdit({ ...policyEdit, premiumPerPerson: Number(e.target.value) })} />
@@ -392,14 +484,18 @@ function InsurancePage() {
                   <Input type="number" min={0} value={policyEdit.coverage || ""} onChange={(e) => setPolicyEdit({ ...policyEdit, coverage: Number(e.target.value) })} />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="保险期开始">
-                  <Input type="date" value={policyEdit.periodStart} onChange={(e) => setPolicyEdit({ ...policyEdit, periodStart: e.target.value })} />
-                </Field>
-                <Field label="保险期结束">
-                  <Input type="date" value={policyEdit.periodEnd} onChange={(e) => setPolicyEdit({ ...policyEdit, periodEnd: e.target.value })} />
-                </Field>
-              </div>
+              <DateTimeField
+                label="保险期开始"
+                value={policyEdit.periodStart}
+                defaultTime="00:00"
+                onChange={(v) => setPolicyEdit({ ...policyEdit, periodStart: v })}
+              />
+              <DateTimeField
+                label="保险期结束"
+                value={policyEdit.periodEnd}
+                defaultTime="23:59"
+                onChange={(v) => setPolicyEdit({ ...policyEdit, periodEnd: v })}
+              />
               <Field label="保险合同（可多份）">
                 <div className="space-y-2">
                   {policyEdit.contracts.map((c) => (
@@ -429,8 +525,13 @@ function InsurancePage() {
                         const f = e.target.files?.[0];
                         e.target.value = "";
                         if (!f) return;
+                        const parts = [policyEdit.policyNo, policyEdit.buyer, datePart(policyEdit.periodStart).replace(/-/g, "")]
+                          .map((s) => safeFileBase(s))
+                          .filter(Boolean);
+                        const base = parts.join("-") || "保险合同";
+                        const named = renameFile(f, base);
                         const id = uid();
-                        const saved = (await setDoc(id, "insurance", f)) || f.name;
+                        const saved = (await setDoc(id, "insurance", named)) || named.name;
                         setPolicyEdit({ ...policyEdit, contracts: [...policyEdit.contracts, { id, fileName: saved }] });
                         toast.success(`已上传 ${saved}`);
                       }}
@@ -467,14 +568,19 @@ function InsurancePage() {
                   ))}
                 </datalist>
               </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="开始日期">
-                  <Input type="date" value={memberEdit.startDate} onChange={(e) => setMemberEdit({ ...memberEdit, startDate: e.target.value })} />
-                </Field>
-                <Field label="结束日期（空=在保）">
-                  <Input type="date" value={memberEdit.endDate} onChange={(e) => setMemberEdit({ ...memberEdit, endDate: e.target.value })} />
-                </Field>
-              </div>
+              <DateTimeField
+                label="开始时间"
+                value={memberEdit.startDate}
+                defaultTime="00:00"
+                onChange={(v) => setMemberEdit({ ...memberEdit, startDate: v })}
+                required
+              />
+              <DateTimeField
+                label="结束时间（空=在保）"
+                value={memberEdit.endDate}
+                defaultTime="23:59"
+                onChange={(v) => setMemberEdit({ ...memberEdit, endDate: v })}
+              />
               <Field label="备注">
                 <Input value={memberEdit.remark} onChange={(e) => setMemberEdit({ ...memberEdit, remark: e.target.value })} />
               </Field>
@@ -507,9 +613,13 @@ function InsurancePage() {
                   ))}
                 </datalist>
               </Field>
-              <Field label="开始日期（也是原人员的结束日期）" required>
-                <Input type="date" value={replaceState.startDate} onChange={(e) => setReplaceState({ ...replaceState, startDate: e.target.value })} />
-              </Field>
+              <DateTimeField
+                label="开始时间（也是原人员的结束时间）"
+                value={replaceState.startDate}
+                defaultTime="00:00"
+                onChange={(v) => setReplaceState({ ...replaceState, startDate: v })}
+                required
+              />
               <Field label="备注">
                 <Input value={replaceState.remark} onChange={(e) => setReplaceState({ ...replaceState, remark: e.target.value })} />
               </Field>

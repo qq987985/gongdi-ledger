@@ -140,6 +140,7 @@ export interface InsurancePolicy {
   coverage: number; // 保额/额度（每人，元）
   periodStart: string; // 保险期开始 YYYY-MM-DD
   periodEnd: string; // 保险期结束 YYYY-MM-DD
+  linkedPolicyId: string; // 挂钩的保单 id（人员同步），空 = 不挂钩
   contracts: InsuranceContract[]; // 保险合同文件（可多份）
   remark: string;
 }

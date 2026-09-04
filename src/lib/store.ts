@@ -515,6 +515,7 @@ export const useApp = create<AppStore>()(
           coverage: Number(p.coverage) || 0,
           periodStart: p.periodStart || "",
           periodEnd: p.periodEnd || "",
+          linkedPolicyId: p.linkedPolicyId || "",
           contracts: Array.isArray(p.contracts) ? p.contracts : [],
           remark: p.remark || "",
         };

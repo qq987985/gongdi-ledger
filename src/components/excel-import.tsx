@@ -516,7 +516,7 @@ export function FullBookImport() {
 }
 
 /* ───────────── 保险人员导入 ───────────── */
-export function InsuranceMemberImport({ policyId }: { policyId: string }) {
+export function InsuranceMemberImport({ policyId, onImported }: { policyId: string; onImported?: () => void }) {
   const store = useApp();
   const [mode, setMode] = React.useState<ImportMode>("add");
   const [conflicts, setConflicts] = React.useState<{ incoming: InsuranceMember; existing: InsuranceMember; action: "skip" | "overwrite" }[]>([]);
@@ -559,6 +559,7 @@ export function InsuranceMemberImport({ policyId }: { policyId: string }) {
         for (let i = 0; i < result.length; i++)
           if (result[i].id === c.existing.id) result[i] = { ...c.incoming, id: c.existing.id, policyId };
     store.replaceMembers(result);
+    if (onImported) onImported();
     toast.success(mode === "replace" ? "保险人员已替换导入" : "保险人员导入完成");
     setConflicts([]);
     setFresh([]);

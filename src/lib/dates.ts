@@ -130,13 +130,21 @@ export function nextYear(years: number[]): number {
   return (years.length ? Math.max(...years) : new Date().getFullYear()) + 1;
 }
 
-/** 两个 YYYY-MM-DD 之间的天数（含首尾）。缺任一端返回 0。 */
+/** 解析 YYYY-MM-DD 或 YYYY-MM-DD HH:mm；缺时间时用 defaultTime（from 用 00:00，to 用 23:59）。 */
+function parseDateTime(s: string, defaultTime: string): Date | null {
+  const t = String(s || "").trim();
+  if (!t) return null;
+  const m = t.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}:\d{2}))?/);
+  if (!m) return null;
+  const d = new Date(`${m[1]}T${m[2] || defaultTime}:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** 两个时间点之间的天数（带小数，保留 2 位）。开始缺时间按 00:00，结束缺时间按 23:59。 */
 export function daysBetween(from: string, to: string): number {
-  const a = parseDateYmd(from);
-  const b = parseDateYmd(to);
+  const a = parseDateTime(from, "00:00");
+  const b = parseDateTime(to, "23:59");
   if (!a || !b) return 0;
-  const da = new Date(`${a}T00:00:00`);
-  const db = new Date(`${b}T00:00:00`);
-  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return 0;
-  return Math.round((db.getTime() - da.getTime()) / 864e5) + 1;
+  const days = (b.getTime() - a.getTime()) / 864e5;
+  return Math.max(0, Math.round(days * 100) / 100);
 }
