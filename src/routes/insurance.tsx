@@ -278,7 +278,7 @@ function InsurancePage() {
                   <th className="p-3">保险期</th>
                   <th className="p-3">天数</th>
                   <th className="p-3">总保费</th>
-                  <th className="p-3">在保/总</th>
+                  <th className="p-3">在保/共</th>
                   <th className="p-3">备注</th>
                   <Can perm="insurance.edit">
                     <th className="p-3">操作</th>
@@ -351,7 +351,7 @@ function InsurancePage() {
                 <span>保额/人 <b className="tabular-nums text-ink">{money(coverage)}</b> 元</span>
                 <span>总保费 <b className="tabular-nums text-ink">{money(totalPremium)}</b> 元</span>
                 <span>每人每天 <b className="tabular-nums text-ink">{money(Math.round(perPersonDaily * 100) / 100)}</b> 元</span>
-                <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> / {policyMembers.length}</span>
+                <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> 人 / 共 <b className="tabular-nums text-ink">{policyMembers.length}</b> 人</span>
                 <span>累计人天 <b className="tabular-nums text-ink">{totalPersonDays}</b></span>
                 <span>保费合计 <b className="tabular-nums text-ink">{money(Math.round(totalSettle * 100) / 100)}</b> 元</span>
               </div>
