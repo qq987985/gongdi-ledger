@@ -217,10 +217,25 @@ function InsurancePage() {
       return;
     }
     const id = policyEdit.id || uid();
-    upsertPolicy({ ...policyEdit, id, policyNo: policyEdit.policyNo.trim() });
+    const linkedId = policyEdit.linkedPolicyId || "";
+    upsertPolicy({ ...policyEdit, id, policyNo: policyEdit.policyNo.trim(), linkedPolicyId: linkedId });
+    // 组合险互相挂：只在一个保单上选一次，另一个保单自动反向挂上
+    const st = useApp.getState();
+    const all = st.insurancePolicies || [];
+    for (const p of all) {
+      if (p.id !== id && p.linkedPolicyId === id && p.id !== linkedId) {
+        st.upsertPolicy({ ...p, linkedPolicyId: "" });
+      }
+    }
+    if (linkedId) {
+      const target = all.find((p) => p.id === linkedId);
+      if (target && target.linkedPolicyId !== id) {
+        st.upsertPolicy({ ...target, linkedPolicyId: id });
+      }
+    }
     setSelectedId(id);
     setPolicyEdit(null);
-    toast.success("已保存保单");
+    toast.success(linkedId ? "已保存保单，两张保单已互相挂钩为组合险" : "已保存保单");
   }
 
   function saveMember() {
@@ -331,7 +346,7 @@ function InsurancePage() {
                         {p.policyNo}
                         {p.linkedPolicyId ? (
                           <div className="text-[11px] font-normal text-muted">
-                            ↔ 挂钩 {policies.find((x) => x.id === p.linkedPolicyId)?.policyNo || ""}
+                            ↔ 组合险 {policies.find((x) => x.id === p.linkedPolicyId)?.policyNo || ""}
                           </div>
                         ) : null}
                       </td>
@@ -500,13 +515,13 @@ function InsurancePage() {
               <Field label="保险公司">
                 <Input value={policyEdit.company} onChange={(e) => setPolicyEdit({ ...policyEdit, company: e.target.value })} />
               </Field>
-              <Field label="挂钩保单（人员同步，替换一起替换）">
+              <Field label="组合险保单（选一次即互相挂钩，换人一起换）">
                 <select
                   className="field-select w-full"
                   value={policyEdit.linkedPolicyId}
                   onChange={(e) => setPolicyEdit({ ...policyEdit, linkedPolicyId: e.target.value })}
                 >
-                  <option value="">不挂钩</option>
+                  <option value="">不组合（单独保单）</option>
                   {policies
                     .filter((p) => p.id !== policyEdit.id)
                     .map((p) => (
