@@ -391,8 +391,8 @@ Releases 下载 `gongdi-windows.zip`，双击 `启动.bat`，打开 http://127.0
 
 ```text
 qq987985/gongdi-ledger
-├── .github/workflows/docker.yml     ← 网页上看不见时，用根目录 docker-workflow.yml 粘贴
-├── docker-workflow.yml
+├── .github/workflows/docker.yml     ← 网页上看不见时，用根目录 仓库内的 .github/workflows/docker.yml 粘贴
+├── 仓库内的 .github/workflows/docker.yml
 ├── Dockerfile
 ├── docker-compose.yml               ← 默认，国内加速 ghcr.1ms.run
 ├── docker-compose.github.yml        ← 同 docker-compose.yml，老脚本兼容
@@ -414,7 +414,7 @@ qq987985/gongdi-ledger
 ```
 
 网页一次最多传 **100** 个文件。超了就先传整个 `app/` 并 Commit，再传其余；或用 GitHub Desktop。  
-`.github` 解压后经常看不见：仓库 → Actions → 新建工作流，把 `docker-workflow.yml` 贴成 `.github/workflows/docker.yml`。
+`.github` 解压后经常看不见：仓库 → Actions → 新建工作流，把 `仓库内的 .github/workflows/docker.yml` 贴成 `.github/workflows/docker.yml`。
 
 推到 `main` 后 Actions 自动打 Docker 镜像和 Windows 包。
 

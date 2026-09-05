@@ -86,7 +86,7 @@ data/templates/         导入用模板（运行时目录，不要传 GitHub）
 --------------------------------
 
 .github/workflows/docker.yml
-docker-workflow.yml             ← .github 看不见时，把这份贴进仓库
+仓库内的 .github/workflows/docker.yml             ← .github 看不见时，把这份贴进仓库
 Dockerfile
 docker-compose.yml              ← 拉镜像
 docker-compose.build.yml        ← 本机构建

@@ -904,7 +904,12 @@ function BatchRules({
     replacePeople(
       people.map((p) => {
         if (!set.has(p.id)) return p;
-        if (onlyBlank && (payType === "month" ? p.monthWage : p.dailyWage)) return p;
+        if (onlyBlank) {
+          // 只填空白：只补工资数额，不动计薪方式和加班规则
+          if (payType === "month" ? p.monthWage : p.dailyWage) return p;
+          n += 1;
+          return payType === "month" ? { ...p, monthWage } : { ...p, dailyWage: wage };
+        }
         n += 1;
         return payType === "month"
           ? { ...p, payType: "month", monthWage, otRule: rule }

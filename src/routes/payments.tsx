@@ -72,8 +72,9 @@ function PaymentsPage() {
   }, [ranged, batch, q, status]);
   const pager = usePager("payments", filtered, [status, batch, q, lo, hi].join("|"));
   const pageRows = pager.rows;
-  const pendingCount = ranged.filter((p) => !p.date).length;
-  const pendingAmt = ranged.filter((p) => !p.date).reduce((s, p) => s + p.amount, 0);
+  // 汇总口径与当前筛选一致（全部用 filtered），避免待发放按区间、已发放按筛选导致对不上
+  const pendingCount = filtered.filter((p) => !p.date).length;
+  const pendingAmt = filtered.filter((p) => !p.date).reduce((s, p) => s + p.amount, 0);
   const paidAmt = filtered.filter((p) => p.date).reduce((s, p) => s + p.amount, 0);
   const total = filtered.reduce((s, p) => s + p.amount, 0);
   const proxyCount = filtered.filter((p) => p.owner !== p.receiver).length;

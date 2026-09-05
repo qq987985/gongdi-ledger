@@ -16,12 +16,12 @@ export const Route = createFileRoute("/api/photo-flags")({
       GET: async ({ request }) => {
         if (!persistOn()) return Response.json({ flags: {} });
         const names = await namesFrom(request);
-        return withTenant(request, async () => Response.json({ flags: await photoFlags(names) }));
+        return withTenant(request, async () => Response.json({ flags: await photoFlags(names) }), "people.view");
       },
       POST: async ({ request }) => {
         if (!persistOn()) return Response.json({ flags: {} });
         const names = await namesFrom(request);
-        return withTenant(request, async () => Response.json({ flags: await photoFlags(names) }));
+        return withTenant(request, async () => Response.json({ flags: await photoFlags(names) }), "people.view");
       },
     },
   },

@@ -16,7 +16,7 @@ fi
 
 mkdir -p data/accounts data/books data/backups data/templates \
   data/photos/id data/photos/bank data/photos/ic \
-  data/photos/报量单 data/photos/发票 data/photos/收款回单 data/photos/考勤影像 data/photos/合同扫描件 data/photos/报销凭证 data/photos/报销打款
+  data/photos/报量单 data/photos/发票 data/photos/收款回单 data/photos/考勤影像 data/photos/合同扫描件 data/photos/报销凭证 data/photos/报销打款 data/photos/保险合同
 
 echo "停止旧容器..."
 docker compose down --timeout 8 2>/dev/null || true

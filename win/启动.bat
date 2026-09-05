@@ -31,13 +31,14 @@ if not exist "data" (
   mkdir "data\photos\id"
   mkdir "data\photos\bank"
   mkdir "data\photos\ic"
-  mkdir "data\photos\report"
-  mkdir "data\photos\invoice"
-  mkdir "data\photos\receipt"
-  mkdir "data\photos\attendance"
-  mkdir "data\photos\contract"
-  mkdir "data\photos\expense"
-  mkdir "data\photos\payout"
+  mkdir "data\photos\报量单"
+  mkdir "data\photos\发票"
+  mkdir "data\photos\收款回单"
+  mkdir "data\photos\考勤影像"
+  mkdir "data\photos\合同扫描件"
+  mkdir "data\photos\报销凭证"
+  mkdir "data\photos\报销打款"
+  mkdir "data\photos\保险合同"
   echo Directory creation complete.
 ) else (
   echo data directory exists, skipping creation.

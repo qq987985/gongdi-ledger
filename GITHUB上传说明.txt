@@ -5,7 +5,7 @@
 或先传 app/ 并 Commit，再传其余文件。
 
 .github 文件夹解压后经常看不见。请打开仓库 → Actions → 新建工作流，
-把 docker-workflow.yml 全文粘贴保存为 .github/workflows/docker.yml
+把 仓库内的 .github/workflows/docker.yml 全文粘贴保存为 .github/workflows/docker.yml
 
 不要上传：
   data/                 真实台账、账号、照片、合同扫描件

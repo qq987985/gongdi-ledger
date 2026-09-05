@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import { uid } from "./utils";
 import { normalizeIdDate, parseIdCard } from "./idcard";
 import { hasWork, monthPay, getWageAt } from "./wage";
-import { parseDateYmd, paymentsInYear } from "./dates";
+import { parseDateYmd, paymentsInYear, daysBetween } from "./dates";
 import {
   contractRollup,
   normalizeContractStatus,
@@ -12,7 +12,7 @@ import {
   type ContractEntry,
   type ContractRecord,
 } from "./contracts";
-import type { AttendanceRow, Expense, InsuranceMember, Payment, Person } from "./types";
+import type { AttendanceRow, Expense, InsuranceMember, InsurancePolicy, Payment, Person } from "./types";
 
 const { utils } = XLSX;
 const readSync = XLSX.read;
@@ -556,14 +556,21 @@ export interface FullWorkbookArgs {
   attendance: AttendanceRow[];
   payments: Payment[];
   expenses?: Expense[];
+  insurancePolicies?: InsurancePolicy[];
+  insuranceMembers?: InsuranceMember[];
   months?: { year: number; month: number }[];
   skipPeople?: boolean;
   skipPay?: boolean;
   skipExp?: boolean;
 }
 
+
+function dpart(dt: string): string {
+  return (dt || "").slice(0, 10);
+}
+
 export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
-  const { year, people, attendance, payments, expenses = [], months: monthArg, skipPeople = false, skipPay = false, skipExp = false } = args;
+  const { year, people, attendance, payments, expenses = [], insurancePolicies = [], insuranceMembers = [], months: monthArg, skipPeople = false, skipPay = false, skipExp = false } = args;
   const wb = utils.book_new();
   const monthList =
     Array.isArray(monthArg) && monthArg.length
@@ -596,8 +603,33 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
   }
   if (!skipPay) utils.book_append_sheet(wb, sheetFromAoa(paymentSheetAoa(payments)), "发放记录");
   if (!skipExp) utils.book_append_sheet(wb, sheetFromAoa(expenseSheetAoa(expenses)), "报销单");
+  if (insurancePolicies.length) {
+    const paoa: unknown[][] = [
+      ["保险保单"],
+      ["保单号", "名称", "购买公司", "保险公司", "每人保费", "人数", "保额/人", "保险期开始", "保险期结束", "保险期天数", "总保费", "备注"],
+    ];
+    for (const p of insurancePolicies) {
+      paoa.push([
+        p.policyNo, p.name, p.buyer, p.company, p.premiumPerPerson || "",
+        p.headcount || "", p.coverage || "", dpart(p.periodStart), dpart(p.periodEnd),
+        daysBetween(p.periodStart, p.periodEnd) || "", (p.premiumPerPerson || 0) * (p.headcount || 0) || "", p.remark,
+      ]);
+    }
+    utils.book_append_sheet(wb, sheetFromAoa(paoa), "保险保单");
+    const iaoa: unknown[][] = [
+      ["保险人员"],
+      ["保单号", "姓名", "队长", "开始日期", "结束日期", "状态"],
+    ];
+    for (const m of insuranceMembers) {
+      const pol = insurancePolicies.find((p) => p.id === m.policyId);
+      iaoa.push([pol?.policyNo || "", m.name, m.leader, dpart(m.startDate), dpart(m.endDate) || "在保", m.endDate ? "已结束" : "在保"]);
+    }
+    utils.book_append_sheet(wb, sheetFromAoa(iaoa), "保险人员");
+  }
+  const earliestYear = yearSet.length ? Math.min(...yearSet) : year;
   for (const y of yearSet) {
-    const yearPays = paymentsInYear(payments, y, y);
+    // 无日期的旧发放只归最早一年，避免每年汇总重复出现
+    const yearPays = paymentsInYear(payments, y, earliestYear);
     const sumAoa: unknown[][] = [
       [`${y}年度工资汇总表`],
       [

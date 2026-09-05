@@ -279,6 +279,8 @@ function confirmEdits(kind: string, name: string, creating: boolean, before: any
   if (typeof window === "undefined") return true;
   if (creating) return window.confirm(`确认新增${kind}「${name || "未命名"}」？`);
   const lines: string[] = [];
+  if (JSON.stringify(before?.wageHistory || []) !== JSON.stringify(after?.wageHistory || []))
+    lines.push("工资历史：已变更");
   for (const key of Object.keys(labels)) {
     let a = before?.[key],
       b = after?.[key];

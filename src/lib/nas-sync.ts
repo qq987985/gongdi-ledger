@@ -1,9 +1,11 @@
 import { canWriteLedger, livePerms } from "./perms";
 import { useApp } from "./store";
 import { buildFullWorkbook } from "./excel";
+import { toast } from "sonner";
 import type { LedgerState } from "./types";
 
 let nas = false;
+let pushFailed = false;
 
 export function nasEnabled(): boolean {
   return nas;
@@ -74,12 +76,27 @@ export async function pushNasLedger(): Promise<void> {
   if (!nas) return;
   if (!canWriteLedger(livePerms())) return;
   const body = sliceState(useApp.getState());
-  await fetch("/api/ledger", {
-    method: "PUT",
-    credentials: "include",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  try {
+    const r = await fetch("/api/ledger", {
+      method: "PUT",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) {
+      pushFailed = false;
+      return;
+    }
+    if (!pushFailed) {
+      pushFailed = true;
+      toast.error(`保存到服务器失败（${r.status}），请检查网络后重试`);
+    }
+  } catch {
+    if (!pushFailed) {
+      pushFailed = true;
+      toast.error("保存到服务器失败，请检查网络后重试");
+    }
+  }
 }
 
 export async function pushNasBackup(): Promise<string> {
@@ -90,6 +107,8 @@ export async function pushNasBackup(): Promise<string> {
     people: s.people,
     attendance: s.attendance,
     payments: s.payments,
+    insurancePolicies: s.insurancePolicies || [],
+    insuranceMembers: s.insuranceMembers || [],
   });
   const { writeCenteredXlsx } = await import("./xlsx-center");
   const data = await writeCenteredXlsx(wb);

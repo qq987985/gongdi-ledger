@@ -16,14 +16,18 @@ export const Route = createFileRoute("/api/photo")({
         const name = url.searchParams.get("name") || "";
         const kind = kindOf(url.searchParams.get("kind"));
         if (!name || !kind) return Response.json({ url: null });
-        return withTenant(request, async () => {
-          const hit = await findPhotoPath(name, kind);
-          if (!hit) return Response.json({ url: null, file: null });
-          return Response.json({
-            url: `/api/photo-file?name=${encodeURIComponent(name)}&kind=${kind}&v=${encodeURIComponent(hit.file)}`,
-            file: hit.file,
-          });
-        });
+        return withTenant(
+          request,
+          async () => {
+            const hit = await findPhotoPath(name, kind);
+            if (!hit) return Response.json({ url: null, file: null });
+            return Response.json({
+              url: `/api/photo-file?name=${encodeURIComponent(name)}&kind=${kind}&v=${encodeURIComponent(hit.file)}`,
+              file: hit.file,
+            });
+          },
+          "people.view",
+        );
       },
       PUT: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });

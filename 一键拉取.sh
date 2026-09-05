@@ -9,7 +9,7 @@ fi
 
 mkdir -p data/accounts data/books data/backups data/templates \
   data/photos/id data/photos/bank data/photos/ic \
-  data/photos/报量单 data/photos/发票 data/photos/收款回单 data/photos/考勤影像 data/photos/合同扫描件 data/photos/报销凭证 data/photos/报销打款
+  data/photos/报量单 data/photos/发票 data/photos/收款回单 data/photos/考勤影像 data/photos/合同扫描件 data/photos/报销凭证 data/photos/报销打款 data/photos/保险合同
 
 if [ ! -f docker-compose.github.yml ] && [ ! -f docker-compose.yml ]; then
   echo "缺少 docker-compose.github.yml 或 docker-compose.yml"

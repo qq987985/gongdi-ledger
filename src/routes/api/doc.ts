@@ -7,6 +7,21 @@ function kindOf(v: string | null) {
   return null;
 }
 
+/** 文件类型 → 查看权限：与 UI 的入口模块一致，避免权限错配 */
+function kindView(kind: string): string {
+  if (kind === "report" || kind === "invoice" || kind === "receipt" || kind === "contract") return "contracts.view";
+  if (kind === "expense" || kind === "payout") return "expenses.view";
+  if (kind === "insurance") return "insurance.view";
+  return "attendance.view";
+}
+
+function kindEdit(kind: string): string {
+  if (kind === "report" || kind === "invoice" || kind === "receipt" || kind === "contract") return "contracts.edit";
+  if (kind === "expense" || kind === "payout") return "expenses.edit";
+  if (kind === "insurance") return "insurance.edit";
+  return "attendance.edit";
+}
+
 const MIME: Record<string, string> = {
   ".pdf": "application/pdf",
   ".png": "image/png",
@@ -28,18 +43,22 @@ export const Route = createFileRoute("/api/doc")({
         const id = url.searchParams.get("id") || "";
         const kind = kindOf(url.searchParams.get("kind"));
         if (!id || !kind) return new Response("bad request", { status: 400 });
-        return withTenant(request, async () => {
-          const hit = await findDoc(id, kind);
-          if (!hit) return new Response("not found", { status: 404 });
-          const mime = MIME[`.${(hit.fileName.split(".").pop() || "").toLowerCase()}`] || "application/octet-stream";
-          return new Response(new Uint8Array(hit.buf), {
-            headers: {
-              "Content-Type": mime,
-              "Content-Disposition": `inline; filename="${encodeURIComponent(hit.fileName)}"`,
-              "Cache-Control": "no-store",
-            },
-          });
-        });
+        return withTenant(
+          request,
+          async () => {
+            const hit = await findDoc(id, kind);
+            if (!hit) return new Response("not found", { status: 404 });
+            const mime = MIME[`.${(hit.fileName.split(".").pop() || "").toLowerCase()}`] || "application/octet-stream";
+            return new Response(new Uint8Array(hit.buf), {
+              headers: {
+                "Content-Type": mime,
+                "Content-Disposition": `inline; filename="${encodeURIComponent(hit.fileName)}"`,
+                "Cache-Control": "no-store",
+              },
+            });
+          },
+          kindView(kind),
+        );
       },
       PUT: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
@@ -56,7 +75,7 @@ export const Route = createFileRoute("/api/doc")({
             const saved = await saveDoc(id, kind, buf, file.name, { replace });
             return Response.json({ ok: true, fileName: saved || file.name });
           },
-          "files.edit",
+          kindEdit(kind),
         );
       },
       DELETE: async ({ request }) => {
@@ -71,7 +90,7 @@ export const Route = createFileRoute("/api/doc")({
             await removeDocFile(id, kind);
             return Response.json({ ok: true });
           },
-          "files.edit",
+          kindEdit(kind),
         );
       },
     },

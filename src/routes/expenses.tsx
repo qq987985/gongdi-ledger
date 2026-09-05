@@ -398,6 +398,8 @@ function ExpensesPage() {
     const acc = formatPayAccount(batch.payBank, batch.payCardNo);
     const day = markDone ? batch.payoutDate || todayYmd() : "";
     for (const e of batchRows) {
+      // 打款凭证按 (payoutId, payout) 存；换新 pid 时旧文件名不能再引用（否则找不到文件）
+      const keepFile = batch.payoutFileName || (batch.payoutId && batch.payoutId === e.payoutId ? e.payoutFileName : "");
       saveOne(e, {
         claimant: batch.claimant.trim(),
         forWhom: (batch.forWhom || e.forWhom).trim(),
@@ -407,7 +409,7 @@ function ExpensesPage() {
         payoutMethod: batch.payoutMethod || "转账",
         payoutDate: markDone ? day : e.status === "已报销" ? e.payoutDate : "",
         payoutId: pid,
-        payoutFileName: batch.payoutFileName || e.payoutFileName || "",
+        payoutFileName: keepFile,
         status: markDone ? "已报销" : e.status,
         reimbursedAt: markDone ? day : e.reimbursedAt,
       });

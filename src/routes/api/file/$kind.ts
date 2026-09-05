@@ -164,21 +164,23 @@ export const Route = createFileRoute("/api/file/$kind")({
         const url = new URL(request.url);
         const year = Number(url.searchParams.get("year") || "2026") || 2026;
         const kind = params.kind;
-        if (kind === "people-template") return xlsxFile(peopleTemplateWb(), "人员导入模板.xlsx");
-        if (kind === "attendance-template") return xlsxFile(attendanceTemplateWb(year), `${year}年考勤导入模板.xlsx`);
-        if (kind === "payment-template") return xlsxFile(paymentTemplateWb(), "发放记录导入模板.xlsx");
-        if (kind === "expense-template") return xlsxFile(expenseTemplateWb(), "报销单导入模板.xlsx");
-        if (kind === "contract-template") return xlsxFile(contractTemplateWb(), "合同导入模板.xlsx");
-        if (kind === "insurance-member-template") return xlsxFile(insuranceMemberTemplateWb(), "保险人员导入模板.xlsx");
-        if (
-          kind === "contract-export" ||
-          kind === "export" ||
-          kind === "payment-export" ||
-          kind === "expense-export" ||
-          kind === "people-export" ||
-          kind === "attendance-export"
-        ) {
-          const run = async () => {
+        // 模板下载需导入权限，导出需导出权限
+        const need = kind.endsWith("-template") ? "import.use" : "export.use";
+        const handle = async (): Promise<Response> => {
+          if (kind === "people-template") return xlsxFile(peopleTemplateWb(), "人员导入模板.xlsx");
+          if (kind === "attendance-template") return xlsxFile(attendanceTemplateWb(year), `${year}年考勤导入模板.xlsx`);
+          if (kind === "payment-template") return xlsxFile(paymentTemplateWb(), "发放记录导入模板.xlsx");
+          if (kind === "expense-template") return xlsxFile(expenseTemplateWb(), "报销单导入模板.xlsx");
+          if (kind === "contract-template") return xlsxFile(contractTemplateWb(), "合同导入模板.xlsx");
+          if (kind === "insurance-member-template") return xlsxFile(insuranceMemberTemplateWb(), "保险人员导入模板.xlsx");
+          if (
+            kind === "contract-export" ||
+            kind === "export" ||
+            kind === "payment-export" ||
+            kind === "expense-export" ||
+            kind === "people-export" ||
+            kind === "attendance-export"
+          ) {
             const range = parseExportRange(url, year);
             const data = persistOn() ? await readLedger() : { empty: true };
             const rec = "empty" in data && data.empty ? {} : data;
@@ -197,14 +199,26 @@ export const Route = createFileRoute("/api/file/$kind")({
             if (!months.length) months = Array.from({ length: 12 }, (_, i) => ({ year: range.year, month: i + 1 }));
             const skip = kind === "attendance-export";
             return xlsxFile(
-              buildFullWorkbook({ year: range.year, people, attendance, payments, expenses, months, skipPeople: skip, skipPay: skip, skipExp: skip }),
+              buildFullWorkbook({
+                year: range.year,
+                people,
+                attendance,
+                payments,
+                expenses,
+                insurancePolicies: rec.insurancePolicies || [],
+                insuranceMembers: rec.insuranceMembers || [],
+                months,
+                skipPeople: skip,
+                skipPay: skip,
+                skipExp: skip,
+              }),
               fileStamp(range, skip ? "att" : "full"),
             );
-          };
-          if (persistOn()) return withTenant(request, run);
-          return run();
-        }
-        return new Response("not found", { status: 404 });
+          }
+          return new Response("not found", { status: 404 });
+        };
+        if (persistOn()) return withTenant(request, handle as any, need);
+        return handle();
       },
     },
   },
