@@ -742,6 +742,7 @@ export function AppShell() {
   useHydrateStore();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const year = useApp((s) => s.year);
+  const uiStyle = useApp((s) => s.uiStyle);
   const accessHash = useApp((s) => s.accessHash);
   const [open, setOpen] = React.useState(false);
   const [unlocked, setUnlocked] = React.useState(() => !accessHash);
@@ -809,57 +810,81 @@ export function AppShell() {
     toast.success("已退出登录");
   };
   return (
-    <div className="app-bg min-h-screen min-h-dvh overflow-x-hidden text-ink">
-      <div className="flex">
-        {/* 桌面：左侧图标导航 */}
-        <aside className="no-print sticky top-0 hidden h-screen w-[72px] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface/90 py-4 backdrop-blur md:flex">
-          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-lg text-white shadow-lg">
-            🏗️
-          </div>
-          {visNav.map((item) => {
-            const active = item.to === "/" ? pathname === "/" : pathname === item.to || pathname.startsWith(item.to);
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                preload={false}
-                title={item.label}
-                className={cn(
-                  "flex h-12 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors duration-150",
-                  active ? "bg-accent-soft text-accent-strong" : "text-muted hover:bg-accent-soft/60 hover:text-ink",
-                )}
-              >
-                <item.icon className="size-[18px]" />
-                {item.label}
-              </Link>
-            );
-          })}
-          <div className="flex-1" />
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent to-violet-500 text-sm font-semibold text-white">
-            {(who?.name || "账").slice(0, 1)}
-          </div>
-          {who ? <div className="w-14 truncate text-center text-[10px] text-muted">{who.name}</div> : null}
-        </aside>
-
-        <div className="min-w-0 flex-1">
-          {/* 桌面顶部栏 */}
-          <header className="no-print sticky top-0 z-30 hidden items-center gap-3 border-b border-line bg-surface/80 px-6 py-3 backdrop-blur md:flex">
+    <div className={cn("app-bg min-h-screen min-h-dvh overflow-x-hidden text-ink", uiStyle === "classic" && "theme-classic")}>
+      <div className={uiStyle === "classic" ? "mx-auto flex max-w-7xl" : "flex"}>
+        {uiStyle === "classic" ? (
+          /* 经典：原版宽侧栏 */
+          <aside className="no-print hidden w-56 shrink-0 flex-col border-r border-line bg-bg-elevated px-4 py-6 md:flex">
             <Brand year={year} pathname={pathname} />
-            <div className="min-w-0 flex-1" />
-            <BookSwitcher compact />
-            <YearSwitcher compact />
-            <VersionLog />
+            <BookSwitcher />
+            <YearSwitcher />
+            <nav className="mt-6 flex flex-col gap-1">
+              {visNav.map((item) => (
+                <NavLink key={item.to} {...item} active={pathname === item.to} />
+              ))}
+            </nav>
+            {who ? <WhoCard who={who} /> : null}
             {accessHash || acct ? (
-              <button
-                type="button"
-                title="退出登录"
-                className="flex h-9 items-center gap-1.5 rounded-xl border border-line-strong bg-surface px-3 text-xs text-muted transition-colors hover:border-danger hover:text-danger"
-                onClick={logout}
-              >
-                <LogOut className="size-3.5" /> 退出
+              <button type="button" className="mt-4 inline-flex items-center gap-2 text-xs text-muted hover:text-ink" onClick={logout}>
+                <LogOut className="size-3.5" /> 退出登录
               </button>
             ) : null}
-          </header>
+            <div className="mt-6">
+              <VersionLog />
+            </div>
+          </aside>
+        ) : (
+          /* 新版：左侧图标导航 */
+          <aside className="no-print sticky top-0 hidden h-screen w-[72px] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface/90 py-4 backdrop-blur md:flex">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-lg text-white shadow-lg">
+              🏗️
+            </div>
+            {visNav.map((item) => {
+              const active = item.to === "/" ? pathname === "/" : pathname === item.to || pathname.startsWith(item.to);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  preload={false}
+                  title={item.label}
+                  className={cn(
+                    "flex h-12 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors duration-150",
+                    active ? "bg-accent-soft text-accent-strong" : "text-muted hover:bg-accent-soft/60 hover:text-ink",
+                  )}
+                >
+                  <item.icon className="size-[18px]" />
+                  {item.label}
+                </Link>
+              );
+            })}
+            <div className="flex-1" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent to-violet-500 text-sm font-semibold text-white">
+              {(who?.name || "账").slice(0, 1)}
+            </div>
+            {who ? <div className="w-14 truncate text-center text-[10px] text-muted">{who.name}</div> : null}
+          </aside>
+        )}
+
+        <div className="min-w-0 flex-1">
+          {uiStyle === "v2" ? (
+            /* 新版顶部栏（台账/年份/退出；检查更新在设置页底部） */
+            <header className="no-print sticky top-0 z-30 hidden items-center gap-3 border-b border-line bg-surface/80 px-6 py-3 backdrop-blur md:flex">
+              <Brand year={year} pathname={pathname} />
+              <div className="min-w-0 flex-1" />
+              <BookSwitcher compact />
+              <YearSwitcher compact />
+              {accessHash || acct ? (
+                <button
+                  type="button"
+                  title="退出登录"
+                  className="flex h-9 items-center gap-1.5 rounded-xl border border-line-strong bg-surface px-3 text-xs text-muted transition-colors hover:border-danger hover:text-danger"
+                  onClick={logout}
+                >
+                  <LogOut className="size-3.5" /> 退出
+                </button>
+              ) : null}
+            </header>
+          ) : null}
           <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-bg/95 px-3 py-2 backdrop-blur md:hidden" style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}>
             <Brand year={year} compact pathname={pathname} />
             <div className="flex min-w-0 items-center gap-1">

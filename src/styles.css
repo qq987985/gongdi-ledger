@@ -83,6 +83,33 @@
   --radius-xl: 22px;
 }
 
+/* 经典（原版）主题：设置里可切回旧配色与圆角 */
+.theme-classic {
+  --color-bg: #f5f6f8;
+  --color-bg-elevated: #eef1f5;
+  --color-ink: #1b2430;
+  --color-muted: #4b5563;
+  --color-subtle: #8a94a3;
+  --color-line: #e3e7ee;
+  --color-line-strong: #c9d2dd;
+  --color-accent: #1e56a0;
+  --color-accent-strong: #17467f;
+  --color-accent-soft: #e7eef8;
+  --color-ok: #177245;
+  --color-ok-bg: #e6f2eb;
+  --color-warn: #a35d00;
+  --color-warn-bg: #fdf1e2;
+  --color-danger: #c23737;
+  --color-danger-bg: #fdecec;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+}
+.theme-classic .app-bg {
+  background: var(--color-bg);
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;

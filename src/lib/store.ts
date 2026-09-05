@@ -22,6 +22,7 @@ export function emptyState(): LedgerState {
     insurancePolicies: [],
     insuranceMembers: [],
     accessHash: "",
+    uiStyle: "v2",
   };
 }
 
@@ -226,6 +227,7 @@ export function demoState(): LedgerState {
     insurancePolicies: [],
     insuranceMembers: [],
     accessHash: "",
+    uiStyle: "v2",
   };
 }
 
@@ -271,6 +273,7 @@ export interface AppActions {
   setInsuranceMembers: (members: InsuranceMember[]) => void;
   replaceMembers: (members: InsuranceMember[]) => void;
   setAccessHash: (accessHash: string) => void;
+  setUiStyle: (uiStyle: "v2" | "classic") => void;
   setAll: (s: LedgerState) => void;
 }
 
@@ -579,6 +582,7 @@ export const useApp = create<AppStore>()(
       },
       setInsuranceMembers: (members) => set({ insuranceMembers: members }),
       setAccessHash: (accessHash) => set({ accessHash }),
+      setUiStyle: (uiStyle) => set({ uiStyle }),
       setAll: (s) => set({ ...s, years: derivedYears(s) }),
     }),
     {
@@ -630,6 +634,7 @@ export const useApp = create<AppStore>()(
           insuranceMembers: s.insuranceMembers || [],
           years: derivedYears({ ...s, attendance, years: s.years || [] }),
           accessHash: s.accessHash || "",
+          uiStyle: s.uiStyle === "classic" ? "classic" : "v2",
         };
       },
       partialize: (s) => ({
@@ -645,6 +650,7 @@ export const useApp = create<AppStore>()(
         insurancePolicies: s.insurancePolicies || [],
         insuranceMembers: s.insuranceMembers || [],
         accessHash: s.accessHash || "",
+        uiStyle: s.uiStyle === "classic" ? "classic" : "v2",
       }),
     },
   ),

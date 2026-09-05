@@ -69,6 +69,8 @@ export async function pullNasLedger(): Promise<void> {
     insurancePolicies: j.insurancePolicies || [],
     insuranceMembers: j.insuranceMembers || [],
     accessHash: j.accessHash || "",
+    // 界面风格是本机偏好，不随台账同步
+    uiStyle: useApp.getState().uiStyle,
   });
 }
 

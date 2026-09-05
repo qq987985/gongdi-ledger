@@ -112,6 +112,8 @@ export interface LedgerState {
   insurancePolicies: InsurancePolicy[];
   insuranceMembers: InsuranceMember[];
   accessHash: string;
+  /** 界面风格：v2 = 新版仪表盘风格，classic = 原版界面 */
+  uiStyle: "v2" | "classic";
 }
 
 export interface AuditEntry {

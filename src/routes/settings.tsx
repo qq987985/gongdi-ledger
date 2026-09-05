@@ -39,7 +39,7 @@ function SettingsPage() {
         <p className="mt-1 text-sm text-muted">年度、访问密码、批量工资。反代到公网请先设密码。</p>
       </header>
       <AccountsCard />
-      <WinUpdate compact />
+      <UiStyleCard />
       <MembersCard />
       <PasswordCard />
       <Can perm="settings.year">
@@ -226,7 +226,37 @@ function SettingsPage() {
           </div>
         </section>
       </Can>
+      {/* 软件更新放最底部 */}
+      <WinUpdate compact />
     </div>
+  );
+}
+
+function UiStyleCard() {
+  const uiStyle = useApp((s) => s.uiStyle);
+  const setUiStyle = useApp((s) => s.setUiStyle);
+  return (
+    <section className="rounded-xl border border-line bg-surface p-5">
+      <h2 className="font-semibold">界面风格</h2>
+      <p className="mt-1 text-sm text-muted">喜欢哪套用哪套，随时切换；只影响显示，不动数据。</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setUiStyle("v2")}
+          className={`h-9 rounded-xl border px-4 text-sm transition-colors ${uiStyle === "v2" ? "border-accent bg-accent text-accent-fg" : "border-line bg-surface text-muted hover:text-ink"}`}
+        >
+          🎨 新版界面
+        </button>
+        <button
+          type="button"
+          onClick={() => setUiStyle("classic")}
+          className={`h-9 rounded-xl border px-4 text-sm transition-colors ${uiStyle === "classic" ? "border-accent bg-accent text-accent-fg" : "border-line bg-surface text-muted hover:text-ink"}`}
+        >
+          📋 原版界面
+        </button>
+      </div>
+      <p className="mt-3 text-xs text-subtle">新版：图标导航 + 仪表盘总览；原版：左边完整菜单 + 统计卡总览。</p>
+    </section>
   );
 }
 
