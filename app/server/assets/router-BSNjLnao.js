@@ -1381,7 +1381,8 @@ async function checkUpdate(fresh = false) {
 }
 function dockerReq(method, path, opts = {}) {
 	return new Promise((resolve, reject) => {
-		const data = opts.body == null ? null : typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body);
+		let data = opts.body == null ? null : typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body);
+		if (data == null && method.toUpperCase() === "POST") data = "{}";
 		const req = nodeHTTP.request({
 			socketPath: SOCK,
 			path,
@@ -1466,7 +1467,8 @@ var HELPER = `const http=require("node:http");
 const fs=require("node:fs");
 function docker(method,path,body){
   return new Promise((resolve,reject)=>{
-    const data=body==null?null:JSON.stringify(body);
+    let data=body==null?null:typeof body==="string"?body:JSON.stringify(body);
+    if(data==null&&method==="POST")data="{}";
     const req=http.request({socketPath:"/var/run/docker.sock",path,method,headers:data?{"Content-Type":"application/json","Content-Length":Buffer.byteLength(data)}:{}},res=>{
       const chunks=[];
       res.on("data",c=>chunks.push(c));
