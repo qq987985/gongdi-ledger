@@ -22,7 +22,7 @@ export function emptyState(): LedgerState {
     insurancePolicies: [],
     insuranceMembers: [],
     accessHash: "",
-    uiStyle: "v2",
+    uiStyle: "classic",
   };
 }
 
@@ -227,7 +227,7 @@ export function demoState(): LedgerState {
     insurancePolicies: [],
     insuranceMembers: [],
     accessHash: "",
-    uiStyle: "v2",
+    uiStyle: "classic",
   };
 }
 
@@ -273,7 +273,7 @@ export interface AppActions {
   setInsuranceMembers: (members: InsuranceMember[]) => void;
   replaceMembers: (members: InsuranceMember[]) => void;
   setAccessHash: (accessHash: string) => void;
-  setUiStyle: (uiStyle: "v2" | "classic") => void;
+  setUiStyle: (uiStyle: "classic" | "v2" | "apple") => void;
   setAll: (s: LedgerState) => void;
 }
 
@@ -634,7 +634,8 @@ export const useApp = create<AppStore>()(
           insuranceMembers: s.insuranceMembers || [],
           years: derivedYears({ ...s, attendance, years: s.years || [] }),
           accessHash: s.accessHash || "",
-          uiStyle: s.uiStyle === "classic" ? "classic" : "v2",
+          // 默认原版界面；显式选过新版/苹果的保持
+          uiStyle: s.uiStyle === "v2" || s.uiStyle === "apple" ? s.uiStyle : "classic",
         };
       },
       partialize: (s) => ({
@@ -650,7 +651,7 @@ export const useApp = create<AppStore>()(
         insurancePolicies: s.insurancePolicies || [],
         insuranceMembers: s.insuranceMembers || [],
         accessHash: s.accessHash || "",
-        uiStyle: s.uiStyle === "classic" ? "classic" : "v2",
+        uiStyle: s.uiStyle === "v2" || s.uiStyle === "apple" ? s.uiStyle : "classic",
       }),
     },
   ),

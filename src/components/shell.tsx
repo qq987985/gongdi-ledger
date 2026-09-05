@@ -810,7 +810,7 @@ export function AppShell() {
     toast.success("已退出登录");
   };
   return (
-    <div className={cn("app-bg min-h-screen min-h-dvh overflow-x-hidden text-ink", uiStyle === "classic" && "theme-classic")}>
+    <div className={cn("app-bg min-h-screen min-h-dvh overflow-x-hidden text-ink", uiStyle === "classic" && "theme-classic", uiStyle === "apple" && "theme-apple")}>
       <div className={uiStyle === "classic" ? "mx-auto flex max-w-7xl" : "flex"}>
         {uiStyle === "classic" ? (
           /* 经典：原版宽侧栏 */
@@ -834,8 +834,15 @@ export function AppShell() {
             </div>
           </aside>
         ) : (
-          /* 新版：左侧图标导航 */
-          <aside className="no-print sticky top-0 hidden h-screen w-[72px] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface/90 py-4 backdrop-blur md:flex">
+          /* 新版/苹果：左侧图标导航（苹果为毛玻璃材质） */
+          <aside
+            className={cn(
+              "no-print sticky top-0 hidden h-screen w-[72px] shrink-0 flex-col items-center gap-1 border-r py-4 md:flex",
+              uiStyle === "apple"
+                ? "border-white/50 bg-white/55 backdrop-blur-2xl"
+                : "border-line bg-surface/90 backdrop-blur",
+            )}
+          >
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-lg text-white shadow-lg">
               🏗️
             </div>
@@ -866,9 +873,14 @@ export function AppShell() {
         )}
 
         <div className="min-w-0 flex-1">
-          {uiStyle === "v2" ? (
-            /* 新版顶部栏（台账/年份/退出；检查更新在设置页底部） */
-            <header className="no-print sticky top-0 z-30 hidden items-center gap-3 border-b border-line bg-surface/80 px-6 py-3 backdrop-blur md:flex">
+          {uiStyle !== "classic" ? (
+            /* 新版/苹果顶部栏（台账/年份/退出；检查更新在设置页底部） */
+            <header
+              className={cn(
+                "no-print sticky top-0 z-30 hidden items-center gap-3 border-b px-6 py-3 backdrop-blur md:flex",
+                uiStyle === "apple" ? "border-white/50 bg-white/50 backdrop-blur-2xl" : "border-line bg-surface/80",
+              )}
+            >
               <Brand year={year} pathname={pathname} />
               <div className="min-w-0 flex-1" />
               <BookSwitcher compact />
