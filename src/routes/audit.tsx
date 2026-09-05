@@ -212,7 +212,7 @@ function AuditPage() {
               {!list.length ? (
                 <tr>
                   <td colSpan={admin ? 6 : 5} className="py-8 text-center text-sm text-muted">
-                    {canView ? "还没有记录" : ""}
+                    {canView ? "还没有操作记录。" : ""}
                   </td>
                 </tr>
               ) : null}

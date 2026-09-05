@@ -558,7 +558,7 @@ function QueryPage() {
               </section>
             </>
           ) : (
-            <p className="text-sm text-muted">暂无人员</p>
+            <p className="text-sm text-muted">还没有人员。先在「人员」里添加。</p>
           )}
         </div>
         <PayslipSheets slips={slips as any} rangeLabel={rangeLabelText} showPays={printPays} />

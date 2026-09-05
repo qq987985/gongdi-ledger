@@ -209,8 +209,8 @@ function PaymentsPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-muted">
-                    暂无发放记录
+                  <td colSpan={9} className="p-8 text-center text-sm text-muted">
+                    还没有发放记录。点右上角「新增发放」。
                   </td>
                 </tr>
               ) : null}
