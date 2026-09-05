@@ -13,7 +13,8 @@ import { derivedYears } from "~/lib/dates";
 import { monthPay, parseOtRule, wageLabel, hasWork, getWageAt } from "~/lib/wage";
 import { overAgeLabel } from "~/lib/idcard";
 import { money, copyText } from "~/lib/utils";
-import type { Person, Payment, Attendance, MonthAttendance } from "~/lib/types";
+import type { Person, Payment, AttendanceRow } from "~/lib/types";
+import type { MonthAttendance } from "~/lib/wage";
 
 function CopyField({ label, value, mono = false }: { label: string; value: string | number | undefined; mono?: boolean }) {
   const text = value == null || value === "" ? "" : String(value);
@@ -60,7 +61,7 @@ function buildSlips({
   people: Person[];
   names: string[];
   span: { year: number; month: number }[];
-  attendance: Attendance[];
+  attendance: AttendanceRow[];
   payments: Payment[];
 }) {
   return names

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { persistOn, readLedger, writeLedger } from "~/lib/nas-fs.server";
+import { withTenant } from "~/lib/accounts.server";
 
 async function addYearAndRedirect(request: Request, year: number) {
   const referer = request.headers.get("referer");
@@ -30,7 +31,9 @@ export const Route = createFileRoute("/api/year")({
       GET: async () => Response.json({ error: "请在月度考勤里新增年份" }, { status: 405 }),
       POST: async ({ request }) => {
         const form = await request.formData();
-        return addYearAndRedirect(request, Number(form.get("year") || form.get("add") || 0));
+        const year = Number(form.get("year") || form.get("add") || 0);
+        // 需登录 + settings.year 权限，并写入当前台账
+        return withTenant(request, () => addYearAndRedirect(request, year), "settings.year");
       },
     },
   },

@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import type { AuditEntry, LedgerState } from "./types";
 
 const bookAls = new AsyncLocalStorage<string>();
@@ -339,7 +339,11 @@ export async function readLedger(): Promise<Partial<LedgerState> & { empty?: boo
 export async function writeLedger(data: Partial<LedgerState>): Promise<void> {
   if (!persistOn()) return;
   await ensureDirs();
-  await writeFile(ledgerPath(), JSON.stringify(data, null, 2), "utf8");
+  // 原子写：先写临时文件再 rename，避免写一半崩溃导致文件损坏
+  const p = ledgerPath();
+  const tmp = `${p}.tmp-${process.pid}-${Date.now()}`;
+  await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
+  await rename(tmp, p);
 }
 
 function auditPath(): string {

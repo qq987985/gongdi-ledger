@@ -82,7 +82,7 @@ function YearOverview({
   upcoming: number;
 }) {
   const { year, people, attendance, attendanceDocs = [], payments } = useApp();
-  const fallbackYear = derivedYears({ year, years: [year], attendance, payments })[0] || year;
+  const fallbackYear = derivedYears({ year, years: [year], attendance })[0] || year;
   const yearPay = paymentsInYear(payments, year, fallbackYear);
   const personRows = people
     .map((p) => {

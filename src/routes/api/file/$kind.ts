@@ -120,7 +120,7 @@ function filterExpensesExport(expenses: any[], range: any) {
   return (expenses || []).filter((e: any) => {
     const parts = ymdParts(e.date) || ymdParts(e.period) || ymdParts(e.payoutDate);
     if (parts) return inExportRange(parts.year, parts.month, range);
-    const y = Number(e.year) || dateYear(e.date) || dateYear(e.period);
+    const y = Number(e.year) || dateYear(e.date) || dateYear(e.period) || 0;
     if (y >= 2e3) return y >= range.fromY && y <= range.toY;
     return true;
   });

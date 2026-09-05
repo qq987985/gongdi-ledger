@@ -160,7 +160,7 @@ function InsurancePage() {
     for (const linkedId of targets) {
       for (const m of fromMembers) result.push({ ...m, id: uid(), policyId: linkedId });
     }
-    st.replaceMembers(result);
+    st.setInsuranceMembers(result);
   }
 
   const [selectedId, setSelectedId] = React.useState("");

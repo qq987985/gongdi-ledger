@@ -352,6 +352,11 @@ function PersonEditor({
       toast.error(`身份证号有误：${idErr}`);
       return;
     }
+    const badWage = (form.wageHistory || []).find((h) => !(h.fromDate || "").trim());
+    if (badWage) {
+      toast.error("工资记录的「生效日期」必填，否则历史月份会算错工资");
+      return;
+    }
     const next: Person = {
       ...form,
       idValidFrom: normalizeIdDate(form.idValidFrom),

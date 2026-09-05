@@ -17,6 +17,7 @@ function Home() {
   let should = 0;
   for (const a of yearAtt) {
     const p = map[a.name];
+    if (!p) continue; // 已删除人员不参与应发合计，与考勤汇总口径一致
     const wage = getWageAt(p, a.year, a.month);
     should += monthPay(a, wage).pay;
   }

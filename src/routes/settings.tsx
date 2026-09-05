@@ -334,7 +334,7 @@ function MembersCard() {
     const s = await authStatus();
     setMe(s.user);
     setBookId(s.bookId);
-    setMembers(s.members || []);
+    setMembers((s.members || []) as Member[]);
     setUsers(s.users || []);
     setReady(true);
   }

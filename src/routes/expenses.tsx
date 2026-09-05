@@ -270,7 +270,7 @@ function ExpensesPage() {
     const rows = list.filter((e: any) => selected.includes(e.id));
     if (!rows.length) return;
     const first = rows[0];
-    const same = (k: keyof typeof batch) => rows.every((e: any) => (e[k] || "") === (first[k] || ""));
+    const same = (k: keyof typeof batch) => rows.every((e: any) => (e[k] || "") === ((first as any)[k] || ""));
     setBatch((prev: any) => ({
       ...prev,
       claimant: same("claimant") ? first.claimant || prev.claimant : prev.claimant,

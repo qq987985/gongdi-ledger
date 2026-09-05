@@ -250,8 +250,8 @@ function ContractsPage() {
               <Button
                 type="button"
                 onClick={async () => {
-                  const wb = buildContractWorkbook({ contracts, entries: contractEntries });
-                  const buf = await wb.xlsx.writeBuffer();
+                  const { writeCenteredXlsx } = await import("~/lib/xlsx-center");
+                  const buf = await writeCenteredXlsx(buildContractWorkbook({ contracts, entries: contractEntries }));
                   const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
@@ -291,8 +291,8 @@ function ContractsPage() {
               <select className="field-select mt-1 w-auto" value={status} onChange={(e) => setStatus(e.target.value)}>
                 <option value="all">全部</option>
                 {CONTRACT_STATUSES.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
+                  <option key={s} value={s}>
+                    {s}
                   </option>
                 ))}
               </select>
@@ -452,7 +452,7 @@ function ContractsPage() {
                       <td className="p-2 text-right tabular-nums">{money(r.remain)}</td>
                       <td className="p-2">
                         <Badge tone={c.status === "finished" ? "ok" : c.status === "aborted" ? "danger" : "warn"}>
-                          {CONTRACT_STATUSES.find((s) => s.id === c.status)?.label || c.status}
+                          {CONTRACT_STATUSES.find((s) => s === c.status) || c.status}
                         </Badge>
                       </td>
                     </tr>
@@ -660,8 +660,8 @@ function ContractEditor({
           <Field label="状态">
             <select className="field-select w-full" value={c.status} onChange={(e) => patch("status", e.target.value)}>
               {CONTRACT_STATUSES.map((s) => (
-                <option value={s.id} key={s.id}>
-                  {s.label}
+                <option value={s} key={s}>
+                  {s}
                 </option>
               ))}
             </select>
@@ -774,7 +774,9 @@ async function attachNamed(id: string, kind: string, file: File | undefined, bas
 function useTakenNames() {
   const entries = useApp((s) => s.contractEntries);
   const docs = useApp((s) => s.attendanceDocs);
-  return [...entries.map((e) => e.fileName), ...(docs || []).map((d) => d.fileName)].filter(Boolean);
+  return [...entries.map((e) => e.fileName), ...(docs || []).map((d) => d.fileName)].filter(
+    (x): x is string => Boolean(x),
+  );
 }
 
 function ReportBook({
@@ -994,7 +996,7 @@ function ReceiptBook({
 }) {
   const [date, setDate] = React.useState(new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = React.useState(0);
-  const [payTo, setPayTo] = React.useState("sub");
+  const [payTo, setPayTo] = React.useState<"" | "worker" | "sub">("sub");
   const [no, setNo] = React.useState("");
   const [remark, setRemark] = React.useState("");
   const [file, setFile] = React.useState<File>();
@@ -1014,7 +1016,7 @@ function ReceiptBook({
       <div className="mt-3 space-y-2">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={disabled} />
         <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} disabled={disabled} placeholder="金额" />
-        <select className="field-select w-full" value={payTo} onChange={(e) => setPayTo(e.target.value)} disabled={disabled}>
+        <select className="field-select w-full" value={payTo} onChange={(e) => setPayTo(e.target.value as "" | "sub" | "worker")} disabled={disabled}>
           <option value="sub">到分包</option>
           <option value="worker">代付农民工</option>
         </select>
@@ -1151,7 +1153,7 @@ function contractScanName(name: string) {
 
 function ContractScanBox({ contract, onFileName }: { contract: ContractRecord; onFileName: (name: string) => void }) {
   const scans = useApp((s) => s.contracts);
-  const taken = (scans || []).map((c) => c.scanFileName).filter(Boolean);
+  const taken = (scans || []).map((c) => c.scanFileName).filter((x): x is string => Boolean(x));
   return (
     <div id="contract-scan" className="rounded-lg border-2 border-dashed border-accent bg-accent-soft p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

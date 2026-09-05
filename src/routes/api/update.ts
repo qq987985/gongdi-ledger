@@ -9,7 +9,9 @@ export const Route = createFileRoute("/api/update")({
         try {
           const url = new URL(request.url);
           if (url.searchParams.has("apply")) {
-            if (!(await resolveTenant(request)).user) return Response.json({ error: "请先登录" }, { status: 401 });
+            const t = await resolveTenant(request);
+            if (!t.user) return Response.json({ error: "请先登录" }, { status: 401 });
+            if (t.user.role !== "admin") return Response.json({ error: "只有管理员能更新" }, { status: 403 });
             const result = await applyUpdate();
             return Response.json(result, { status: result.ok ? 200 : 400 });
           }
@@ -27,7 +29,9 @@ export const Route = createFileRoute("/api/update")({
           } catch {
             /* body 为空或非 JSON 时忽略 */
           }
-          if (!(await resolveTenant(request)).user) return Response.json({ error: "请先登录" }, { status: 401 });
+          const t = await resolveTenant(request);
+          if (!t.user) return Response.json({ error: "请先登录" }, { status: 401 });
+          if (t.user.role !== "admin") return Response.json({ error: "只有管理员能更新" }, { status: 403 });
           const result = await applyUpdate();
           return Response.json(result, { status: result.ok ? 200 : 400 });
         } catch (e) {

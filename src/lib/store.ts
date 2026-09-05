@@ -41,6 +41,8 @@ function person(partial: Partial<Person> & { name: string }): Person {
     monthWage: partial.monthWage || 0,
     payType: partial.payType === "month" ? "month" : "day",
     otRule: partial.otRule || "",
+    mealAllowance: partial.mealAllowance || 0,
+    wageHistory: [],
     bank: partial.bank || "",
     cardNo: partial.cardNo || "",
     address: partial.address || "",
@@ -266,6 +268,7 @@ export interface AppActions {
   removePolicies: (ids: string[]) => void;
   upsertMember: (m: Partial<InsuranceMember> & { name: string }) => void;
   removeMembers: (ids: string[]) => void;
+  setInsuranceMembers: (members: InsuranceMember[]) => void;
   replaceMembers: (members: InsuranceMember[]) => void;
   setAccessHash: (accessHash: string) => void;
   setAll: (s: LedgerState) => void;
@@ -323,7 +326,8 @@ export const useApp = create<AppStore>()(
           idValidFrom: normalizeIdDate(p.idValidFrom),
           idValidTo: normalizeIdDate(p.idValidTo, true),
         };
-        const i = people.findIndex((x) => x.id === nextP.id || x.name === nextP.name);
+        // 只按 id 匹配，避免编辑改名撞到重名者时覆盖他人档案
+        const i = nextP.id ? people.findIndex((x) => x.id === nextP.id) : -1;
         if (i >= 0) {
           const next = people.slice();
           next[i] = { ...nextP, id: people[i].id };
@@ -530,9 +534,13 @@ export const useApp = create<AppStore>()(
         }
       },
       removePolicies: (ids) => {
+        const deleted = new Set(ids);
         set({
-          insurancePolicies: (get().insurancePolicies || []).filter((p) => !ids.includes(p.id)),
-          insuranceMembers: (get().insuranceMembers || []).filter((m) => !ids.includes(m.policyId)),
+          // 删除保单的同时，清理其它保单指向它的组合险挂接，避免孤儿成员增殖
+          insurancePolicies: (get().insurancePolicies || [])
+            .filter((p) => !deleted.has(p.id))
+            .map((p) => (deleted.has(p.linkedPolicyId) ? { ...p, linkedPolicyId: "" } : p)),
+          insuranceMembers: (get().insuranceMembers || []).filter((m) => !deleted.has(m.policyId)),
         });
         logOp("删除保单", `${ids.length}份`, "团体保险");
       },
@@ -567,6 +575,7 @@ export const useApp = create<AppStore>()(
         set({ insuranceMembers: members });
         logOp("导入被保人", `${members.length}人`, "团体保险");
       },
+      setInsuranceMembers: (members) => set({ insuranceMembers: members }),
       setAccessHash: (accessHash) => set({ accessHash }),
       setAll: (s) => set({ ...s, years: derivedYears(s) }),
     }),

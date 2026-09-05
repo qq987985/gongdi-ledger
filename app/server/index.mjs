@@ -5,7 +5,7 @@
  */
 import { createServer } from "node:http";
 import { readFile, stat, mkdir } from "node:fs/promises";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import handler from "./server.js";
 
@@ -73,11 +73,9 @@ function mimeType(path) {
 }
 
 function isWithin(base, target) {
-  // 统一使用正斜杠进行比较，兼容 Windows 反斜杠
-  const baseNorm = base.replace(/\\/g, "/");
-  const targetNorm = target.replace(/\\/g, "/");
-  const rel = targetNorm.slice(baseNorm.length);
-  return !rel.includes("..") && rel.startsWith("/");
+  // 用 path.relative 做真实层级校验，防止 ../、%2e%2e 等逃逸出 publicDir
+  const rel = relative(resolve(base), resolve(target));
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
 async function serveStatic(req) {
@@ -90,11 +88,11 @@ async function serveStatic(req) {
   // 安全检查：确保路径在 publicDir 内
   if (!isWithin(publicDir, resolvedPath)) return null;
   try {
-    const s = await stat(filePath);
+    const s = await stat(resolvedPath);
     if (!s.isFile()) return null;
-    const body = req.method === "HEAD" ? null : await readFile(filePath);
+    const body = req.method === "HEAD" ? null : await readFile(resolvedPath);
     const headers = {
-      "content-type": mimeType(filePath),
+      "content-type": mimeType(resolvedPath),
       "content-length": String(s.size),
     };
     if (pathname.includes("/assets/")) {

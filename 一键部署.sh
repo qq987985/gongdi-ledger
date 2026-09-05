@@ -34,4 +34,4 @@ docker compose -f docker-compose.build.yml up -d --build --force-recreate
 echo
 echo "完成。打开：http://本机IP:8501"
 echo "数据目录：$(pwd)/data  （原有台账不会被清空）"
-echo "左下角应显示 1.2.23"
+echo "左下角应显示当前版本号"

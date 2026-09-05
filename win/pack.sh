@@ -16,6 +16,8 @@ cp -a app "$STAGE/app"
 rm -rf "$STAGE/app/public/__grok" 2>/dev/null || true
 mkdir -p "$STAGE/win"
 cp win/启动.bat win/停止.bat "$STAGE/win/"
+# 同时在 zip 根目录放一份，保证在线更新脚本（只在解压根目录找 bat）能更新启动器
+cp win/启动.bat win/停止.bat "$STAGE/"
 cp VERSION.txt "$STAGE/" 2>/dev/null || true
 cp 使用说明.md "$STAGE/" 2>/dev/null || true
 cp 目录结构.txt "$STAGE/" 2>/dev/null || true

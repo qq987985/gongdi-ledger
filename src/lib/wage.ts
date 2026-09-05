@@ -63,7 +63,9 @@ export function getWageAt(person: Person | null | undefined, year: number, month
   const history = person.wageHistory || [];
   if (history.length > 0) {
     // 按生效日期排序（从早到晚）
-    const sorted = [...history].sort((a, b) => a.fromDate.localeCompare(b.fromDate));
+    const sorted = [...history]
+      .filter((h) => (h.fromDate || "").trim() !== "")
+      .sort((a, b) => a.fromDate.localeCompare(b.fromDate));
     // 找最后一条生效日期 <= 查询日期的记录
     let matched: WageHistory | undefined;
     for (const h of sorted) {

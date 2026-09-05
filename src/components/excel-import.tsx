@@ -196,7 +196,8 @@ export function AttendanceImport() {
       return;
     }
 
-    const skipNames = new Set(conflicts.map((c) => c.name));
+    // 替换模式下同名同月用导入值覆盖；增加模式跳过冲突行（保留原有）
+    const skipNames = mode === "replace" ? new Set<string>() : new Set(conflicts.map((c) => c.name));
     const mapped = rows
       .filter((r) => !skipNames.has(r.name))
       .map((r) => ({

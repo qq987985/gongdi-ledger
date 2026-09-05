@@ -142,6 +142,8 @@ export function rowToPerson(row: Row): Person | null {
     monthWage: Number(pick(row, ["月工资", "monthWage"])) || 0,
     payType: /月/.test(pick(row, ["计薪方式", "计薪", "payType"])) ? "month" : "day",
     otRule: pick(row, ["加班规则", "计算加班规则", "otRule"]),
+    mealAllowance: Number(pick(row, ["餐补/天", "餐补", "mealAllowance"])) || 0,
+    wageHistory: [],
     bank: pick(row, ["开户行", "bank"]),
     cardNo: pick(row, ["银行卡号", "卡号", "cardNo"]),
     address: pick(row, ["户籍地址", "户籍地地址", "户籍地", "address"]),

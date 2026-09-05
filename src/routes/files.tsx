@@ -50,7 +50,7 @@ function FilesPage() {
         fileName: d.fileName,
         belong: `${d.year}年${d.month}月考勤`,
         extra: d.remark,
-        suggest: attendanceBase(d.year, d.month),
+        suggest: attendanceBase(d.year || 0, d.month || 0),
         source: "attendance",
       });
     }
