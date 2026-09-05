@@ -755,7 +755,7 @@ function InsurancePage() {
               </tfoot>
             </table>
 
-            <div className="mt-6 break-inside-avoid">
+            <div className="mt-6">
               <div className="text-center text-sm font-semibold">按班组汇总（保费）</div>
               <table className="mt-2 w-full border-collapse text-center text-sm">
                 <thead>
