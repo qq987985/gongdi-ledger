@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工地台账 · UI 设计稿 V2（可切换预览）</title>
+<style>
+  :root {
+    --bg-1: #eef2fb; --bg-2: #f7f9ff;
+    --card: #ffffff;
+    --ink: #1b2430; --muted: #6b7688; --subtle: #9aa4b6;
+    --line: #e6eaf3; --line-strong: #d5dce9;
+    --primary: #4f6bf5; --primary-strong: #3d57d8; --primary-soft: #eaefff;
+    --pink: #f0437c; --pink-soft: #fee9f0;
+    --orange: #f59e0b; --orange-soft: #fdf3e0;
+    --green: #18b26b; --green-soft: #e6f7ef;
+    --cyan: #0ea5e9; --cyan-soft: #e5f5fd;
+    --violet: #8b5cf6; --violet-soft: #f1eafe;
+    --ok: #18b26b; --warn: #c07d10; --danger: #e0452f;
+    --radius-lg: 18px; --radius-md: 14px; --radius-sm: 10px;
+    --shadow-card: 0 6px 22px rgba(41, 72, 143, .07);
+    --font: "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: var(--font); color: var(--ink); background: linear-gradient(160deg, var(--bg-1), var(--bg-2)); -webkit-font-smoothing: antialiased; }
+  .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .hidden { display: none !important; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  a { color: inherit; text-decoration: none; }
+
+  .card { background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); border: 1px solid var(--line); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; padding: 0 16px; height: 38px; font-size: 14px; font-weight: 500; transition: all .15s; white-space: nowrap; }
+  .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(79,107,245,.35); }
+  .btn-primary:hover { background: var(--primary-strong); }
+  .btn-ghost { background: #fff; color: var(--ink); border: 1px solid var(--line-strong); }
+  .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .icon-c { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; flex: none; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 500; }
+  .pill-ok { background: var(--green-soft); color: #0c7d4b; }
+  .pill-warn { background: var(--orange-soft); color: var(--warn); }
+  .pill-pink { background: var(--pink-soft); color: var(--pink); }
+  .pill-gray { background: #eef1f7; color: var(--muted); }
+  .input { width: 100%; height: 40px; border: 1px solid var(--line-strong); border-radius: 10px; padding: 0 12px; font-size: 14px; background: #fff; outline: none; transition: border .15s, box-shadow .15s; }
+  .input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-strong); background: #fff; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+  /* 登录 */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background:
+    radial-gradient(900px 500px at 12% 8%, rgba(139,92,246,.18), transparent 60%),
+    radial-gradient(800px 520px at 88% 92%, rgba(14,165,233,.18), transparent 60%),
+    linear-gradient(160deg, var(--bg-1), var(--bg-2)); }
+  .login-card { width: 100%; max-width: 920px; background: var(--card); border-radius: 26px; box-shadow: 0 10px 30px rgba(41,72,143,.12); overflow: hidden; display: grid; grid-template-columns: 1.05fr 1fr; }
+  .login-brand { background: linear-gradient(150deg, #3d57d8 0%, #5b6ef5 55%, #8b5cf6 100%); color: #fff; padding: 46px 42px; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
+  .login-brand::before, .login-brand::after { content: ""; position: absolute; border-radius: 50%; background: rgba(255,255,255,.10); }
+  .login-brand::before { width: 320px; height: 320px; right: -120px; top: -120px; }
+  .login-brand::after { width: 220px; height: 220px; left: -80px; bottom: -80px; }
+  .login-brand h1 { font-size: 30px; line-height: 1.35; margin-top: 44px; font-weight: 700; }
+  .login-brand p { margin-top: 12px; font-size: 14px; line-height: 1.8; color: rgba(255,255,255,.85); }
+  .login-brand .tags { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .login-brand .tags span { border: 1px solid rgba(255,255,255,.35); border-radius: 999px; padding: 4px 12px; font-size: 12px; }
+  .login-form { padding: 46px 42px; }
+  .login-form h2 { font-size: 22px; font-weight: 700; }
+  .login-form .sub { margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .demo-tip { margin-top: 22px; padding: 10px 12px; border-radius: 10px; background: var(--primary-soft); color: var(--primary-strong); font-size: 12px; line-height: 1.7; }
+
+  /* 框架 */
+  .shell { display: flex; min-height: 100vh; }
+  .rail { width: 76px; background: var(--card); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 4px; position: sticky; top: 0; height: 100vh; }
+  .rail-logo { width: 42px; height: 42px; border-radius: 13px; background: linear-gradient(140deg, #3d57d8, #8b5cf6); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; margin-bottom: 14px; box-shadow: 0 6px 14px rgba(93,110,246,.35); }
+  .rail a { width: 46px; height: 46px; border-radius: 13px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--muted); font-size: 10.5px; transition: all .15s; }
+  .rail a:hover { background: #f2f5ff; color: var(--primary); }
+  .rail a.on { background: var(--primary-soft); color: var(--primary-strong); }
+  .rail a svg { width: 21px; height: 21px; }
+  .rail-gap { flex: 1; }
+  .rail-user { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(140deg, var(--pink), #f97316); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; }
+  .main { flex: 1; min-width: 0; }
+  .topbar { display: flex; align-items: center; gap: 14px; padding: 16px 28px; position: sticky; top: 0; z-index: 20; background: rgba(247,249,255,.85); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .topbar .crumb { font-size: 15px; font-weight: 600; }
+  .topbar .sp { flex: 1; }
+  .search { width: 300px; max-width: 40vw; }
+  .bell { position: relative; width: 38px; height: 38px; border-radius: 12px; border: 1px solid var(--line-strong); background: #fff; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+  .bell::after { content: ""; position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--pink); top: 8px; right: 9px; }
+  .content { padding: 24px 28px 56px; max-width: 1240px; }
+
+  .page-h { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .page-h h1 { font-size: 20px; font-weight: 700; }
+  .page-h .sub { font-size: 13px; color: var(--muted); }
+  .page-h .sp { flex: 1; }
+  .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .toolbar .input { width: 220px; }
+
+  /* 总览 */
+  .hero { border-radius: var(--radius-lg); padding: 22px 24px; color: #fff; background: linear-gradient(105deg, #3d57d8 0%, #5b6ef5 45%, #8b5cf6 80%, #a78bfa 100%); box-shadow: 0 12px 28px rgba(93,110,246,.32); display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .hero h2 { font-size: 19px; font-weight: 700; }
+  .hero p { margin-top: 4px; font-size: 13px; color: rgba(255,255,255,.85); }
+  .hero .sp { flex: 1; }
+  .hero .btn-ghost-glass { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.4); color: #fff; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; margin-top: 18px; }
+  .kpi { padding: 18px; }
+  .kpi .row { display: flex; align-items: center; justify-content: space-between; }
+  .kpi .lb { font-size: 12.5px; color: var(--muted); }
+  .kpi .val { margin-top: 10px; font-size: 24px; font-weight: 700; }
+  .kpi .hint { margin-top: 6px; font-size: 12px; color: var(--subtle); }
+  .grid-2 { display: grid; grid-template-columns: 1.7fr 1fr; gap: 16px; margin-top: 16px; }
+  .grid-eq { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .panel-pad { padding: 20px; }
+  .panel-h { display: flex; align-items: center; justify-content: space-between; }
+  .panel-h h3 { font-size: 15px; font-weight: 600; }
+  .panel-h .link { font-size: 12.5px; color: var(--primary); font-weight: 500; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; }
+  .team-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
+  .team-row .nm { width: 84px; font-size: 13.5px; flex: none; }
+  .team-row .bar { flex: 1; height: 8px; border-radius: 99px; background: #eef1f7; overflow: hidden; }
+  .team-row .bar i { display: block; height: 100%; border-radius: 99px; }
+  .team-row .ct { width: 62px; text-align: right; font-size: 12.5px; color: var(--muted); }
+  .quick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .quick { border: 1px solid var(--line); background: #f8faff; border-radius: 12px; padding: 12px 13px; transition: all .15s; cursor: pointer; }
+  .quick:hover { border-color: var(--primary); background: var(--primary-soft); }
+  .quick .t { font-size: 13.5px; font-weight: 600; }
+  .quick .d { margin-top: 3px; font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+  .warn-box { display: flex; gap: 10px; align-items: flex-start; background: var(--orange-soft); border: 1px solid #f5d9a8; color: #92600a; border-radius: 12px; padding: 12px 14px; font-size: 13px; margin-top: 16px; line-height: 1.6; }
+
+  /* 表格 */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 760px; }
+  th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12.5px; padding: 11px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; background: #fbfcff; }
+  td { padding: 12px 14px; border-bottom: 1px solid #f0f3f9; white-space: nowrap; }
+  tbody tr:hover { background: #f8faff; }
+  tr.total td { background: var(--primary-soft); font-weight: 600; }
+  .ava { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #fff; }
+  .pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 16px 8px; font-size: 12.5px; color: var(--muted); }
+  .pager .pg { min-width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line-strong); background: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12.5px; }
+  .pager .pg.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .op { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; border-radius: 8px; padding: 5px 10px; }
+  .op.edit { color: var(--primary); background: var(--primary-soft); }
+  .op.del { color: var(--danger); background: #fdecec; }
+  .mt16 { margin-top: 16px; }
+
+  /* 考勤月格子 */
+  .month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .month-cell { border-radius: 14px; border: 1px solid var(--line); background: #fff; padding: 14px 16px; cursor: pointer; transition: all .15s; }
+  .month-cell:hover { border-color: var(--primary); }
+  .month-cell.today { background: linear-gradient(135deg, #3d57d8, #8b5cf6); border-color: transparent; color: #fff; box-shadow: 0 8px 20px rgba(93,110,246,.35); }
+  .month-cell.today .m { color: rgba(255,255,255,.85); }
+  .month-cell.today .cnt { color: #fff; }
+  .month-cell .m { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .month-cell .cnt { margin-top: 8px; font-size: 20px; font-weight: 700; }
+  .month-cell .d { margin-top: 4px; font-size: 11.5px; color: var(--subtle); }
+  .month-cell.today .d { color: rgba(255,255,255,.75); }
+  .month-cell.late { border-color: #f5d9a8; background: #fffaf0; }
+  .month-cell .tag { margin-top: 8px; }
+
+  /* 保单卡 */
+  .policy-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .policy { padding: 18px 20px; }
+  .policy .row1 { display: flex; align-items: center; gap: 10px; }
+  .policy .no { font-size: 15px; font-weight: 700; }
+  .policy .meta { margin-top: 12px; font-size: 12.5px; color: var(--muted); line-height: 2; }
+  .policy .meta b { color: var(--ink); }
+  .drop { border: 1.5px dashed var(--line-strong); border-radius: 14px; padding: 26px; text-align: center; color: var(--muted); font-size: 13px; background: #fbfcff; }
+  .drop b { color: var(--primary); }
+  .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .btn-grid .btn { width: 100%; }
+
+  /* 弹窗 */
+  .overlay { position: fixed; inset: 0; background: rgba(18,28,54,.45); backdrop-filter: blur(3px); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 18px; z-index: 60; }
+  .modal { width: 100%; max-width: 720px; background: #fff; border-radius: 20px; box-shadow: 0 30px 70px rgba(20,35,70,.30); overflow: hidden; }
+  .modal-h { display: flex; align-items: center; gap: 10px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+  .modal-h h3 { font-size: 16.5px; font-weight: 700; flex: 1; }
+  .x { width: 32px; height: 32px; border-radius: 10px; color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .x:hover { background: #f1f3f9; }
+  .modal-b { padding: 20px 22px; max-height: 62vh; overflow-y: auto; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .sec-t { font-size: 13px; font-weight: 600; color: var(--primary-strong); margin: 8px 0 12px; display: flex; align-items: center; gap: 8px; }
+  .sec-t::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .field { margin-bottom: 14px; }
+  .label { display: block; font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+  .modal-f { display: flex; align-items: center; gap: 10px; padding: 16px 22px; border-top: 1px solid var(--line); background: #fbfcfe; }
+  .modal-f .sp { flex: 1; }
+  .subtbl { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .subtbl table { min-width: 0; font-size: 13px; }
+
+  /* 预览条 */
+  .preview-note { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); background: rgba(20,30,60,.88); color: #fff; border-radius: 18px; padding: 8px 14px; font-size: 12.5px; z-index: 90; display: flex; gap: 6px; align-items: center; max-width: 96vw; backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0,0,20,.3); }
+  .preview-note .pills { display: flex; gap: 4px; overflow-x: auto; max-width: 78vw; }
+  .preview-note button { color: rgba(255,255,255,.75); font-weight: 500; border-radius: 999px; padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+  .preview-note button:hover { color: #fff; background: rgba(255,255,255,.12); }
+  .preview-note button.on { background: #fff; color: #223; }
+  @media (max-width: 900px) {
+    .login-card { grid-template-columns: 1fr; }
+    .login-brand { display: none; }
+    .grid-2, .grid-eq, .policy-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+    .month-grid { grid-template-columns: repeat(3, 1fr); }
+    .rail { width: 62px; }
+    .content { padding: 16px 14px 42px; }
+    .topbar { padding: 12px 14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ ① 登录页 ═══════════ -->
+<div id="screen-login" class="login-wrap">
+  <div class="login-card">
+    <div class="login-brand">
+      <div style="display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600;">
+        <span style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.16);display:inline-flex;align-items:center;justify-content:center;font-size:17px;">🏗️</span>
+        工地台账
+      </div>
+      <div>
+        <h1>全队账目，<br>一本台账说得清。</h1>
+        <p>人员 · 考勤 · 工资 · 发放 · 报销 · 合同 · 保险 ——<br>工地现场随时记，回到办公室一键导出。</p>
+        <div class="tags"><span>零联网</span><span>手机 / 电脑通用</span><span>数据存本地</span><span>一键备份</span></div>
+      </div>
+      <p style="font-size:11.5px;color:rgba(255,255,255,.55);">© 2026 工地台账 · 已部署在你这台设备上</p>
+    </div>
+    <div class="login-form">
+      <div style="display:flex;align-items:center;gap:9px;">
+        <span style="width:38px;height:38px;border-radius:12px;background:linear-gradient(140deg,#3d57d8,#8b5cf6);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:18px;">🏗️</span>
+        <h2>欢迎回来</h2>
+      </div>
+      <p class="sub">输入访问密码进入台账。手机、电脑浏览器都可用。</p>
+      <form style="margin-top:22px;" onsubmit="return false;">
+        <div class="field">
+          <label class="label">访问密码</label>
+          <input class="input" type="password" placeholder="请输入访问密码" value="••••••••">
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-top:4px;">
+          <input type="checkbox" checked style="width:15px;height:15px;accent-color:var(--primary);"> 本机记住，下次不用再输
+        </label>
+        <button class="btn btn-primary" style="width:100%;height:44px;margin-top:20px;font-size:15px;" onclick="go('home')">进入台账</button>
+        <div class="demo-tip">🎨 设计稿演示：进入后可点左侧导航切换所有模块页面，底部胶囊条可快速跳转。</div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ ② 应用框架 ═══════════ -->
+<div id="screen-app" class="shell hidden">
+  <nav class="rail">
+    <div class="rail-logo">🏗️</div>
+    <a data-pg="home" title="总览"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>总览</a>
+    <a data-pg="people" title="人员"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M3.5 20c.7-3.6 2.9-5.5 5.5-5.5s4.8 1.9 5.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.6c2.6.1 4.4 1.9 5 5.4"/></svg>人员</a>
+    <a data-pg="attendance" title="考勤"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M8 14.5l2 2 3.5-3.5"/></svg>考勤</a>
+    <a data-pg="payments" title="发放"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="13" rx="2"/><circle cx="12" cy="12.5" r="3"/><path d="M6 9.5h.01M18 15.5h.01"/></svg>发放</a>
+    <a data-pg="expenses" title="报销"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6M9 12h4"/></svg>报销</a>
+    <a data-pg="contracts" title="合同"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l5 5v13a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 6 21V4.5A1.5 1.5 0 0 1 7.5 3z"/><path d="M15 3v6h5M9.5 13h6M9.5 17h4"/></svg>合同</a>
+    <a data-pg="insurance" title="保险"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3.5v5c0 4.6-3.2 8-8 9.5-4.8-1.5-8-4.9-8-9.5v-5L12 3z"/><path d="M9 12l2 2 4-4"/></svg>保险</a>
+    <a data-pg="io" title="导入导出"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>导入</a>
+    <a data-pg="query" title="查询"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>查询</a>
+    <div class="rail-gap"></div>
+    <a data-pg="settings" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg>设置</a>
+    <div class="rail-user">王</div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb" id="crumb">总览</div>
+      <div class="sp"></div>
+      <div class="search"><input class="input" placeholder="🔍 搜索人员 / 班组 / 项目…"></div>
+      <span class="chip">2026 年 ▾</span>
+      <button class="bell" title="通知"></button>
+      <span style="width:38px;height:38px;border-radius:12px;background:#f2f5ff;color:var(--primary-strong);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;">王工</span>
+    </div>
+
+    <div class="content">
+
+    <!-- ═══ 总览 ═══ -->
+    <div id="page-home">
+      <div class="hero">
+        <div>
+          <h2>早上好，王工👋</h2>
+          <p>今日提示：3 月考勤还没录完；有 5 笔待发放。先处理这两件事？</p>
+        </div>
+        <div class="sp"></div>
+        <button class="btn btn-ghost btn-ghost-glass" onclick="go('attendance')">📅 录入考勤</button>
+        <button class="btn btn-ghost btn-ghost-glass" onclick="go('payments')">💰 新增发放</button>
+        <button class="btn" style="background:#fff;color:var(--primary-strong);" onclick="go('io')">⬇️ 导出台账</button>
+      </div>
+      <div class="kpis">
+        <div class="card kpi"><div class="row"><span class="lb">在册人员</span><span class="icon-c" style="background:var(--pink-soft);color:var(--pink);">👥</span></div><div class="val num">128</div><div class="hint">6 个班组 · 各年共用</div></div>
+        <div class="card kpi"><div class="row"><span class="lb">已录月份</span><span class="icon-c" style="background:var(--cyan-soft);color:var(--cyan);">📆</span></div><div class="val num">9 / 12</div><div class="hint">2026 年 · 缺 3、10、12</div></div>
+        <div class="card kpi"><div class="row"><span class="lb">应发合计</span><span class="icon-c" style="background:var(--green-soft);color:var(--green);">¥</span></div><div class="val num">¥2,156,800</div><div class="hint">2 人未设工资 · 按 0 计算</div></div>
+        <div class="card kpi"><div class="row"><span class="lb">已发放</span><span class="icon-c" style="background:var(--orange-soft);color:var(--orange);">💸</span></div><div class="val num">¥1,982,400</div><div class="hint">待发放 ¥174,400 · 代收 12 笔</div></div>
+        <div class="card kpi"><div class="row"><span class="lb">今年应收</span><span class="icon-c" style="background:var(--violet-soft);color:var(--violet);">📄</span></div><div class="val num">¥3,462,000</div><div class="hint">含税报量 × 合同比例</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>月度应发与发放</h3><a class="link" href="#" onclick="go('payments');return false;">查看明细 →</a></div>
+          <div class="legend"><span><i style="background:var(--primary)"></i>应发合计</span><span><i style="background:#ffb020"></i>已发放</span></div>
+          <svg viewBox="0 0 640 220" style="width:100%;height:auto;margin-top:6px;">
+            <g stroke="#eef1f7" stroke-width="1"><line x1="40" y1="30" x2="620" y2="30"/><line x1="40" y1="75" x2="620" y2="75"/><line x1="40" y1="120" x2="620" y2="120"/><line x1="40" y1="165" x2="620" y2="165"/></g>
+            <polyline fill="none" stroke="#4f6bf5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="40,150 93,120 146,135 199,95 252,110 305,72 358,90 411,58 464,80 517,45 570,60 620,40"/>
+            <polyline fill="none" stroke="#ffb020" stroke-width="3" stroke-dasharray="6 5" stroke-linecap="round" stroke-linejoin="round" points="40,168 93,150 146,162 199,132 252,148 305,118 358,136 411,102 464,124 517,92 570,112 620,86"/>
+            <g fill="#fff" stroke="#4f6bf5" stroke-width="2.5"><circle cx="305" cy="72" r="4"/><circle cx="411" cy="58" r="4"/><circle cx="517" cy="45" r="4"/></g>
+            <g fill="#9aa4b6" font-size="11" text-anchor="middle"><text x="40" y="208">1月</text><text x="93" y="208">2月</text><text x="146" y="208">3月</text><text x="199" y="208">4月</text><text x="252" y="208">5月</text><text x="305" y="208">6月</text><text x="358" y="208">7月</text><text x="411" y="208">8月</text><text x="464" y="208">9月</text><text x="517" y="208">10月</text><text x="570" y="208">11月</text><text x="620" y="208">12月</text></g>
+          </svg>
+        </div>
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>本月应发构成</h3><a class="link" href="#" onclick="go('attendance');return false;">详情 →</a></div>
+          <div style="display:flex;align-items:center;gap:18px;margin-top:10px;">
+            <svg viewBox="0 0 120 120" style="width:132px;height:132px;flex:none;">
+              <circle cx="60" cy="60" r="46" fill="none" stroke="#eef1f7" stroke-width="16"/>
+              <circle cx="60" cy="60" r="46" fill="none" stroke="#4f6bf5" stroke-width="16" stroke-dasharray="135 154" stroke-linecap="round" transform="rotate(-90 60 60)"/>
+              <circle cx="60" cy="60" r="46" fill="none" stroke="#18b26b" stroke-width="16" stroke-dasharray="62 227" stroke-linecap="round" transform="rotate(55 60 60)"/>
+              <circle cx="60" cy="60" r="46" fill="none" stroke="#f0437c" stroke-width="16" stroke-dasharray="36 253" stroke-linecap="round" transform="rotate(158 60 60)"/>
+              <circle cx="60" cy="60" r="46" fill="none" stroke="#f59e0b" stroke-width="16" stroke-dasharray="28 261" stroke-linecap="round" transform="rotate(230 60 60)"/>
+              <text x="60" y="56" text-anchor="middle" font-size="17" font-weight="700" fill="#1b2430">18.6</text>
+              <text x="60" y="72" text-anchor="middle" font-size="10" fill="#9aa4b6">万元</text>
+            </svg>
+            <div style="font-size:12.5px;color:var(--muted);line-height:2.1;">
+              <div><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#4f6bf5;margin-right:6px"></i>底薪 / 工日 <b class="num" style="color:var(--ink)">¥13.2万</b></div>
+              <div><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#18b26b;margin-right:6px"></i>加班费 <b class="num" style="color:var(--ink)">¥3.1万</b></div>
+              <div><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#f0437c;margin-right:6px"></i>补助 <b class="num" style="color:var(--ink)">¥1.6万</b></div>
+              <div><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#f59e0b;margin-right:6px"></i>餐补 <b class="num" style="color:var(--ink)">¥0.7万</b></div>
+            </div>
+          </div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--muted);">
+            扣款 <b class="num" style="color:var(--danger)">-¥0.42万</b> 后 → 本月应发 <b class="num" style="color:var(--ink)">¥18.6万</b>
+          </div>
+        </div>
+      </div>
+      <div class="grid-2" style="grid-template-columns:1fr 1.6fr;margin-top:16px;">
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>班组人数</h3><a class="link" href="#" onclick="go('people');return false;">人员 →</a></div>
+          <div style="margin-top:8px;">
+            <div class="team-row"><span class="nm">木工一班</span><span class="bar"><i style="width:88%;background:linear-gradient(90deg,#4f6bf5,#8b5cf6)"></i></span><span class="ct num">36 人</span></div>
+            <div class="team-row"><span class="nm">钢筋二班</span><span class="bar"><i style="width:74%;background:linear-gradient(90deg,#0ea5e9,#22d3ee)"></i></span><span class="ct num">30 人</span></div>
+            <div class="team-row"><span class="nm">水电班</span><span class="bar"><i style="width:56%;background:linear-gradient(90deg,#18b26b,#4ade80)"></i></span><span class="ct num">23 人</span></div>
+            <div class="team-row"><span class="nm">架子班</span><span class="bar"><i style="width:44%;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></i></span><span class="ct num">18 人</span></div>
+            <div class="team-row"><span class="nm">综合班</span><span class="bar"><i style="width:37%;background:linear-gradient(90deg,#f0437c,#fb7185)"></i></span><span class="ct num">15 人</span></div>
+            <div class="team-row"><span class="nm">未分班组</span><span class="bar"><i style="width:15%;background:#c9d2dd"></i></span><span class="ct num">6 人</span></div>
+          </div>
+        </div>
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>快捷入口</h3></div>
+          <div class="quick-grid">
+            <div class="quick" onclick="go('people')"><div class="t">人员管理</div><div class="d">增减人员、设工资规则、上传证件照</div></div>
+            <div class="quick" onclick="go('attendance')"><div class="t">月度考勤</div><div class="d">12 个月格子，点进去录入</div></div>
+            <div class="quick" onclick="go('payments')"><div class="t">发放记录</div><div class="d">实际收款人入账，代收人单独记</div></div>
+            <div class="quick" onclick="go('contracts')"><div class="t">合同管理</div><div class="d">报量、开票、收款分开记</div></div>
+            <div class="quick" onclick="go('expenses')"><div class="t">报销单</div><div class="d">未报销可勾选打印，现金免传凭证</div></div>
+            <div class="quick" onclick="go('io')"><div class="t">导出</div><div class="d">按年导出整本 Excel，WPS 可开</div></div>
+          </div>
+          <div class="warn-box">⚠️ 超龄提醒：4 人（男≥55 / 女≥45）——建议核对人员卡与现场安排。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 人员 ═══ -->
+    <div id="page-people" class="hidden">
+      <div class="page-h">
+        <div><h1>人员管理</h1><p class="sub" style="margin-top:4px;">128 人 · 6 个班组 · 数据各年共用</p></div>
+        <div class="sp"></div>
+        <div class="toolbar">
+          <span class="chip on">全部</span><span class="chip">木工一班</span><span class="chip">钢筋二班</span><span class="chip">水电班</span>
+          <select class="input" style="width:130px;height:34px;border-radius:999px;font-size:13px;"><option>按姓名</option><option>按身份证</option></select>
+          <button class="btn btn-primary" onclick="go('modal')">＋ 添加人员</button>
+        </div>
+      </div>
+      <div class="card mt16">
+        <div class="toolbar" style="padding:14px 16px 0;">
+          <input class="input" placeholder="🔍 搜姓名 / 身份证 / 班组" style="width:260px;">
+          <div class="sp" style="flex:1"></div>
+          <span class="chip">共 128 人</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>姓名</th><th>班组</th><th>性别 / 年龄</th><th>电话</th><th>工资</th><th>计薪</th><th>证件</th><th>状态</th><th style="text-align:right">操作</th></tr></thead>
+            <tbody>
+              <tr><td><span class="ava" style="background:#5b6ef5">王</span> 王建军</td><td>木工一班</td><td>男 · 48</td><td>138 **** 5621</td><td class="num">¥430 / 天</td><td>按工天</td><td>已传</td><td><span class="pill pill-ok">在册</span></td><td style="text-align:right"><button class="op edit" onclick="go('modal')">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td><span class="ava" style="background:#f0437c">李</span> 李国强</td><td>钢筋二班</td><td>男 · 41</td><td>159 **** 8830</td><td class="num">¥9,000 / 月</td><td>按月</td><td>已传</td><td><span class="pill pill-ok">在册</span></td><td style="text-align:right"><button class="op edit" onclick="go('modal')">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td><span class="ava" style="background:#18b26b">张</span> 张明远</td><td>水电班</td><td>男 · 55</td><td>137 **** 2148</td><td class="num">¥400 / 天</td><td>按工天</td><td>未传</td><td><span class="pill pill-warn">超龄</span></td><td style="text-align:right"><button class="op edit" onclick="go('modal')">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td><span class="ava" style="background:#f59e0b">刘</span> 刘桂芳</td><td>架子班</td><td>女 · 46</td><td>186 **** 9012</td><td class="num">¥360 / 天</td><td>按工天</td><td>已传</td><td><span class="pill pill-ok">在册</span></td><td style="text-align:right"><button class="op edit" onclick="go('modal')">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td><span class="ava" style="background:#8b5cf6">陈</span> 陈志鹏</td><td>未分班组</td><td>男 · 33</td><td>177 **** 3305</td><td class="num">— 未设 —</td><td>—</td><td>未传</td><td><span class="pill pill-gray">待设工资</span></td><td style="text-align:right"><button class="op edit" onclick="go('modal')">编辑</button> <button class="op del">删除</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager"><span style="margin-right:auto;padding-left:8px;">共 128 条</span><span class="pg">‹</span><span class="pg on">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">13</span><span class="pg">›</span></div>
+      </div>
+    </div>
+
+    <!-- ═══ 考勤 ═══ -->
+    <div id="page-attendance" class="hidden">
+      <div class="page-h">
+        <div><h1>月度考勤</h1><p class="sub" style="margin-top:4px;">一年 12 个月，点月份录入。缺的月份不会进工资。</p></div>
+        <div class="sp"></div>
+        <span class="chip">2026 年 ▾</span>
+        <button class="btn btn-ghost">📖 明细导出</button>
+        <button class="btn btn-primary" onclick="go('modal2')">＋ 新增人员到本月</button>
+      </div>
+      <div class="month-grid">
+        <div class="month-cell"><div class="m">1 月</div><div class="cnt num">118 人</div><div class="d">应发 ¥19.4 万</div><span class="pill pill-ok tag" style="margin-top:8px;">已录</span></div>
+        <div class="month-cell"><div class="m">2 月</div><div class="cnt num">120 人</div><div class="d">应发 ¥20.1 万</div><span class="pill pill-ok tag" style="margin-top:8px;">已录</span></div>
+        <div class="month-cell today"><div class="m">3 月（本月）</div><div class="cnt num">96 人</div><div class="d">录了一半 · 应发 ¥9.8 万</div><span class="pill tag" style="margin-top:8px;background:rgba(255,255,255,.22);color:#fff;">录入中</span></div>
+        <div class="month-cell"><div class="m">4 月</div><div class="cnt num">124 人</div><div class="d">应发 ¥19.0 万</div><span class="pill pill-ok tag" style="margin-top:8px;">已录</span></div>
+        <div class="month-cell"><div class="m">5 月</div><div class="cnt num">125 人</div><div class="d">应发 ¥21.2 万</div><span class="pill pill-ok tag" style="margin-top:8px;">已录</span></div>
+        <div class="month-cell"><div class="m">6 月</div><div class="cnt num">128 人</div><div class="d">应发 ¥20.8 万</div><span class="pill pill-ok tag" style="margin-top:8px;">已录</span></div>
+        <div class="month-cell"><div class="m">7 月</div><div class="cnt num">126 人</div><div class="d">应发 ¥19.6 万</div><span class="pill pill-ok tag" style="margin-top:8px;">已录</span></div>
+        <div class="month-cell"><div class="m">8 月</div><div class="cnt num">126 人</div><div class="d">应发 ¥20.4 万</div><span class="pill pill-ok tag" style="margin-top:8px;">已录</span></div>
+        <div class="month-cell"><div class="m">9 月</div><div class="cnt num">127 人</div><div class="d">应发 ¥19.2 万</div><span class="pill pill-ok tag" style="margin-top:8px;">已录</span></div>
+        <div class="month-cell late"><div class="m">10 月</div><div class="cnt num">—</div><div class="d">还没录 · 待补</div><span class="pill pill-warn tag" style="margin-top:8px;">未录</span></div>
+        <div class="month-cell"><div class="m">11 月</div><div class="cnt num">—</div><div class="d">未来月份</div><span class="pill pill-gray tag" style="margin-top:8px;">未开始</span></div>
+        <div class="month-cell"><div class="m">12 月</div><div class="cnt num">—</div><div class="d">未来月份</div><span class="pill pill-gray tag" style="margin-top:8px;">未开始</span></div>
+      </div>
+      <div class="card mt16">
+        <div class="panel-h" style="padding:16px 18px 0;">
+          <h3>3 月 · 王建军等 96 人</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="chip">按班组筛选 ▾</span>
+            <button class="btn btn-ghost">🗑️ 去掉所选</button>
+            <button class="btn btn-primary">保存本月</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>姓名</th><th>班组</th><th style="text-align:center">出勤天数</th><th style="text-align:center">加班小时</th><th style="text-align:center">补助</th><th style="text-align:center">扣款</th><th style="text-align:center">餐补</th><th style="text-align:center">应发</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr><td>王建军</td><td>木工一班</td><td class="num" style="text-align:center">26</td><td class="num" style="text-align:center">12</td><td class="num" style="text-align:center">1,200</td><td class="num" style="text-align:center">0</td><td class="num" style="text-align:center">0</td><td class="num" style="text-align:center;font-weight:600">¥13,760</td><td>—</td></tr>
+              <tr><td>李国强</td><td>钢筋二班</td><td class="num" style="text-align:center">26.5</td><td class="num" style="text-align:center">8</td><td class="num" style="text-align:center">800</td><td class="num" style="text-align:center">200</td><td class="num" style="text-align:center">0</td><td class="num" style="text-align:center;font-weight:600">¥9,600</td><td>—</td></tr>
+              <tr><td>张明远</td><td>水电班</td><td class="num" style="text-align:center">25</td><td class="num" style="text-align:center">20</td><td class="num" style="text-align:center">1,000</td><td class="num" style="text-align:center">0</td><td class="num" style="text-align:center">0</td><td class="num" style="text-align:center;font-weight:600">¥13,500</td><td>—</td></tr>
+              <tr><td>刘桂芳</td><td>架子班</td><td class="num" style="text-align:center">24</td><td class="num" style="text-align:center">6</td><td class="num" style="text-align:center">600</td><td class="num" style="text-align:center">0</td><td class="num" style="text-align:center">240</td><td class="num" style="text-align:center;font-weight:600">¥9,840</td><td>—</td></tr>
+              <tr><td>陈志鹏</td><td>未分班组</td><td class="num" style="text-align:center">22</td><td class="num" style="text-align:center">10</td><td class="num" style="text-align:center">500</td><td class="num" style="text-align:center">150</td><td class="num" style="text-align:center">0</td><td class="num" style="text-align:center;font-weight:600;color:var(--warn)">待设工资</td><td>—</td></tr>
+              <tr class="total"><td colspan="7">合计（96 人）</td><td class="num">¥98,000</td><td>超额加班 3 人</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 发放 ═══ -->
+    <div id="page-payments" class="hidden">
+      <div class="page-h">
+        <div><h1>发放记录</h1><p class="sub" style="margin-top:4px;">按实际收款人入账；代收记在「代收」列，谁领钱算谁。</p></div>
+        <div class="sp"></div>
+        <div class="toolbar">
+          <span class="chip on">全部</span><span class="chip">已发放</span><span class="chip">待发放</span>
+          <input class="input" placeholder="🔍 搜收款人 / 发放方">
+          <button class="btn btn-primary">＋ 新增发放</button>
+        </div>
+      </div>
+      <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-top:16px;">
+        <div class="card kpi"><div class="row"><span class="lb">本月已发</span><span class="icon-c" style="background:var(--green-soft);color:var(--green);">💸</span></div><div class="val num">¥186,200</div><div class="hint">68 笔 · 记在实际收款人头上</div></div>
+        <div class="card kpi"><div class="row"><span class="lb">待发放</span><span class="icon-c" style="background:var(--orange-soft);color:var(--orange);">⏳</span></div><div class="val num">¥174,400</div><div class="hint">5 笔 · 未打款的日期为空</div></div>
+        <div class="card kpi"><div class="row"><span class="lb">代收笔数</span><span class="icon-c" style="background:var(--pink-soft);color:var(--pink);">👥</span></div><div class="val num">12</div><div class="hint">领钱人 ≠ 实际收款人</div></div>
+      </div>
+      <div class="card mt16">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>打款日期</th><th>实际收款人</th><th>收款人（代收）</th><th style="text-align:right">金额</th><th>发放方</th><th>状态</th><th>备注</th><th style="text-align:right">操作</th></tr></thead>
+            <tbody>
+              <tr><td class="num">2026-09-04</td><td>王建军</td><td>王建军</td><td class="num" style="text-align:right">¥14,200</td><td>公司账户</td><td><span class="pill pill-ok">已发</span></td><td>8 月工资</td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td class="num">2026-09-04</td><td>李国强</td><td>李国强</td><td class="num" style="text-align:right">¥9,800</td><td>公司账户</td><td><span class="pill pill-ok">已发</span></td><td>8 月工资</td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td class="num">2026-09-03</td><td>张明远</td><td>张明远</td><td class="num" style="text-align:right">¥13,100</td><td>公司账户</td><td><span class="pill pill-ok">已发</span></td><td>8 月工资</td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td class="num">—</td><td>刘桂芳</td><td>刘桂芳</td><td class="num" style="text-align:right">¥9,300</td><td>现金</td><td><span class="pill pill-warn">待发</span></td><td>9 月月结</td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td class="num">—</td><td>陈志鹏</td><td>陈志鹏</td><td class="num" style="text-align:right">¥4,800</td><td>现金</td><td><span class="pill pill-warn">待发</span></td><td>9 月月结</td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr class="total"><td colspan="3">合计（68 笔已发 + 5 笔待发）</td><td class="num" style="text-align:right">¥360,600</td><td colspan="4">待发 ¥174,400</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager"><span style="margin-right:auto;padding-left:8px;">共 73 条</span><span class="pg">‹</span><span class="pg on">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">4</span><span class="pg">›</span></div>
+      </div>
+    </div>
+
+    <!-- ═══ 报销 ═══ -->
+    <div id="page-expenses" class="hidden">
+      <div class="page-h">
+        <div><h1>报销单</h1><p class="sub" style="margin-top:4px;">现金可免凭证；报销人、收款人分开记，几笔可共用一张打款凭证。</p></div>
+        <div class="sp"></div>
+        <div class="toolbar">
+          <span class="chip on">全部</span><span class="chip">未报销</span><span class="chip">已报销</span>
+          <input class="input" placeholder="🔍 搜报销人 / 收款人">
+          <button class="btn btn-ghost">🖨️ 打印打款单</button>
+          <button class="btn btn-primary">＋ 新增报销</button>
+        </div>
+      </div>
+      <div class="card mt16">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>购买时间</th><th>项目</th><th>报销人</th><th>收款人 / 账户</th><th style="text-align:right">金额</th><th>支付方式</th><th>凭证</th><th>状态</th><th style="text-align:right">操作</th></tr></thead>
+            <tbody>
+              <tr><td class="num">2026-09-02</td><td>1#楼 3F 钢筋料</td><td>王建军</td><td>张明远 / 建行 **** 6688</td><td class="num" style="text-align:right">¥8,420</td><td>转账</td><td>已传</td><td><span class="pill pill-ok">已报</span></td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td class="num">2026-09-01</td><td>塔吊租赁 9 月</td><td>李国强</td><td>李国强 / 农行 **** 3302</td><td class="num" style="text-align:right">¥19,000</td><td>转账</td><td>已传</td><td><span class="pill pill-warn">未报</span></td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td class="num">2026-08-28</td><td>工地围挡补修</td><td>刘桂芳</td><td>刘桂芳 / 现金</td><td class="num" style="text-align:right">¥2,650</td><td>现金</td><td>免传</td><td><span class="pill pill-warn">未报</span></td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td class="num">2026-08-26</td><td>劳保用品一批</td><td>陈志鹏</td><td>陈志鹏 / 工行 **** 8901</td><td class="num" style="text-align:right">¥5,300</td><td>微信</td><td>已传</td><td><span class="pill pill-ok">已报</span></td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr class="total"><td colspan="4">合计（筛选后）</td><td class="num" style="text-align:right">¥35,370</td><td colspan="4">未报销 2 笔 ¥21,650</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager"><span style="margin-right:auto;padding-left:8px;">共 142 条</span><span class="pg">‹</span><span class="pg on">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">8</span><span class="pg">›</span></div>
+      </div>
+    </div>
+
+    <!-- ═══ 合同 ═══ -->
+    <div id="page-contracts" class="hidden">
+      <div class="page-h">
+        <div><h1>合同管理</h1><p class="sub" style="margin-top:4px;">报量、开票、收款分开记；保证金独立。</p></div>
+        <div class="sp"></div>
+        <div class="toolbar">
+          <span class="chip">2026 年 ▾</span>
+          <span class="chip on">全部</span><span class="chip">进行中</span><span class="chip">已结算</span>
+          <input class="input" placeholder="🔍 搜项目名 / 编号">
+          <button class="btn btn-ghost">📄 导出对账表</button>
+          <button class="btn btn-primary">＋ 新增合同</button>
+        </div>
+      </div>
+      <div class="card mt16">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>项目名称</th><th>编号</th><th>总包</th><th style="text-align:right">合同金额</th><th style="text-align:right">报量</th><th style="text-align:right">开票</th><th style="text-align:right">已收</th><th>进度</th><th style="text-align:right">操作</th></tr></thead>
+            <tbody>
+              <tr><td><b>某某住宅一期</b></td><td class="num">HT-2026-001</td><td>华建集团</td><td class="num" style="text-align:right">¥1,860,000</td><td class="num" style="text-align:right">¥1,302,000</td><td class="num" style="text-align:right">¥1,302,000</td><td class="num" style="text-align:right">¥1,170,800</td><td><span class="pill pill-ok">正常</span></td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td><b>厂房钢结构</b></td><td class="num">HT-2026-002</td><td>中建三局</td><td class="num" style="text-align:right">¥980,000</td><td class="num" style="text-align:right">¥686,000</td><td class="num" style="text-align:right">¥686,000</td><td class="num" style="text-align:right">¥480,200</td><td><span class="pill pill-warn">待开票</span></td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td><b>市政管网改造</b></td><td class="num">HT-2026-003</td><td>城投公司</td><td class="num" style="text-align:right">¥2,150,000</td><td class="num" style="text-align:right">¥1,505,000</td><td class="num" style="text-align:right">¥1,505,000</td><td class="num" style="text-align:right">¥1,354,500</td><td><span class="pill pill-ok">正常</span></td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr><td><b>学校宿舍楼</b></td><td class="num">HT-2025-012</td><td>教育局</td><td class="num" style="text-align:right">¥640,000</td><td class="num" style="text-align:right">¥448,000</td><td class="num" style="text-align:right">¥448,000</td><td class="num" style="text-align:right">¥448,000</td><td><span class="pill pill-gray">已结算</span></td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op del">删除</button></td></tr>
+              <tr class="total"><td colspan="3">合计</td><td class="num" style="text-align:right">¥5,630,000</td><td class="num" style="text-align:right">¥3,941,000</td><td class="num" style="text-align:right">¥3,941,000</td><td class="num" style="text-align:right">¥3,453,500</td><td colspan="2">未收 ¥487,500</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 保险 ═══ -->
+    <div id="page-insurance" class="hidden">
+      <div class="page-h">
+        <div><h1>团体保险</h1><p class="sub" style="margin-top:4px;">保单与人员独立；组合险自动双向同步，各自按保险期结算。</p></div>
+        <div class="sp"></div>
+        <div class="toolbar">
+          <span class="chip on">在保</span><span class="chip">已结束</span>
+          <button class="btn btn-ghost">🖨️ 打印清单</button>
+          <button class="btn btn-primary">＋ 新增保单</button>
+        </div>
+      </div>
+      <div class="policy-grid mt16">
+        <div class="card policy">
+          <div class="row1"><span class="icon-c" style="background:var(--primary-soft);color:var(--primary);">🛡️</span><div style="flex:1"><div class="no">PICC-2026-009</div><div class="sub" style="font-size:12px;color:var(--muted);margin-top:2px;">平安产险 · 建筑工程团意险</div></div><span class="pill pill-ok">在保</span></div>
+          <div class="meta">
+            保险期 <b class="num">2026-01-01 → 2026-12-31</b> · 共 <b class="num">365</b> 天<br>
+            每人保费 <b class="num">¥180</b> × 人数 <b class="num">126</b> = 总保费 <b class="num">¥22,680</b><br>
+            在保 <b class="num">126 人</b> · 累计人天 <b class="num">36,540</b> · 累计保费 <b class="num">¥18,018</b>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;"><button class="btn btn-ghost" style="flex:1;height:34px;font-size:13px;">人员清单</button><button class="btn btn-ghost" style="flex:1;height:34px;font-size:13px;">打印</button><button class="btn btn-ghost" style="flex:1;height:34px;font-size:13px;">编辑</button></div>
+        </div>
+        <div class="card policy">
+          <div class="row1"><span class="icon-c" style="background:var(--violet-soft);color:var(--violet);">🛡️</span><div style="flex:1"><div class="no">CPIC-2026-014</div><div class="sub" style="font-size:12px;color:var(--muted);margin-top:2px;">太平洋保险 · 组合险（挂钩 009）</div></div><span class="pill pill-ok">在保</span></div>
+          <div class="meta">
+            保险期 <b class="num">2026-03-01 → 2026-07-31</b> · 共 <b class="num">153</b> 天<br>
+            每人保费 <b class="num">¥90</b> × 人数 <b class="num">48</b> = 总保费 <b class="num">¥4,320</b><br>
+            在保 <b class="num">48 人</b> · 累计人天 <b class="num">7,344</b> · 累计保费 <b class="num">¥4,320</b>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;"><button class="btn btn-ghost" style="flex:1;height:34px;font-size:13px;">人员清单</button><button class="btn btn-ghost" style="flex:1;height:34px;font-size:13px;">打印</button><button class="btn btn-ghost" style="flex:1;height:34px;font-size:13px;">编辑</button></div>
+        </div>
+      </div>
+      <div class="card mt16">
+        <div class="panel-h" style="padding:16px 18px 0;"><h3>PICC-2026-009 人员清单</h3><div style="display:flex;gap:8px;"><span class="chip">队长 ▾</span><button class="btn btn-ghost" style="height:34px;font-size:13px;">导入人员</button><button class="btn btn-primary" style="height:34px;font-size:13px;">＋ 添加</button></div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>姓名</th><th>队长</th><th>开始日期</th><th>结束日期</th><th style="text-align:center">使用天数</th><th style="text-align:right">保费</th><th style="text-align:right">操作</th></tr></thead>
+            <tbody>
+              <tr><td>王建军</td><td>木工一班</td><td class="num">2026-01-01</td><td class="num">在保</td><td class="num" style="text-align:center">248</td><td class="num" style="text-align:right">¥122.30</td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op edit">替换</button> <button class="op del">删除</button></td></tr>
+              <tr><td>李国强</td><td>钢筋二班</td><td class="num">2026-01-01</td><td class="num">在保</td><td class="num" style="text-align:center">248</td><td class="num" style="text-align:right">¥122.30</td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op edit">替换</button> <button class="op del">删除</button></td></tr>
+              <tr><td>张明远</td><td>水电班</td><td class="num">2026-01-01</td><td class="num">在保</td><td class="num" style="text-align:center">248</td><td class="num" style="text-align:right">¥122.30</td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op edit">替换</button> <button class="op del">删除</button></td></tr>
+              <tr><td>刘桂芳</td><td>架子班</td><td class="num">2026-05-01</td><td class="num">在保</td><td class="num" style="text-align:center">128</td><td class="num" style="text-align:right">¥63.12</td><td style="text-align:right"><button class="op edit">编辑</button> <button class="op edit">替换</button> <button class="op del">删除</button></td></tr>
+              <tr class="total"><td colspan="4">合计（筛选后 126 人）</td><td class="num" style="text-align:center">36,540</td><td class="num" style="text-align:right">¥18,018.00</td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 导入导出 ═══ -->
+    <div id="page-io" class="hidden">
+      <div class="page-h">
+        <div><h1>导入 导出</h1><p class="sub" style="margin-top:4px;">Excel 进出，WPS / Office 通用；导入前先下载模板。</p></div>
+      </div>
+      <div class="grid-eq mt16">
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>⬆️ 导入</h3><span class="pill pill-warn">「增加/替换」小心选</span></div>
+          <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span class="chip on">增加</span><span class="chip">替换</span>
+            <div class="sp" style="flex:1"></div>
+            <button class="btn btn-ghost" style="height:34px;font-size:13px;">⬇️ 人员模板</button>
+            <button class="btn btn-ghost" style="height:34px;font-size:13px;">⬇️ 考勤模板</button>
+          </div>
+          <div class="drop" style="margin-top:14px;">📂 把 Excel 拖到这里，或 <b>点击选择文件</b><div style="font-size:12px;margin-top:6px;">支持 .xlsx · 单文件 ≤ 10MB</div></div>
+          <div style="margin-top:12px;font-size:12.5px;color:var(--muted);line-height:1.8;">导入前先看模板说明：日期格式、班组名、工资列；<b style="color:var(--primary)">替换</b>模式会覆盖同编号的记录。</div>
+          <button class="btn btn-primary" style="width:100%;margin-top:14px;">开始导入</button>
+        </div>
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>⬇️ 导出</h3><span class="pill pill-ok">整本 / 按年 / 分项</span></div>
+          <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+            <span class="chip on">全部年份</span><span class="chip">2026 年</span><span class="chip">2025 年</span><span class="chip">按区间</span>
+          </div>
+          <div class="btn-grid">
+            <button class="btn btn-ghost">人员</button><button class="btn btn-ghost">考勤</button>
+            <button class="btn btn-ghost">发放</button><button class="btn btn-ghost">报销</button>
+            <button class="btn btn-ghost">合同</button><button class="btn btn-ghost">保险</button>
+          </div>
+          <button class="btn btn-primary" style="width:100%;margin-top:14px;">📦 导出总台账（一个 Excel 全部表）</button>
+          <div style="margin-top:12px;font-size:12.5px;color:var(--muted);">备份：<a href="#" style="color:var(--primary)">下载全量备份</a> · 放在安全的地方，恢复可导入。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 查询 ═══ -->
+    <div id="page-query" class="hidden">
+      <div class="page-h">
+        <div><h1>个人查询</h1><p class="sub" style="margin-top:4px;">给工人看工资：选人、选区间，可按月打印工资条。</p></div>
+        <div class="sp"></div>
+        <div class="toolbar">
+          <input class="input" placeholder="🔍 搜姓名（支持下拉）">
+          <span class="chip on">2026 年</span><span class="chip">1-3 月</span>
+          <button class="btn btn-ghost">🖨️ 打印工资条</button>
+        </div>
+      </div>
+      <div class="grid-2 mt16" style="grid-template-columns:1fr 1fr;">
+        <div class="card panel-pad">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="ava" style="background:#5b6ef5;width:44px;height:44px;font-size:16px;">王</span>
+            <div><div style="font-size:16px;font-weight:700;">王建军</div><div style="font-size:12px;color:var(--muted);">木工一班 · 按工天 ¥430/天 · 加班 1.5 倍</div></div>
+            <div class="sp" style="flex:1"></div>
+            <span class="pill pill-ok">应发 ¥131,208</span>
+          </div>
+          <div class="subtbl" style="margin-top:14px;">
+            <table>
+              <thead><tr><th>年月</th><th>出勤</th><th>底薪</th><th>加班小时</th><th>加班费</th><th>补助</th><th>扣款</th><th>应发</th></tr></thead>
+              <tbody>
+                <tr><td class="num">2026-06</td><td class="num">26</td><td class="num">11,180</td><td class="num">12</td><td class="num">6,180</td><td class="num">1,100</td><td class="num">0</td><td class="num">¥18,460</td></tr>
+                <tr><td class="num">2026-07</td><td class="num">27</td><td class="num">11,610</td><td class="num">10</td><td class="num">5,150</td><td class="num">1,200</td><td class="num">200</td><td class="num">¥17,760</td></tr>
+                <tr><td class="num">2026-08</td><td class="num">26.5</td><td class="num">11,395</td><td class="num">8</td><td class="num">4,120</td><td class="num">1,200</td><td class="num">0</td><td class="num">¥16,715</td></tr>
+                <tr class="total"><td colspan="6">本区间合计</td><td class="num">¥800</td><td class="num">¥131,208</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:12px;font-size:12.5px;color:var(--muted);">已打款 ¥112,400 · 未打款 ¥18,808（1 笔代收）</div>
+        </div>
+        <div class="card panel-pad" style="background:repeating-linear-gradient(180deg,#fff 0 9px,#f2f5fd 9px 10px);">
+          <div style="text-align:center;font-size:12px;color:var(--subtle);">打印预览示意（虚线为裁切线）</div>
+          <div style="border:1.5px dashed #c9d2dd;border-radius:12px;padding:18px;margin-top:10px;background:#fff;">
+            <div style="text-align:center;font-weight:700;font-size:15px;letter-spacing:.3em;">台账 · 工资条</div>
+            <div style="text-align:center;font-size:12px;color:var(--muted);margin-top:4px;">2026 年 6–8 月 · 王建军</div>
+            <table style="margin-top:10px;min-width:0;font-size:12px;">
+              <thead><tr><th>年月</th><th>出勤</th><th>底薪</th><th>加班费</th><th>补助</th><th>应发</th></tr></thead>
+              <tbody>
+                <tr><td>06</td><td class="num">26</td><td class="num">11,180</td><td class="num">6,180</td><td class="num">1,100</td><td class="num">18,460</td></tr>
+                <tr><td>07</td><td class="num">27</td><td class="num">11,610</td><td class="num">5,150</td><td class="num">1,200</td><td class="num">17,760</td></tr>
+                <tr><td>08</td><td class="num">26.5</td><td class="num">11,395</td><td class="num">4,120</td><td class="num">1,200</td><td class="num">16,715</td></tr>
+              </tbody>
+            </table>
+            <div style="margin-top:8px;font-size:12px;">应发合计 <b class="num">¥52,935</b> · 已打款 ¥46,130</div>
+          </div>
+          <div style="margin-top:10px;border:1.5px dashed #c9d2dd;border-radius:12px;padding:18px;background:#fff;text-align:center;color:var(--subtle);font-size:13px;">第二张工资条（一页两张）</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 设置 ═══ -->
+    <div id="page-settings" class="hidden">
+      <div class="page-h">
+        <div><h1>设置</h1><p class="sub" style="margin-top:4px;">年度、访问密码、批量工资、账户成员。反代到公网请先设密码。</p></div>
+      </div>
+      <div class="grid-eq mt16">
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>🔒 访问密码</h3><span class="pill pill-ok">已开启</span></div>
+          <p style="margin-top:10px;font-size:13px;color:var(--muted);line-height:1.8;">打开页面要先输密码；勾了「本机记住」这台设备免输。改密码先填当前密码。</p>
+          <div style="margin-top:12px;display:flex;gap:8px;"><button class="btn btn-ghost" style="flex:1;">修改密码</button><button class="btn btn-ghost" style="flex:1;">关闭密码</button></div>
+        </div>
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>👥 账户与成员</h3><button class="btn btn-ghost" style="height:32px;font-size:13px;">＋ 添加成员</button></div>
+          <div style="margin-top:10px;font-size:13px;line-height:2.2;">
+            <div>👤 王工 (admin) · <b>管理员</b> · 全部权限</div>
+            <div>👤 小李 (xiaoli) · 录入员 · <span style="color:var(--muted)">考勤/发放/报销</span></div>
+            <div>👤 老张 (zhang) · 只读 · <span style="color:var(--muted)">总览/查询/导出</span></div>
+          </div>
+        </div>
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>⚙️ 批量工资</h3><button class="btn btn-ghost" style="height:32px;font-size:13px;">去设置</button></div>
+          <p style="margin-top:10px;font-size:13px;color:var(--muted);line-height:1.8;">一次给多人设日工资/月工资；「只填空白」不会动已填的人。</p>
+        </div>
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>📅 年度管理</h3><span class="chip">2026 年</span></div>
+          <p style="margin-top:10px;font-size:13px;color:var(--muted);line-height:1.8;">新增年份后，考勤、发放、合同按年分开看；人员各年共用。</p>
+          <button class="btn btn-ghost" style="margin-top:10px;">＋ 新增工作年</button>
+        </div>
+        <div class="card panel-pad">
+          <div class="panel-h"><h3>📦 备份</h3><span class="pill pill-ok">最近 09-04</span></div>
+          <p style="margin-top:10px;font-size:13px;color:var(--muted);line-height:1.8;">导出整本备份（含照片、合同文件）；从备份恢复会让你选文件。</p>
+          <div style="margin-top:12px;display:flex;gap:8px;"><button class="btn btn-ghost" style="flex:1;">导出备份</button><button class="btn btn-ghost" style="flex:1;">从备份恢复</button></div>
+        </div>
+        <div class="card panel-pad" style="border-color:#f6c8c2;">
+          <div class="panel-h"><h3 style="color:var(--danger)">⚠️ 危险区</h3></div>
+          <p style="margin-top:10px;font-size:13px;color:var(--muted);line-height:1.8;">清空台账不可恢复，需要管理员密码确认。</p>
+          <button class="btn btn-danger" style="margin-top:10px;">清空全部数据</button>
+        </div>
+      </div>
+    </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ ③ 编辑弹窗：人员 ═══════════ -->
+<div id="screen-modal" class="overlay hidden">
+  <div class="modal">
+    <div class="modal-h">
+      <span style="width:34px;height:34px;border-radius:10px;background:var(--primary-soft);color:var(--primary-strong);display:inline-flex;align-items:center;justify-content:center;font-size:15px;">👤</span>
+      <h3>编辑人员 · 王建军</h3>
+      <span class="pill pill-ok">在册</span>
+      <button class="x" onclick="go('people')">✕</button>
+    </div>
+    <div class="modal-b">
+      <div class="sec-t">基本信息</div>
+      <div class="form-grid">
+        <div class="field"><label class="label">姓名</label><input class="input" value="王建军"></div>
+        <div class="field"><label class="label">班组</label><select class="input" style="height:40px;"><option>木工一班</option><option>钢筋二班</option><option>水电班</option></select></div>
+        <div class="field"><label class="label">性别 / 生日</label><div style="display:flex;gap:8px;"><select class="input" style="height:40px;width:90px;"><option>男</option><option>女</option></select><input class="input" type="date" value="1978-06-12"></div></div>
+        <div class="field"><label class="label">电话</label><input class="input" value="138 0000 5621"></div>
+        <div class="field"><label class="label">身份证号</label><input class="input" value="3425**********1210" style="letter-spacing:1px;"></div>
+        <div class="field"><label class="label">备注</label><input class="input" placeholder="工种、进场日期…"></div>
+      </div>
+      <div class="sec-t">工资与计薪</div>
+      <div class="form-grid">
+        <div class="field"><label class="label">计薪方式</label><select class="input" style="height:40px;"><option>按工天</option><option>按月</option></select></div>
+        <div class="field"><label class="label">日工资 / 月工资</label><input class="input num" value="430"></div>
+        <div class="field"><label class="label">加班规则</label><select class="input" style="height:40px;"><option>加班按小时：1.5 倍</option><option>加班按折算工天</option></select></div>
+        <div class="field"><label class="label">餐补 / 天</label><input class="input num" value="0"></div>
+        <div class="field full"><label class="label">工资变更历史（生效日期前旧工资，之后新工资）</label>
+          <div class="subtbl">
+            <table>
+              <thead><tr style="background:#f8faff;"><th>生效日期</th><th>日工资 / 月工资</th><th>计薪</th><th>加班</th><th>餐补</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td class="num">2026-03-01</td><td class="num">¥430 / 天</td><td>按工天</td><td>1.5 倍</td><td>0</td><td><button class="op edit">编辑</button></td></tr>
+                <tr><td class="num">2025-06-01</td><td class="num">¥380 / 天</td><td>按工天</td><td>1.5 倍</td><td>0</td><td><button class="op edit">编辑</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="sec-t">证件照片（选传）</div>
+      <div style="display:flex;gap:10px;">
+        <div style="width:76px;height:96px;border-radius:10px;border:1.5px dashed var(--line-strong);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--subtle);">身份证<br>正面</div>
+        <div style="width:76px;height:96px;border-radius:10px;border:1.5px dashed var(--line-strong);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--subtle);">照片</div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-danger" onclick="go('people')">删除</button>
+      <div class="sp"></div>
+      <button class="btn btn-ghost" onclick="go('people')">取消</button>
+      <button class="btn btn-primary" onclick="go('people')">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ ④ 弹窗：把人员加到本月（考勤） ═══════════ -->
+<div id="screen-modal2" class="overlay hidden">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-h">
+      <span style="width:34px;height:34px;border-radius:10px;background:var(--green-soft);color:var(--green);display:inline-flex;align-items:center;justify-content:center;font-size:15px;">＋</span>
+      <h3>把人员加到 3 月</h3>
+      <button class="x" onclick="go('attendance')">✕</button>
+    </div>
+    <div class="modal-b">
+      <div class="field"><label class="label">从人员表选择（支持多选）</label><input class="input" placeholder="🔍 搜姓名 / 班组"></div>
+      <div style="border:1px solid var(--line);border-radius:12px;overflow:hidden;max-height:280px;overflow-y:auto;">
+        <table style="min-width:0;font-size:13px;">
+          <thead><tr style="background:#f8faff;"><th>姓名</th><th>班组</th><th>工资</th><th style="text-align:center"></th></tr></thead>
+          <tbody>
+            <tr><td>王建军</td><td>木工一班</td><td class="num">¥430/天</td><td style="text-align:center"><input type="checkbox" checked style="width:15px;height:15px;accent-color:var(--primary)"></td></tr>
+            <tr><td>李国强</td><td>钢筋二班</td><td class="num">¥9,000/月</td><td style="text-align:center"><input type="checkbox" checked style="width:15px;height:15px;accent-color:var(--primary)"></td></tr>
+            <tr><td>张明远</td><td>水电班</td><td class="num">¥400/天</td><td style="text-align:center"><input type="checkbox" style="width:15px;height:15px;accent-color:var(--primary)"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;font-size:12.5px;color:var(--muted);">已选 2 人 · 进入本月考勤后按当月工资规则计算</div>
+    </div>
+    <div class="modal-f">
+      <div class="sp"></div>
+      <button class="btn btn-ghost" onclick="go('attendance')">取消</button>
+      <button class="btn btn-primary" onclick="go('attendance')">添加 2 人</button>
+    </div>
+  </div>
+</div>
+
+<div class="preview-note">
+  <span style="flex:none;">🎨 设计稿 ·</span>
+  <div class="pills" id="jump">
+    <button data-pg="login" class="on">登录</button>
+    <button data-pg="home">总览</button>
+    <button data-pg="people">人员</button>
+    <button data-pg="attendance">考勤</button>
+    <button data-pg="payments">发放</button>
+    <button data-pg="expenses">报销</button>
+    <button data-pg="contracts">合同</button>
+    <button data-pg="insurance">保险</button>
+    <button data-pg="io">导入导出</button>
+    <button data-pg="query">查询</button>
+    <button data-pg="settings">设置</button>
+    <button data-pg="modal">编辑弹窗</button>
+  </div>
+</div>
+
+<script>
+const TITLES = { home: "总览", people: "人员管理", attendance: "月度考勤", payments: "发放记录", expenses: "报销单", contracts: "合同管理", insurance: "团体保险", io: "导入 导出", query: "个人查询", settings: "设置" };
+function go(where) {
+  document.querySelectorAll('#screen-login, #screen-app, #screen-modal, #screen-modal2').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.content > div[id^="page-"]').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.rail a').forEach(a => a.classList.remove('on'));
+  document.querySelectorAll('#jump button').forEach(b => b.classList.remove('on'));
+  const jumpBtn = document.querySelector('#jump button[data-pg="' + where + '"]');
+  if (jumpBtn) jumpBtn.classList.add('on');
+  if (where === 'login') { document.getElementById('screen-login').classList.remove('hidden'); return; }
+  if (where === 'modal' || where === 'modal2') {
+    document.getElementById(where === 'modal' ? 'screen-modal' : 'screen-modal2').classList.remove('hidden');
+    document.getElementById('screen-app').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('screen-app').classList.remove('hidden');
+  document.getElementById('page-' + where).classList.remove('hidden');
+  document.getElementById('crumb').textContent = TITLES[where] || '';
+  const rail = document.querySelector('.rail a[data-pg="' + where + '"]');
+  if (rail) rail.classList.add('on');
+}
+document.querySelectorAll('.rail a').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.pg); }));
+document.querySelectorAll('#jump button').forEach(b => b.addEventListener('click', () => go(b.dataset.pg)));
+</script>
+</body>
+</html>

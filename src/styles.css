@@ -47,40 +47,40 @@
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   --font-display: "DIN Alternate", "DIN", "Roboto Condensed", "Arial Black", system-ui, sans-serif;
 
-  /* 背景与表面 */
-  --color-bg: #f5f6f8;
-  --color-bg-elevated: #eef1f5;
+  /* 背景与表面（浅紫蓝，参考 B 端设计） */
+  --color-bg: #eef2fb;
+  --color-bg-elevated: #f1f5fd;
   --color-surface: #ffffff;
 
   /* 文字 */
   --color-ink: #1b2430;
-  --color-muted: #4b5563;
-  --color-subtle: #8a94a3;
+  --color-muted: #5b6678;
+  --color-subtle: #93a0b5;
 
   /* 边框 */
-  --color-line: #e3e7ee;
-  --color-line-strong: #c9d2dd;
+  --color-line: #e6eaf3;
+  --color-line-strong: #d5dce9;
 
-  /* 主色：工程蓝 */
-  --color-accent: #1e56a0;
+  /* 主色：紫蓝 */
+  --color-accent: #4f6bf5;
   --color-accent-fg: #ffffff;
-  --color-accent-soft: #e7eef8;
-  --color-accent-strong: #17467f;
+  --color-accent-soft: #eaefff;
+  --color-accent-strong: #3d57d8;
 
   /* 语义色 */
-  --color-ok: #177245;
-  --color-ok-bg: #e6f2eb;
-  --color-warn: #a35d00;
-  --color-warn-bg: #fdf1e2;
-  --color-danger: #c23737;
+  --color-ok: #18b26b;
+  --color-ok-bg: #e6f7ef;
+  --color-warn: #c07d10;
+  --color-warn-bg: #fdf3e0;
+  --color-danger: #e0452f;
   --color-danger-bg: #fdecec;
   --color-danger-fg: #ffffff;
 
-  /* 圆角 */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  /* 圆角（整体放大，B 端卡片感） */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
 }
 
 @layer base {
@@ -104,6 +104,52 @@
 }
 
 @layer components {
+  /* 应用背景：浅紫蓝渐变（参考 B 端风格） */
+  .app-bg {
+    background:
+      radial-gradient(900px 460px at 100% 0%, rgba(139, 92, 246, 0.10), transparent 60%),
+      radial-gradient(820px 480px at 0% 100%, rgba(14, 165, 233, 0.10), transparent 60%),
+      linear-gradient(160deg, #eef2fb, #f7f9ff);
+  }
+
+  /* 状态胶囊 */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  /* 筛选胶囊（tab 样式） */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--color-line-strong);
+    background: var(--color-surface);
+    font-size: 13px;
+    color: var(--color-muted);
+    white-space: nowrap;
+    transition: all 150ms ease;
+  }
+  .chip:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+  .chip.on,
+  .chip[data-on] {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-accent-fg);
+  }
+
   .btn {
     height: 2rem;
     padding-inline: 0.625rem;
@@ -150,8 +196,8 @@
 
   .shadow-panel {
     box-shadow:
-      0 1px 2px rgba(27, 36, 48, 0.04),
-      0 4px 16px -4px rgba(27, 36, 48, 0.06);
+      0 1px 2px rgba(41, 72, 143, 0.04),
+      0 8px 24px -6px rgba(41, 72, 143, 0.10);
   }
 
   .min-w-ledger {

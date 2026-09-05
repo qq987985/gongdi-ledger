@@ -558,13 +558,21 @@ function LoginScreen({ accessHash, onOk }: { accessHash: string; onOk: () => voi
   }
   return (
     <div
-      className="flex min-h-screen min-h-dvh items-center justify-center bg-bg px-4"
+      className="app-bg flex min-h-screen min-h-dvh items-center justify-center px-4"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
-      <form onSubmit={submit} className="w-full max-w-sm rounded-xl border border-line bg-surface p-6 shadow-panel">
-        <h1 className="font-display text-xl font-semibold">{APP_NAME}</h1>
-        <p className="mt-1 text-sm text-muted">手机、电脑浏览器都可打开。已开密码时先登录。</p>
-        <div className="mt-5">
+      <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-line bg-surface p-8 shadow-panel">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-xl text-white shadow-lg">
+            🏗️
+          </span>
+          <div>
+            <h1 className="font-display text-xl font-semibold">{APP_NAME}</h1>
+            <p className="text-xs text-muted">工地账目 · 一本台账说得清</p>
+          </div>
+        </div>
+        <p className="mt-5 text-sm text-muted">手机、电脑浏览器都可打开。已开密码时先登录。</p>
+        <div className="mt-4">
           <Label htmlFor="gate-login">访问密码</Label>
           <Input
             id="gate-login"
@@ -580,8 +588,8 @@ function LoginScreen({ accessHash, onOk }: { accessHash: string; onOk: () => voi
         <label className="mt-3 flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" className="size-4" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> 本机记住，下次不用再输
         </label>
-        <Button className="btn-lg mt-5 w-full" type="submit" disabled={busy || !pwd}>
-          进入
+        <Button className="btn-lg mt-6 w-full" type="submit" disabled={busy || !pwd}>
+          进入台账
         </Button>
       </form>
     </div>
@@ -616,10 +624,18 @@ function SetupScreen({ onOk }: { onOk: () => void }) {
     }
   }
   return (
-    <div className="flex min-h-screen min-h-dvh items-center justify-center bg-bg px-4">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-xl border border-line bg-surface p-6 shadow-panel">
-        <h1 className="font-display text-xl font-semibold">创建管理员</h1>
-        <p className="mt-1 text-sm text-muted">第一次使用。原来的数据会放进「默认台账」，不会丢。</p>
+    <div className="app-bg flex min-h-screen min-h-dvh items-center justify-center px-4">
+      <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-line bg-surface p-8 shadow-panel">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-xl text-white shadow-lg">
+            🏗️
+          </span>
+          <div>
+            <h1 className="font-display text-xl font-semibold">创建管理员</h1>
+            <p className="text-xs text-muted">第一次使用</p>
+          </div>
+        </div>
+        <p className="mt-4 text-sm text-muted">原来的数据会放进「默认台账」，不会丢。</p>
         <div className="mt-4 space-y-3">
           <div>
             <Label>显示名</Label>
@@ -638,7 +654,7 @@ function SetupScreen({ onOk }: { onOk: () => void }) {
             <Input className="mt-1" type="password" value={again} onChange={(e) => setAgain(e.target.value)} autoComplete="new-password" />
           </div>
         </div>
-        <Button className="btn-lg mt-5 w-full" type="submit" disabled={busy}>
+        <Button className="btn-lg mt-6 w-full" type="submit" disabled={busy}>
           创建并进入
         </Button>
       </form>
@@ -648,12 +664,20 @@ function SetupScreen({ onOk }: { onOk: () => void }) {
 
 function NoBookScreen({ onOut }: { onOut: () => void }) {
   return (
-    <div className="flex min-h-screen min-h-dvh items-center justify-center bg-bg px-4">
-      <div className="w-full max-w-sm rounded-xl border border-line bg-surface p-6 shadow-panel">
-        <h1 className="font-display text-xl font-semibold">还没有台账</h1>
-        <p className="mt-2 text-sm text-muted">这个账户没有自己的台账。请让管理员在「设置 → 这套台账的成员」里把你加进去。</p>
+    <div className="app-bg flex min-h-screen min-h-dvh items-center justify-center px-4">
+      <div className="w-full max-w-md rounded-3xl border border-line bg-surface p-8 shadow-panel">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-xl text-white shadow-lg">
+            🏗️
+          </span>
+          <div>
+            <h1 className="font-display text-xl font-semibold">还没有台账</h1>
+            <p className="text-xs text-muted">{APP_NAME} · 工地账目</p>
+          </div>
+        </div>
+        <p className="mt-4 text-sm text-muted">这个账户没有自己的台账。请让管理员在「设置 → 这套台账的成员」里把你加进去。</p>
         <Button
-          className="btn-lg mt-5 w-full"
+          className="btn-lg mt-6 w-full"
           type="button"
           variant="outline"
           onClick={() => {
@@ -684,19 +708,29 @@ function AcctLogin({ onOk }: { onOk: () => void }) {
     }
   }
   return (
-    <div className="flex min-h-screen min-h-dvh items-center justify-center bg-bg px-4">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-xl border border-line bg-surface p-6 shadow-panel">
-        <h1 className="font-display text-xl font-semibold">{APP_NAME}</h1>
-        <p className="mt-1 text-sm text-muted">每个账户各自的数据。以前设过总密码的，用户名填 admin，密码还是原来的。</p>
-        <div className="mt-5">
-          <Label>用户名</Label>
-          <Input className="mt-1" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus />
+    <div className="app-bg flex min-h-screen min-h-dvh items-center justify-center px-4">
+      <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-line bg-surface p-8 shadow-panel">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-xl text-white shadow-lg">
+            🏗️
+          </span>
+          <div>
+            <h1 className="font-display text-xl font-semibold">{APP_NAME}</h1>
+            <p className="text-xs text-muted">工地账目 · 一本台账说得清</p>
+          </div>
         </div>
-        <div className="mt-3">
-          <Label>密码</Label>
-          <Input className="mt-1" type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} autoComplete="current-password" />
+        <p className="mt-4 text-sm text-muted">每个账户各自的数据。以前设过总密码的，用户名填 admin，密码还是原来的。</p>
+        <div className="mt-4 space-y-3">
+          <div>
+            <Label>用户名</Label>
+            <Input className="mt-1" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus />
+          </div>
+          <div>
+            <Label>密码</Label>
+            <Input className="mt-1" type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} autoComplete="current-password" />
+          </div>
         </div>
-        <Button className="btn-lg mt-5 w-full" type="submit" disabled={busy || !username || !pwd}>
+        <Button className="btn-lg mt-6 w-full" type="submit" disabled={busy || !username || !pwd}>
           登录
         </Button>
       </form>
@@ -761,45 +795,71 @@ export function AppShell() {
     return !p || can(p);
   });
   const tabHit = visTabs.some((t) => (t.to === "/" ? pathname === "/" : pathname === t.to || pathname.startsWith(t.to)));
+  const logout = () => {
+    if (acct) {
+      authOp("logout").finally(() => {
+        lockGate();
+        setGate("login");
+        toast.success("已退出登录");
+      });
+      return;
+    }
+    lockGate();
+    setUnlocked(false);
+    toast.success("已退出登录");
+  };
   return (
-    <div className="min-h-screen min-h-dvh overflow-x-hidden bg-bg text-ink">
-      <div className="mx-auto flex max-w-7xl">
-        <aside className="no-print hidden w-56 shrink-0 flex-col border-r border-line bg-bg-elevated px-4 py-6 md:flex">
-          <Brand year={year} pathname={pathname} />
-          <BookSwitcher />
-          <YearSwitcher />
-          <nav className="mt-6 flex flex-col gap-1">
-            {visNav.map((item) => (
-              <NavLink key={item.to} {...item} active={pathname === item.to} />
-            ))}
-          </nav>
-          {who ? <WhoCard who={who} /> : null}
-          {accessHash || acct ? (
-            <button
-              type="button"
-              className="mt-4 inline-flex items-center gap-2 text-xs text-muted hover:text-ink"
-              onClick={() => {
-                if (acct) {
-                  authOp("logout").finally(() => {
-                    lockGate();
-                    setGate("login");
-                    toast.success("已退出登录");
-                  });
-                  return;
-                }
-                lockGate();
-                setUnlocked(false);
-                toast.success("已退出登录");
-              }}
-            >
-              <LogOut className="size-3.5" /> 退出登录
-            </button>
-          ) : null}
-          <div className="mt-6">
-            <VersionLog />
+    <div className="app-bg min-h-screen min-h-dvh overflow-x-hidden text-ink">
+      <div className="flex">
+        {/* 桌面：左侧图标导航 */}
+        <aside className="no-print sticky top-0 hidden h-screen w-[72px] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface/90 py-4 backdrop-blur md:flex">
+          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-lg text-white shadow-lg">
+            🏗️
           </div>
+          {visNav.map((item) => {
+            const active = item.to === "/" ? pathname === "/" : pathname === item.to || pathname.startsWith(item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                preload={false}
+                title={item.label}
+                className={cn(
+                  "flex h-12 w-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] transition-colors duration-150",
+                  active ? "bg-accent-soft text-accent-strong" : "text-muted hover:bg-accent-soft/60 hover:text-ink",
+                )}
+              >
+                <item.icon className="size-[18px]" />
+                {item.label}
+              </Link>
+            );
+          })}
+          <div className="flex-1" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent to-violet-500 text-sm font-semibold text-white">
+            {(who?.name || "账").slice(0, 1)}
+          </div>
+          {who ? <div className="w-14 truncate text-center text-[10px] text-muted">{who.name}</div> : null}
         </aside>
+
         <div className="min-w-0 flex-1">
+          {/* 桌面顶部栏 */}
+          <header className="no-print sticky top-0 z-30 hidden items-center gap-3 border-b border-line bg-surface/80 px-6 py-3 backdrop-blur md:flex">
+            <Brand year={year} pathname={pathname} />
+            <div className="min-w-0 flex-1" />
+            <BookSwitcher compact />
+            <YearSwitcher compact />
+            <VersionLog />
+            {accessHash || acct ? (
+              <button
+                type="button"
+                title="退出登录"
+                className="flex h-9 items-center gap-1.5 rounded-xl border border-line-strong bg-surface px-3 text-xs text-muted transition-colors hover:border-danger hover:text-danger"
+                onClick={logout}
+              >
+                <LogOut className="size-3.5" /> 退出
+              </button>
+            ) : null}
+          </header>
           <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-bg/95 px-3 py-2 backdrop-blur md:hidden" style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}>
             <Brand year={year} compact pathname={pathname} />
             <div className="flex min-w-0 items-center gap-1">
@@ -820,29 +880,13 @@ export function AppShell() {
               ))}
               {who ? <WhoCard who={who} /> : null}
               {accessHash || acct ? (
-                <button
-                  type="button"
-                  className="flex h-11 w-full items-center gap-2 rounded-sm px-3 text-sm text-muted"
-                  onClick={() => {
-                    if (acct) {
-                      authOp("logout").finally(() => {
-                        lockGate();
-                        setGate("login");
-                        toast.success("已退出登录");
-                      });
-                      return;
-                    }
-                    lockGate();
-                    setUnlocked(false);
-                    toast.success("已退出登录");
-                  }}
-                >
+                <button type="button" className="flex h-11 w-full items-center gap-2 rounded-sm px-3 text-sm text-muted" onClick={logout}>
                   <LogOut className="size-4" /> 退出登录
                 </button>
               ) : null}
             </nav>
           ) : null}
-          <main className="px-3 py-4 md:px-8 md:py-8">
+          <main className="px-3 py-4 md:px-8 md:py-6">
             <Outlet />
             <div className="no-print mt-10 md:hidden">
               <VersionLog />
