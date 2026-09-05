@@ -198,6 +198,26 @@ function InsurancePage() {
   const shownPersonDays = shownMembers.reduce((s, m) => s + memberDays(m), 0);
   const shownSettle = shownMembers.reduce((s, m) => s + settleOf(m), 0);
 
+  // 打印清单下边的按班组（队长）汇总：人数 / 累计人天 / 保费金额
+  const leaderSummary = (() => {
+    const map = new Map<string, { count: number; days: number; settle: number }>();
+    for (const m of shownMembers) {
+      const k = (m.leader || "").trim() || "未分班组";
+      const cur = map.get(k) ?? { count: 0, days: 0, settle: 0 };
+      cur.count += 1;
+      cur.days += memberDays(m);
+      cur.settle += settleOf(m);
+      map.set(k, cur);
+    }
+    return [...map.entries()]
+      .map(([leader, v]) => ({ leader, ...v }))
+      .sort((a, b) => {
+        if (a.leader === "未分班组") return 1;
+        if (b.leader === "未分班组") return -1;
+        return a.leader.localeCompare(b.leader, "zh");
+      });
+  })();
+
   function savePolicy() {
     if (!policyEdit) return;
     if (!policyEdit.policyNo.trim()) {
@@ -734,6 +754,39 @@ function InsurancePage() {
                 </tr>
               </tfoot>
             </table>
+
+            <div className="mt-6 break-inside-avoid">
+              <div className="text-center text-sm font-semibold">按班组汇总（保费）</div>
+              <table className="mt-2 w-full border-collapse text-center text-sm">
+                <thead>
+                  <tr>
+                    {["班组（队长）", "人数", "累计人天", "保费(元)"].map((h) => (
+                      <th key={h} className="border border-black px-2 py-1 font-semibold">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderSummary.map((g) => (
+                    <tr key={g.leader}>
+                      <td className="border border-black px-2 py-1">{g.leader}</td>
+                      <td className="border border-black px-2 py-1">{g.count}</td>
+                      <td className="border border-black px-2 py-1">{Math.round(g.days * 100) / 100}</td>
+                      <td className="border border-black px-2 py-1">{money(Math.round(g.settle * 100) / 100)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-semibold">
+                    <td className="border border-black px-2 py-1 text-right">合计</td>
+                    <td className="border border-black px-2 py-1">{leaderSummary.reduce((s, g) => s + g.count, 0)}</td>
+                    <td className="border border-black px-2 py-1">{Math.round(shownPersonDays * 100) / 100}</td>
+                    <td className="border border-black px-2 py-1">{money(Math.round(shownSettle * 100) / 100)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </article>
         </div>
       ) : null}
