@@ -273,7 +273,7 @@ export interface AppActions {
   setInsuranceMembers: (members: InsuranceMember[]) => void;
   replaceMembers: (members: InsuranceMember[]) => void;
   setAccessHash: (accessHash: string) => void;
-  setUiStyle: (uiStyle: "classic" | "v2" | "apple") => void;
+  setUiStyle: (uiStyle: "classic" | "v2" | "apple" | "movie") => void;
   setAll: (s: LedgerState) => void;
 }
 
@@ -634,8 +634,8 @@ export const useApp = create<AppStore>()(
           insuranceMembers: s.insuranceMembers || [],
           years: derivedYears({ ...s, attendance, years: s.years || [] }),
           accessHash: s.accessHash || "",
-          // 默认原版界面；显式选过新版/苹果的保持
-          uiStyle: s.uiStyle === "v2" || s.uiStyle === "apple" ? s.uiStyle : "classic",
+          // 默认原版界面；显式选过其他风格的保持
+          uiStyle: s.uiStyle === "v2" || s.uiStyle === "apple" || s.uiStyle === "movie" ? s.uiStyle : "classic",
         };
       },
       partialize: (s) => ({
@@ -651,7 +651,7 @@ export const useApp = create<AppStore>()(
         insurancePolicies: s.insurancePolicies || [],
         insuranceMembers: s.insuranceMembers || [],
         accessHash: s.accessHash || "",
-        uiStyle: s.uiStyle === "v2" || s.uiStyle === "apple" ? s.uiStyle : "classic",
+        uiStyle: s.uiStyle === "v2" || s.uiStyle === "apple" || s.uiStyle === "movie" ? s.uiStyle : "classic",
       }),
     },
   ),

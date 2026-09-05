@@ -810,7 +810,7 @@ export function AppShell() {
     toast.success("已退出登录");
   };
   return (
-    <div className={cn("app-bg min-h-screen min-h-dvh overflow-x-hidden text-ink", uiStyle === "classic" && "theme-classic", uiStyle === "apple" && "theme-apple")}>
+    <div className={cn("app-bg min-h-screen min-h-dvh overflow-x-hidden text-ink", uiStyle === "classic" && "theme-classic", uiStyle === "apple" && "theme-apple", uiStyle === "movie" && "theme-movie")}>
       <div className={uiStyle === "classic" ? "mx-auto flex max-w-7xl" : "flex"}>
         {uiStyle === "classic" ? (
           /* 经典：原版宽侧栏 */
@@ -840,7 +840,9 @@ export function AppShell() {
               "no-print sticky top-0 hidden h-screen w-[72px] shrink-0 flex-col items-center gap-1 border-r py-4 md:flex",
               uiStyle === "apple"
                 ? "border-white/50 bg-white/55 backdrop-blur-2xl"
-                : "border-line bg-surface/90 backdrop-blur",
+                : uiStyle === "movie"
+                  ? "border-white/10 bg-white/5 backdrop-blur-2xl"
+                  : "border-line bg-surface/90 backdrop-blur",
             )}
           >
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-lg text-white shadow-lg">
@@ -878,7 +880,11 @@ export function AppShell() {
             <header
               className={cn(
                 "no-print sticky top-0 z-30 hidden items-center gap-3 border-b px-6 py-3 backdrop-blur md:flex",
-                uiStyle === "apple" ? "border-white/50 bg-white/50 backdrop-blur-2xl" : "border-line bg-surface/80",
+                uiStyle === "apple"
+                  ? "border-white/50 bg-white/50 backdrop-blur-2xl"
+                  : uiStyle === "movie"
+                    ? "border-white/10 bg-white/5 backdrop-blur-2xl"
+                    : "border-line bg-surface/80",
               )}
             >
               <Brand year={year} pathname={pathname} />
