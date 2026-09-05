@@ -33,7 +33,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 function MiniTable({ title, heads, rows, empty }: { title: string; heads: string[]; rows: any[][]; empty: string }) {
   return (
-    <section className="mt-4">
+    <section className="mt-4 break-inside-avoid">
       <div className="text-sm font-semibold">{title}</div>
       {rows.length ? (
         <table className="mt-1 w-full border-collapse text-center text-xs">
@@ -81,7 +81,7 @@ function ContractStatementSheets({ items }: { items: { contract: ContractRecord;
         const invoices = entries.filter((e) => e.kind === "invoice").slice().sort(sortByDate);
         const receipts = entries.filter((e) => e.kind === "receipt").slice().sort(sortByDate);
         return (
-          <article key={c.id} className="statement border border-black p-4">
+          <article key={c.id} className="statement break-inside-avoid border border-black p-4">
             <header className="border-b border-black pb-2 text-center">
               <div className="text-2xl font-semibold tracking-widest">合同对账单</div>
               <div className="mt-1 text-xs">
