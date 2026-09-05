@@ -98,7 +98,8 @@ async function serveStatic(req) {
     if (pathname.includes("/assets/")) {
       headers["cache-control"] = "public, max-age=31536000, immutable";
     } else {
-      headers["cache-control"] = "public, max-age=3600";
+      // 页面本身不缓存：升级后能立即看到新版
+      headers["cache-control"] = "no-cache";
     }
     return new Response(body, { headers });
   } catch {

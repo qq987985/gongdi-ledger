@@ -506,7 +506,6 @@ export const useApp = create<AppStore>()(
       replaceExpenses: (expenses) => set({ expenses }),
       upsertPolicy: (p) => {
         const list = get().insurancePolicies || [];
-        const i = list.findIndex((x) => x.id === p.id);
         const next: InsurancePolicy = {
           ...p,
           id: p.id || uid(),
@@ -523,6 +522,9 @@ export const useApp = create<AppStore>()(
           contracts: Array.isArray(p.contracts) ? p.contracts : [],
           remark: p.remark || "",
         };
+        // 优先按 id；新增时按保单号去重（同保单号视为同一张保单）
+        let i = list.findIndex((x) => x.id === p.id);
+        if (i < 0 && p.id) i = list.findIndex((x) => x.policyNo && x.policyNo === next.policyNo);
         if (i >= 0) {
           const copy = list.slice();
           copy[i] = { ...next, id: list[i].id };

@@ -139,7 +139,7 @@ export const PRESETS: PermPreset[] = [
     label: "只读",
     hint: "只能看，不能改",
     perms: ALL_PERMS.filter(
-      (p) => p.endsWith(".view") || p === "query.view" || p === "export.use" || p === "audit.view",
+      (p) => p.endsWith(".view") || p === "query.print" || p === "contracts.print" || p === "expenses.print" || p === "export.use" || p === "audit.view",
     ),
   },
   {

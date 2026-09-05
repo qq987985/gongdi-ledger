@@ -66,13 +66,23 @@ echo  Close this window to stop
 echo ========================================
 echo.
 
-REM Start Node and show output in this window
-REM Open browser after a short delay
-timeout /t 2 /nobreak >nul 2>&1
+REM Start Node in background (output stays in this window)
+start "" /b "%CD%\node\node.exe" "%CD%\app\server\index.mjs"
+
+REM Wait until the service is healthy (up to 60s), then open browser
+setlocal enabledelayedexpansion
+set READY=0
+for /l %%i in (1,1,60) do (
+  timeout /t 1 /nobreak >nul 2>&1
+  for /f %%c in ('curl -s -o nul -w "%%{http_code}" http://127.0.0.1:8501/api/health 2^>nul') do if "%%c"=="200" set "READY=1"
+  if "!READY!"=="1" goto ready
+)
+:ready
 start "" "http://127.0.0.1:8501"
 
-REM Run Node (this blocks until user closes window)
-"%CD%\node\node.exe" "%CD%\app\server\index.mjs"
+REM Keep this window open; Node runs in it until the window is closed
+echo Node is running. Closing this window stops the service.
+pause >nul
 
 echo.
 echo Stopped.

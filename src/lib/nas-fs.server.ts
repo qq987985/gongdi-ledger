@@ -756,12 +756,8 @@ export async function removeBookDir(id: string): Promise<void> {
 }
 
 export async function readVersionText(): Promise<string> {
-  const candidates = [
-    join(process.cwd(), "VERSION.txt"),
-    "/app/VERSION.txt",
-    dataDir() ? join(dataDir(), "VERSION.txt") : "",
-    "/data/VERSION.txt",
-  ].filter(Boolean);
+  // 只读程序目录内的 VERSION.txt；data/ 里的旧文件不再读取（防旧版本号带偏）
+  const candidates = [join(process.cwd(), "VERSION.txt"), "/app/VERSION.txt"].filter(Boolean);
   for (const p of candidates)
     try {
       if (!existsSync(p)) continue;

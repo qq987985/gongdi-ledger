@@ -249,6 +249,8 @@
   @media print {
     .print-only {
       display: block;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
   }
 

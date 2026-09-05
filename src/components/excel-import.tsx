@@ -532,7 +532,7 @@ export function InsuranceMemberImport({ policyId, onImported }: { policyId: stri
       endDate: m.endDate || policy?.periodEnd || "",
     }));
     if (!rows.length) {
-      toast.error("没有读到保险人员。模板列：姓名、队长、开始日期、结束日期、备注。");
+      toast.error("没有读到保险人员。模板列：姓名、队长、备注。");
       return;
     }
     const byName = Object.fromEntries(

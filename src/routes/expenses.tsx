@@ -432,8 +432,8 @@ function ExpensesPage() {
       toast.error("先勾选要改回未报销的几笔");
       return;
     }
-    if (!confirm(`把这 ${batchRows.length} 笔标为未报销？`)) return;
-    for (const e of batchRows) saveOne(e, { status: "未报销", payoutDate: "", reimbursedAt: "" });
+    if (!confirm(`把这 ${batchRows.length} 笔标为未报销？\n\n会同时取消打款挂账和打款日期。`)) return;
+    for (const e of batchRows) saveOne(e, { status: "未报销", payoutDate: "", reimbursedAt: "", payoutId: "", payoutFileName: "" });
     toast.success(`已把 ${batchRows.length} 笔标为未报销`);
   }
   async function uploadPayout(file: File) {

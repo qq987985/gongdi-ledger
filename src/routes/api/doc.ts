@@ -52,7 +52,7 @@ export const Route = createFileRoute("/api/doc")({
             return new Response(new Uint8Array(hit.buf), {
               headers: {
                 "Content-Type": mime,
-                "Content-Disposition": `inline; filename="${encodeURIComponent(hit.fileName)}"`,
+                "Content-Disposition": `inline; filename="${encodeURIComponent(hit.fileName.replace(/[\r\n]/g, ""))}"`,
                 "Cache-Control": "no-store",
               },
             });

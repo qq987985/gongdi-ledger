@@ -39,6 +39,14 @@ export function validateIdCard(idCard: string | undefined | null): string {
   const s = (idCard || "").trim().toUpperCase();
   if (!s) return "";
   if (s.length < 18) return ""; // 输入中，先不校验
+  // 15 位老身份证：只校验出生日期（无校验码）
+  if (/^\d{15}$/.test(s)) {
+    const yy = Number(s.slice(6, 8));
+    const year = yy >= 70 ? 1900 + yy : 2000 + yy;
+    const birth = new Date(`${year}-${s.slice(8, 10)}-${s.slice(10, 12)}T00:00:00`);
+    if (Number.isNaN(birth.getTime())) return "身份证号中的出生日期无效";
+    return "";
+  }
   if (s.length > 18) return "身份证号应为 18 位";
   if (!/^\d{17}[\dX]$/.test(s)) return "身份证号格式不对：前 17 位数字，末位数字或 X";
   const birth = new Date(`${s.slice(6, 10)}-${s.slice(10, 12)}-${s.slice(12, 14)}T00:00:00`);
