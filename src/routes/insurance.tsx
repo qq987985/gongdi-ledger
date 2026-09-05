@@ -755,13 +755,13 @@ function InsurancePage() {
               </tfoot>
             </table>
 
-            <div className="mt-6">
+            <div className="mt-6 break-inside-avoid">
               <div className="text-center text-sm font-semibold">按班组汇总（保费）</div>
               <table className="mt-2 w-full border-collapse text-center text-sm">
                 <thead>
                   <tr>
                     {["班组（队长）", "人数", "累计人天", "保费(元)"].map((h) => (
-                      <th key={h} className="border border-black px-2 py-1 font-semibold">
+                      <th key={h} className="border border-black px-2 py-0.5 font-semibold">
                         {h}
                       </th>
                     ))}
@@ -770,19 +770,19 @@ function InsurancePage() {
                 <tbody>
                   {leaderSummary.map((g) => (
                     <tr key={g.leader}>
-                      <td className="border border-black px-2 py-1">{g.leader}</td>
-                      <td className="border border-black px-2 py-1">{g.count}</td>
-                      <td className="border border-black px-2 py-1">{Math.round(g.days * 100) / 100}</td>
-                      <td className="border border-black px-2 py-1">{money(Math.round(g.settle * 100) / 100)}</td>
+                      <td className="border border-black px-2 py-0.5">{g.leader}</td>
+                      <td className="border border-black px-2 py-0.5">{g.count}</td>
+                      <td className="border border-black px-2 py-0.5">{Math.round(g.days * 100) / 100}</td>
+                      <td className="border border-black px-2 py-0.5">{money(Math.round(g.settle * 100) / 100)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td className="border border-black px-2 py-1 text-right">合计</td>
-                    <td className="border border-black px-2 py-1">{leaderSummary.reduce((s, g) => s + g.count, 0)}</td>
-                    <td className="border border-black px-2 py-1">{Math.round(shownPersonDays * 100) / 100}</td>
-                    <td className="border border-black px-2 py-1">{money(Math.round(shownSettle * 100) / 100)}</td>
+                    <td className="border border-black px-2 py-0.5 text-right">合计</td>
+                    <td className="border border-black px-2 py-0.5">{leaderSummary.reduce((s, g) => s + g.count, 0)}</td>
+                    <td className="border border-black px-2 py-0.5">{Math.round(shownPersonDays * 100) / 100}</td>
+                    <td className="border border-black px-2 py-0.5">{money(Math.round(shownSettle * 100) / 100)}</td>
                   </tr>
                 </tfoot>
               </table>
