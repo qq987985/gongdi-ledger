@@ -841,7 +841,7 @@ export function AppShell() {
               uiStyle === "apple"
                 ? "border-white/50 bg-white/55 backdrop-blur-2xl"
                 : uiStyle === "movie"
-                  ? "border-white/10 bg-white/5 backdrop-blur-2xl"
+                  ? "border-white/50 bg-white/60 backdrop-blur-2xl"
                   : "border-line bg-surface/90 backdrop-blur",
             )}
           >
@@ -883,7 +883,7 @@ export function AppShell() {
                 uiStyle === "apple"
                   ? "border-white/50 bg-white/50 backdrop-blur-2xl"
                   : uiStyle === "movie"
-                    ? "border-white/10 bg-white/5 backdrop-blur-2xl"
+                    ? "border-white/50 bg-white/60 backdrop-blur-2xl"
                     : "border-line bg-surface/80",
               )}
             >

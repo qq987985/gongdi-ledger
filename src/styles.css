@@ -146,25 +146,25 @@
     0 10px 34px -8px rgba(20, 20, 30, 0.12);
 }
 
-/* MOVIEPILOT 风格：暗黑玻璃拟态 + 霓虹紫蓝渐变 + 发光 */
+/* MOVIEPILOT 风格：白色底 + 彩色渐变点缀（粉·紫·蓝），大圆角活泼卡片 */
 .theme-movie {
-  --color-bg: #0b0b13;
-  --color-bg-elevated: #171724;
-  --color-surface: #14141f;
-  --color-ink: #f3f4fa;
-  --color-muted: #a6a8c2;
-  --color-subtle: #6d6f8c;
-  --color-line: rgba(255, 255, 255, 0.10);
-  --color-line-strong: rgba(255, 255, 255, 0.18);
-  --color-accent: #8b5cf6;
+  --color-bg: #f8f7fc;
+  --color-bg-elevated: #f1effa;
+  --color-surface: #ffffff;
+  --color-ink: #17171e;
+  --color-muted: #5f6070;
+  --color-subtle: #989aa8;
+  --color-line: rgba(25, 22, 40, 0.08);
+  --color-line-strong: rgba(25, 22, 40, 0.16);
+  --color-accent: #7c3aed;
   --color-accent-strong: #6d28d9;
-  --color-accent-soft: rgba(139, 92, 246, 0.16);
-  --color-ok: #34d399;
-  --color-ok-bg: rgba(52, 211, 153, 0.14);
-  --color-warn: #fbbf24;
-  --color-warn-bg: rgba(251, 191, 36, 0.14);
-  --color-danger: #fb7185;
-  --color-danger-bg: rgba(251, 113, 133, 0.14);
+  --color-accent-soft: #f1eafe;
+  --color-ok: #10b981;
+  --color-ok-bg: #e7f8f1;
+  --color-warn: #f59e0b;
+  --color-warn-bg: #fdf3e0;
+  --color-danger: #f43f5e;
+  --color-danger-bg: #ffecef;
   --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 20px;
@@ -172,20 +172,20 @@
 }
 .theme-movie .app-bg {
   background:
-    radial-gradient(760px 420px at 85% -5%, rgba(139, 92, 246, 0.22), transparent 60%),
-    radial-gradient(700px 400px at 5% 105%, rgba(59, 130, 246, 0.18), transparent 60%),
-    radial-gradient(500px 300px at 50% 40%, rgba(236, 72, 153, 0.08), transparent 60%),
-    linear-gradient(180deg, #0b0b13, #101019);
+    radial-gradient(700px 380px at 88% -8%, rgba(236, 72, 153, 0.10), transparent 60%),
+    radial-gradient(680px 380px at 4% 104%, rgba(124, 58, 237, 0.10), transparent 60%),
+    radial-gradient(520px 300px at 60% 30%, rgba(59, 130, 246, 0.07), transparent 60%),
+    #ffffff;
 }
-/* 暗色发光卡片 */
+/* 轻柔彩色阴影 */
 .theme-movie .shadow-panel {
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.5),
-    0 10px 34px -10px rgba(139, 92, 246, 0.18);
+    0 1px 2px rgba(0, 0, 0, 0.03),
+    0 12px 36px -10px rgba(124, 58, 237, 0.12);
 }
-/* 霓虹渐变横幅（hero 等）：替换紫蓝渐变 */
+/* 多彩渐变横幅：粉 → 紫 → 蓝 */
 .theme-movie .bg-gradient-to-r {
-  background-image: linear-gradient(105deg, #6d28d9 0%, #8b5cf6 40%, #6366f1 70%, #ec4899 105%) !important;
+  background-image: linear-gradient(105deg, #ec4899 0%, #a855f7 45%, #6366f1 100%) !important;
 }
 
 @layer base {

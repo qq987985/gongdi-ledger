@@ -263,7 +263,7 @@ function UiStyleCard() {
         </Button>
         {val !== current ? <span className="text-xs text-subtle">有未保存的更改</span> : null}
       </div>
-      <p className="mt-3 text-xs text-subtle">原版：左侧完整菜单；新版：图标导航 + 仪表盘；苹果风：毛玻璃 + 系统蓝；MOVIEPILOT：暗黑玻璃 + 霓虹紫蓝渐变发光。</p>
+      <p className="mt-3 text-xs text-subtle">原版：左侧完整菜单；新版：图标导航 + 仪表盘；苹果风：毛玻璃 + 系统蓝；MOVIEPILOT：白色底 + 粉紫蓝彩色渐变卡片。</p>
     </section>
   );
 }
