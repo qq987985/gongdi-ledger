@@ -12,6 +12,7 @@ import { ExpenseImport, TplLink } from "~/components/excel-import";
 import { DocActions, prepareNamedFile, setDoc } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
+import { localToday } from "~/lib/dates";
 import { useGuardedClose } from "~/lib/confirm-close";
 
 const PAY_METHODS = ["现金", "转账", "微信", "支付宝", "对公", "其他"];
@@ -23,7 +24,7 @@ function needsVoucher(method: string) {
   return (method || "现金") !== "现金";
 }
 function todayYmd() {
-  return new Date().toISOString().slice(0, 10);
+  return localToday();
 }
 function emptyExpense(year: number): any {
   const today = todayYmd();

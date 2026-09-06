@@ -1,7 +1,7 @@
 {
   "name": "gongdi-ledger",
   "private": true,
-  "version": "1.6.4",
+  "version": "1.6.5",
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 3000",
@@ -23,7 +23,7 @@
     "sonner": "latest",
     "srvx": "^0.12.7",
     "tailwind-merge": "latest",
-    "xlsx": "latest",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "latest",
     "zustand": "latest"
   },

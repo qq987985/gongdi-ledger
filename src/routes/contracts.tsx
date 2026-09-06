@@ -15,6 +15,7 @@ import { useApp } from "~/lib/store";
 import { emptyContract, contractRollup, normalizeEntry, CONTRACT_STATUSES } from "~/lib/contracts";
 import { buildContractWorkbook } from "~/lib/excel";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
+import { localToday } from "~/lib/dates";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { ContractRecord, ContractEntry } from "~/lib/types";
 
@@ -69,7 +70,7 @@ function MiniTable({ title, heads, rows, empty }: { title: string; heads: string
 
 function ContractStatementSheets({ items }: { items: { contract: ContractRecord; entries: ContractEntry[] }[] }) {
   if (!items.length) return null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   return (
     <div className="print-only space-y-8 text-black">
       {items.map(({ contract: c, entries }) => {
@@ -792,7 +793,7 @@ function ReportBook({
   onAdd: (e: ContractEntry) => void;
   onRemove: (ids: string[]) => void;
 }) {
-  const [date, setDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = React.useState(localToday());
   const [amount, setAmount] = React.useState(0);
   const [no, setNo] = React.useState("");
   const [remark, setRemark] = React.useState("");
@@ -889,7 +890,7 @@ function InvoiceBook({
   onAdd: (e: ContractEntry) => void;
   onRemove: (ids: string[]) => void;
 }) {
-  const [date, setDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = React.useState(localToday());
   const [incl, setIncl] = React.useState(0);
   const [excl, setExcl] = React.useState(0);
   const [rate, setRate] = React.useState(contract.taxRate || 9);
@@ -994,7 +995,7 @@ function ReceiptBook({
   onAdd: (e: ContractEntry) => void;
   onRemove: (ids: string[]) => void;
 }) {
-  const [date, setDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = React.useState(localToday());
   const [amount, setAmount] = React.useState(0);
   const [payTo, setPayTo] = React.useState<"" | "worker" | "sub">("sub");
   const [no, setNo] = React.useState("");

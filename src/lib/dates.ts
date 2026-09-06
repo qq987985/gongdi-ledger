@@ -5,6 +5,13 @@ export function ymd(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+/** 本地时区的今天（YYYY-MM-DD），比 toISOString 安全（东八区 0–8 点不差一天） */
+export function localToday(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export function excelSerialYmd(n: number): string {
   if (!Number.isFinite(n)) return "";
   const whole = Math.floor(n);

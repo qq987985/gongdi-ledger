@@ -247,11 +247,13 @@ function PeoplePage() {
             onClose={closeEditor}
             onChanged={() => setPhotoTick((n) => n + 1)}
             onSave={(p) => {
+              // 同名统一口径（总览/Excel/考勤都按姓名匹配）：新增与改名都拦截，避免一人多档
+              const dupName = people.some((x) => x.name === p.name && (!editing || x.id !== editing.id));
+              if (dupName) {
+                toast.error("已有同名人员，请改名或直接编辑原记录");
+                return;
+              }
               if (creating) {
-                if (people.some((x) => x.name === p.name)) {
-                  toast.error("已有同名人员，请改名或直接编辑原记录");
-                  return;
-                }
                 addPerson(p);
                 toast.success("已添加");
               } else {

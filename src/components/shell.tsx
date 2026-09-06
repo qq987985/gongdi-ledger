@@ -538,7 +538,12 @@ function NavLink({
   );
 }
 
+function themeClass(uiStyle: "classic" | "v2" | "apple" | "movie"): string {
+  return cn(uiStyle === "classic" && "theme-classic", uiStyle === "apple" && "theme-apple", uiStyle === "movie" && "theme-movie");
+}
+
 function LoginScreen({ accessHash, onOk }: { accessHash: string; onOk: () => void }) {
+  const uiStyle = useApp((s) => s.uiStyle);
   const [pwd, setPwd] = React.useState("");
   const [remember, setRemember] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
@@ -558,7 +563,7 @@ function LoginScreen({ accessHash, onOk }: { accessHash: string; onOk: () => voi
   }
   return (
     <div
-      className="app-bg flex min-h-screen min-h-dvh items-center justify-center px-4"
+      className={cn("app-bg flex min-h-screen min-h-dvh items-center justify-center px-4", themeClass(uiStyle))}
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-line bg-surface p-8 shadow-panel">
@@ -597,6 +602,7 @@ function LoginScreen({ accessHash, onOk }: { accessHash: string; onOk: () => voi
 }
 
 function SetupScreen({ onOk }: { onOk: () => void }) {
+  const uiStyle = useApp((s) => s.uiStyle);
   const [username, setUsername] = React.useState("");
   const [name, setName] = React.useState("");
   const [pwd, setPwd] = React.useState("");
@@ -604,8 +610,8 @@ function SetupScreen({ onOk }: { onOk: () => void }) {
   const [busy, setBusy] = React.useState(false);
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (pwd.length < 4) {
-      toast.error("密码至少 4 位");
+    if (pwd.length < 8) {
+      toast.error("密码至少 8 位");
       return;
     }
     if (pwd !== again) {
@@ -624,7 +630,7 @@ function SetupScreen({ onOk }: { onOk: () => void }) {
     }
   }
   return (
-    <div className="app-bg flex min-h-screen min-h-dvh items-center justify-center px-4">
+    <div className={cn("app-bg flex min-h-screen min-h-dvh items-center justify-center px-4", themeClass(uiStyle))}>
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-line bg-surface p-8 shadow-panel">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-xl text-white shadow-lg">
@@ -663,8 +669,9 @@ function SetupScreen({ onOk }: { onOk: () => void }) {
 }
 
 function NoBookScreen({ onOut }: { onOut: () => void }) {
+  const uiStyle = useApp((s) => s.uiStyle);
   return (
-    <div className="app-bg flex min-h-screen min-h-dvh items-center justify-center px-4">
+    <div className={cn("app-bg flex min-h-screen min-h-dvh items-center justify-center px-4", themeClass(uiStyle))}>
       <div className="w-full max-w-md rounded-3xl border border-line bg-surface p-8 shadow-panel">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-xl text-white shadow-lg">
@@ -692,6 +699,7 @@ function NoBookScreen({ onOut }: { onOut: () => void }) {
 }
 
 function AcctLogin({ onOk }: { onOk: () => void }) {
+  const uiStyle = useApp((s) => s.uiStyle);
   const [username, setUsername] = React.useState("");
   const [pwd, setPwd] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -708,7 +716,7 @@ function AcctLogin({ onOk }: { onOk: () => void }) {
     }
   }
   return (
-    <div className="app-bg flex min-h-screen min-h-dvh items-center justify-center px-4">
+    <div className={cn("app-bg flex min-h-screen min-h-dvh items-center justify-center px-4", themeClass(uiStyle))}>
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-line bg-surface p-8 shadow-panel">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-strong to-violet-500 text-xl text-white shadow-lg">
@@ -744,6 +752,14 @@ export function AppShell() {
   const year = useApp((s) => s.year);
   const uiStyle = useApp((s) => s.uiStyle);
   const accessHash = useApp((s) => s.accessHash);
+  // 主题类同步到 <html>：body 底色、滚动条、overscroll 区域跟随所选风格
+  React.useEffect(() => {
+    const el = document.documentElement;
+    el.classList.remove("theme-classic", "theme-apple", "theme-movie");
+    if (uiStyle !== "v2")
+      el.classList.add(uiStyle === "classic" ? "theme-classic" : uiStyle === "apple" ? "theme-apple" : "theme-movie");
+    return () => el.classList.remove("theme-classic", "theme-apple", "theme-movie");
+  }, [uiStyle]);
   const [open, setOpen] = React.useState(false);
   const [unlocked, setUnlocked] = React.useState(() => !accessHash);
   const [gate, setGate] = React.useState<"boot" | "setup" | "login" | "nobook" | "app">("boot");

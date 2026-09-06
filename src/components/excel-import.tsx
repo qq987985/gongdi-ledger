@@ -163,13 +163,14 @@ export function AttendanceImport() {
     }
     const months = [...new Set(rows.map((r) => r.month).filter(Boolean))];
     const years = [...new Set(rows.map((r) => r.year).filter(Boolean))];
-    const targetYear = years[0] || store.year;
+    // 行内带年份（如"2025年3月考勤"）时按行内年导入；单年文件预选该年
+    const targetYear = years.length === 1 ? years[0] : store.year;
     const targetMonth = store.year === new Date().getFullYear() ? new Date().getMonth() + 1 : 1;
 
     // 检测冲突
     const conflicts: { name: string; existing: AttendanceRow; incoming: AttendanceRow }[] = [];
     for (const r of rows) {
-      const y = targetYear;
+      const y = r.year || targetYear;
       const m = months.length > 1 ? r.month || targetMonth : targetMonth;
       const ex = store.attendance.find((a) => a.year === y && a.month === m && a.name === r.name);
       if (ex) conflicts.push({ name: r.name, existing: ex, incoming: r });
@@ -203,12 +204,14 @@ export function AttendanceImport() {
       .map((r) => ({
         ...r,
         id: uid(),
-        year: targetYear,
+        year: r.year || targetYear,
         month: keepMonths ? r.month || targetMonth : targetMonth,
         team: r.team || store.people.find((p) => p.name === r.name)?.team || "",
       }));
 
-    store.addYear(targetYear);
+    // 行内年份可能跨年，全部展开后再写入
+    const allYears = [...new Set([...mapped.map((r) => r.year), targetYear])];
+    for (const y of allYears) store.addYear(y);
     let att = store.attendance;
 
     if (mode === "replace") {
@@ -486,8 +489,15 @@ export function FullBookImport() {
       onFile={async (file) => {
         if (!file) return;
         const parsed = parseFullAttendanceWorkbook(await file.arrayBuffer(), store.year);
-        if (!parsed.people.length && !parsed.attendance.length && !parsed.payments.length && !(parsed.expenses || []).length) {
-          toast.error("没有读到人员、考勤、发放或报销");
+        if (
+          !parsed.people.length &&
+          !parsed.attendance.length &&
+          !parsed.payments.length &&
+          !(parsed.expenses || []).length &&
+          !(parsed.policies || []).length &&
+          !(parsed.members || []).length
+        ) {
+          toast.error("没有读到人员、考勤、发放、报销或保险");
           return;
         }
         const byName = Object.fromEntries(store.people.map((p) => [p.name, p]));
@@ -508,8 +518,40 @@ export function FullBookImport() {
           store.replaceAttendance([...keep, ...parsed.attendance.map((a) => ({ ...a, id: uid() }))]);
           store.setYear(parsed.year || store.year);
         }
+        // 保险：保单按保单号去重；成员按保单号挂回本地保单（组合险随保单一起恢复）
+        let polAdded = 0;
+        let memAdded = 0;
+        if ((parsed.policies || []).length || (parsed.members || []).length) {
+          const st = useApp.getState();
+          const existing = st.insurancePolicies || [];
+          const byNo = new Map<string, string>();
+          for (const p of existing) if (p.policyNo) byNo.set(p.policyNo, p.id);
+          const fileNoOf = new Map<string, string>();
+          for (const p of parsed.policies || []) fileNoOf.set(p.id, p.policyNo);
+          for (const p of parsed.policies || []) {
+            if (!p.policyNo || byNo.has(p.policyNo)) continue;
+            st.upsertPolicy(p);
+            byNo.set(p.policyNo, p.id);
+            polAdded += 1;
+          }
+          const im = (parsed.members || [])
+            .map((m) => {
+              const no = fileNoOf.get(m.policyId) || "";
+              return { ...m, id: uid(), policyId: byNo.get(no) || "" };
+            })
+            .filter((m) => m.policyId);
+          if (im.length) {
+            const now = st.insuranceMembers || [];
+            const have = new Set(now.map((m) => `${m.policyId}:${m.name}`));
+            const fresh = im.filter((m) => !have.has(`${m.policyId}:${m.name}`));
+            if (fresh.length) {
+              st.setInsuranceMembers([...now, ...fresh]);
+              memAdded = fresh.length;
+            }
+          }
+        }
         toast.success(
-          `整本导入完成：人员新增 ${added}，考勤 ${parsed.attendance.length} 条，发放 ${parsed.payments.length} 条，报销 ${(parsed.expenses || []).length} 条`,
+          `整本导入完成：人员新增 ${added}，考勤 ${parsed.attendance.length} 条，发放 ${parsed.payments.length} 条，报销 ${(parsed.expenses || []).length} 条，保单 ${polAdded} 份，保险人员 ${memAdded} 人`,
         );
       }}
     />

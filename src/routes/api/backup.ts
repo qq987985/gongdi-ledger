@@ -7,9 +7,11 @@ export const Route = createFileRoute("/api/backup")({
     handlers: {
       POST: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
+        // 读 body 前先检查：备份 50MB 上限，且需导出/写入权限，防止任意成员覆盖最新备份
+        const len = Number(request.headers.get("content-length") || 0);
+        if (len > 50 * 1024 * 1024) return Response.json({ error: "备份太大" }, { status: 413 });
         const buf = Buffer.from(await request.arrayBuffer());
-        // 备份 50MB 上限，且需导出/写入权限，防止任意成员覆盖最新备份
-        if (buf.length > 50 * 1024 * 1024) return Response.json({ error: "备份太大" }, { status: 400 });
+        if (buf.length > 50 * 1024 * 1024) return Response.json({ error: "备份太大" }, { status: 413 });
         return withTenant(
           request,
           async () => {

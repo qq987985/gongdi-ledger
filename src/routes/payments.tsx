@@ -10,7 +10,7 @@ import { Need } from "~/components/can";
 import { PaymentImport, TplLink } from "~/components/excel-import";
 import { YmPick, ymKey, monthsInRange, rangeLabel } from "~/components/ym-pick";
 import { useApp } from "~/lib/store";
-import { dateYear, derivedYears, parseDateYmd } from "~/lib/dates";
+import { dateYear, derivedYears, parseDateYmd, localToday } from "~/lib/dates";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { Payment } from "~/lib/types";
@@ -34,7 +34,7 @@ function PaymentsPage() {
   const [selected, setSelected] = React.useState<string[]>([]);
   const [editing, setEditing] = React.useState<Payment | null>(null);
   const [creating, setCreating] = React.useState(false);
-  const [fillDate, setFillDate] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [fillDate, setFillDate] = React.useState(() => localToday());
   const yearOpts = React.useMemo(() => {
     const set = new Set([...years, year, fromY, toY]);
     for (const p of payments) {

@@ -124,6 +124,15 @@ function idSide(base: string): "back" | "front" | "plain" {
   return "plain";
 }
 
+/** 精确匹配姓名+标签，避免"张"误匹配"张三-身份证"（删除越权/误删） */
+function labelledMatch(b: string, n: string, labels: string[]): boolean {
+  if (b === n) return true;
+  if (labels.some((lab) => b.startsWith(n + compactName(lab)))) return true;
+  const rest = b.slice(n.length);
+  if (rest && /^[^一-龥A-Za-z0-9]/.test(rest) && labels.some((lab) => b.includes(compactName(lab)))) return true;
+  return false;
+}
+
 function photoFileMatches(file: string, name: string, kind: string, requireLabel: boolean): boolean {
   const ext = extname(file).toLowerCase();
   if (!PHOTO_EXT.has(ext)) return false;
@@ -134,25 +143,16 @@ function photoFileMatches(file: string, name: string, kind: string, requireLabel
   const side = idSide(base);
   if (kind === "idBack") {
     if (side !== "back") return false;
-    if (b === n) return !requireLabel;
-    return ["身份证", "身份"].some((lab) => {
-      const L = compactName(lab);
-      return b.startsWith(n + L) || (b.startsWith(n) && b.includes(L));
-    });
+    if (!requireLabel && b === n) return true;
+    return labelledMatch(b, n, ["身份证", "身份"]);
   }
   if (kind === "id" || kind === "idFront") {
     if (side === "back") return false;
-    if (b === n) return !requireLabel;
-    return ["身份证", "身份"].some((lab) => {
-      const L = compactName(lab);
-      return b.startsWith(n + L) || (b.startsWith(n) && b.includes(L));
-    });
+    if (!requireLabel && b === n) return true;
+    return labelledMatch(b, n, ["身份证", "身份"]);
   }
-  if (b === n) return !requireLabel;
-  return (kind === "bank" ? ["银行卡", "银行"] : ["ic卡", "ic", "工卡"]).some((lab) => {
-    const L = compactName(lab);
-    return b.startsWith(n + L) || (b.startsWith(n) && b.includes(L));
-  });
+  if (!requireLabel && b === n) return true;
+  return labelledMatch(b, n, kind === "bank" ? ["银行卡", "银行"] : ["ic卡", "ic", "工卡"]);
 }
 
 const PHOTO_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".bmp"]);
@@ -368,7 +368,11 @@ export async function readAudit(): Promise<AuditEntry[]> {
 export async function writeAudit(entries: AuditEntry[]): Promise<void> {
   if (!persistOn()) return;
   await ensureDirs();
-  await writeFile(auditPath(), JSON.stringify({ entries: entries.slice(0, 2e3) }, null, 2), "utf8");
+  // 原子写，避免断电/强杀留下截断的审计文件
+  const target = auditPath();
+  const tmp = `${target}.tmp`;
+  await writeFile(tmp, JSON.stringify({ entries: entries.slice(0, 2e3) }, null, 2), "utf8");
+  await rename(tmp, target);
 }
 
 export async function appendAudit(row: Partial<AuditEntry>): Promise<AuditEntry> {

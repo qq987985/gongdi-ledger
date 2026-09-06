@@ -159,11 +159,11 @@
   --color-accent: #7c3aed;
   --color-accent-strong: #6d28d9;
   --color-accent-soft: #f1eafe;
-  --color-ok: #10b981;
-  --color-ok-bg: #e7f8f1;
-  --color-warn: #f59e0b;
+  --color-ok: #047857;
+  --color-ok-bg: #e7f6ee;
+  --color-warn: #b45309;
   --color-warn-bg: #fdf3e0;
-  --color-danger: #f43f5e;
+  --color-danger: #e11d48;
   --color-danger-bg: #ffecef;
   --radius-sm: 12px;
   --radius-md: 16px;

@@ -6,7 +6,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/input";
 import { Can, useCan } from "~/components/can";
 import { PayTypePick, OtRulePick } from "~/components/pay-fields";
-import { WinUpdate } from "~/components/shell";
+import { WinUpdate, VersionLog } from "~/components/shell";
 import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear, confirmRemoveYear } from "~/lib/dates";
 import { wageLabel, parseOtRule } from "~/lib/wage";
@@ -228,6 +228,9 @@ function SettingsPage() {
       </Can>
       {/* 软件更新放最底部 */}
       <WinUpdate compact />
+      <p className="text-xs text-muted">
+        当前版本：<VersionLog /> · 检查更新按钮在上方
+      </p>
     </div>
   );
 }
@@ -237,7 +240,7 @@ function UiStyleCard() {
   const setUiStyle = useApp((s) => s.setUiStyle);
   const current = uiStyle === "v2" || uiStyle === "apple" || uiStyle === "movie" ? uiStyle : "classic";
   const [val, setVal] = React.useState<"classic" | "v2" | "apple" | "movie">(current);
-  const NAMES: Record<string, string> = { classic: "原版界面", v2: "新版界面", apple: "苹果 Mac 风格", movie: "MOVIEPILOT 暗黑风格" };
+  const NAMES: Record<string, string> = { classic: "原版界面", v2: "新版界面", apple: "苹果 Mac 风格", movie: "MOVIEPILOT 风格" };
   function save() {
     setUiStyle(val);
     toast.success(`已切换到${NAMES[val]}`);
@@ -256,7 +259,7 @@ function UiStyleCard() {
           <option value="classic">原版界面（默认）</option>
           <option value="v2">新版界面</option>
           <option value="apple">苹果 Mac 风格</option>
-          <option value="movie">MOVIEPILOT 暗黑风格</option>
+          <option value="movie">MOVIEPILOT 风格</option>
         </select>
         <Button type="button" onClick={save} disabled={val === current}>
           保存
@@ -306,8 +309,8 @@ function PasswordCard() {
                   return;
                 }
               }
-              if (next.trim().length < 4) {
-                toast.error("密码至少 4 位");
+              if (next.trim().length < 8) {
+                toast.error("密码至少 8 位");
                 return;
               }
               if (next !== again) {
@@ -739,8 +742,8 @@ function AccountsCard() {
             type="button"
             onClick={async () => {
               try {
-                if (!uUser.trim() || uPwd.trim().length < 4) {
-                  toast.error("登录名必填，密码至少 4 位");
+                if (!uUser.trim() || uPwd.trim().length < 8) {
+                  toast.error("登录名必填，密码至少 8 位");
                   return;
                 }
                 const r = await authOp("createUser", {
@@ -832,8 +835,8 @@ function AccountsCard() {
                             type="button"
                             onClick={async () => {
                               const password = (resets[u.id] || "").trim();
-                              if (password.length < 4) {
-                                toast.error("新密码至少 4 位");
+                              if (password.length < 8) {
+                                toast.error("新密码至少 8 位");
                                 return;
                               }
                               try {

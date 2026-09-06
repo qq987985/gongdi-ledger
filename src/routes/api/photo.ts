@@ -31,9 +31,13 @@ export const Route = createFileRoute("/api/photo")({
       },
       PUT: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
+        // 照片走 base64 JSON，限制 20MB（原图过大先压缩再传）
+        const len = Number(request.headers.get("content-length") || 0);
+        if (len > 20 * 1024 * 1024) return Response.json({ error: "照片太大，最大 20MB" }, { status: 413 });
         const body = (await request.json()) as any;
         const kind = kindOf(body.kind || null);
         if (!body.name || !kind || !body.dataUrl) return Response.json({ ok: false }, { status: 400 });
+        if (body.dataUrl.length > 20 * 1024 * 1024) return Response.json({ error: "照片太大，最大 20MB" }, { status: 413 });
         return withTenant(
           request,
           async () => {

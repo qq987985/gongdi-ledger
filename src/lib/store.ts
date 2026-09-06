@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { uid } from "./utils";
 import { normalizeIdDate, parseIdCard } from "./idcard";
-import { derivedYears, nextYear } from "./dates";
+import { derivedYears, nextYear, localToday } from "./dates";
 import { normalizeEntry, splitLegacyReceipts, type ContractEntry, type ContractRecord } from "./contracts";
 import { logOp } from "./audit";
 import type { AttendanceDoc, AttendanceRow, Expense, InsuranceMember, InsurancePolicy, LedgerState, Payment, Person } from "./types";
@@ -489,7 +489,7 @@ export const useApp = create<AppStore>()(
           payoutMethod: row.payoutMethod || "",
           reimbursedAt:
             row.status === "已报销"
-              ? row.reimbursedAt || row.payoutDate || new Date().toISOString().slice(0, 10)
+              ? row.reimbursedAt || row.payoutDate || localToday()
               : "",
         } as Expense;
         if (i >= 0) {

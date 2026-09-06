@@ -81,7 +81,12 @@ function isWithin(base, target) {
 async function serveStatic(req) {
   if (req.method !== "GET" && req.method !== "HEAD") return null;
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  let pathname = decodeURIComponent(url.pathname);
+  let pathname;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    return new Response("Bad Request", { status: 400, headers: { "content-type": "text/plain; charset=utf-8" } });
+  }
   if (pathname.endsWith("/")) pathname += "index.html";
   const filePath = join(publicDir, pathname);
   const resolvedPath = resolve(filePath);
@@ -94,6 +99,7 @@ async function serveStatic(req) {
     const headers = {
       "content-type": mimeType(resolvedPath),
       "content-length": String(s.size),
+      "x-content-type-options": "nosniff",
     };
     if (pathname.includes("/assets/")) {
       headers["cache-control"] = "public, max-age=31536000, immutable";
@@ -140,6 +146,8 @@ const server = createServer(async (req, res) => {
     const response = await nodeFetch(request);
     res.statusCode = response.status;
     res.statusMessage = response.statusText;
+    // 安全响应头：防 MIME 嗅探
+    if (!response.headers.has("x-content-type-options")) res.setHeader("x-content-type-options", "nosniff");
     // 正确处理多个相同名称的响应头（如 Set-Cookie）
     const headerMap = new Map();
     response.headers.forEach((v, k) => {

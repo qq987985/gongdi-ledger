@@ -7,10 +7,15 @@ export const Route = createFileRoute("/api/ledger")({
     handlers: {
       GET: async ({ request }) => {
         if (!persistOn()) return Response.json({ persist: false, empty: true });
-        return withTenant(request, async () => {
-          const data = await readLedger();
-          return Response.json({ persist: true, ...data });
-        });
+        // 全量台账含身份证/银行卡等敏感字段：只有能看「人员」的成员才能拉取
+        return withTenant(
+          request,
+          async () => {
+            const data = await readLedger();
+            return Response.json({ persist: true, ...data });
+          },
+          "people.view",
+        );
       },
       PUT: async ({ request }) => {
         if (!persistOn()) return Response.json({ persist: false }, { status: 400 });
@@ -21,7 +26,7 @@ export const Route = createFileRoute("/api/ledger")({
             await writeLedger(body);
             return Response.json({ ok: true });
           },
-          "ledger.write",
+          "ledger.manage",
         );
       },
     },

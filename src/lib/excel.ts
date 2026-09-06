@@ -214,6 +214,8 @@ export interface FullBookParse {
   attendance: AttendanceRow[];
   payments: Payment[];
   expenses: Expense[];
+  policies: InsurancePolicy[];
+  members: InsuranceMember[];
 }
 
 export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallbackYear: number): FullBookParse {
@@ -234,6 +236,69 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
   }
   const payName = wb.SheetNames.find((n) => n.includes("发放"));
   const expName = wb.SheetNames.find((n) => n.includes("报销"));
+  // 保险 sheet：整本备份/恢复（保单按保单号去重；成员挂回对应保单；组合险按保单号回填）
+  const policies: InsurancePolicy[] = [];
+  const members: InsuranceMember[] = [];
+  const polName = wb.SheetNames.find((n) => n.includes("保险保单"));
+  if (polName) {
+    const aoa = utils.sheet_to_json(wb.Sheets[polName], { header: 1, defval: "", raw: true }) as unknown[][];
+    const hi = aoa.findIndex((r) => r.some((c) => String(c).trim() === "保单号"));
+    if (hi >= 0) {
+      const headers = aoa[hi].map((c) => String(c).trim());
+      const rows: Row[] = [];
+      for (const row of aoa.slice(hi + 1)) {
+        const o: Row = {};
+        headers.forEach((h, i) => {
+          if (h) o[h] = cellStr(row[i], h);
+        });
+        if (Object.values(o).some((v) => v)) rows.push(o);
+      }
+      const byNo = new Map<string, string>();
+      for (const row of rows) {
+        const no = pick(row, ["保单号"]);
+        if (!no) continue;
+        const id = uid();
+        byNo.set(no, id);
+        policies.push({
+          id,
+          policyNo: no,
+          name: pick(row, ["名称"]),
+          buyer: pick(row, ["购买公司"]),
+          company: pick(row, ["保险公司"]),
+          premiumPerPerson: Number(pick(row, ["每人保费"])) || 0,
+          headcount: Number(pick(row, ["人数"])) || 0,
+          coverage: Number(pick(row, ["保额/人"])) || 0,
+          periodStart: normalizeDate(pick(row, ["保险期开始"])),
+          periodEnd: normalizeDate(pick(row, ["保险期结束"])),
+          linkedPolicyId: "",
+          contracts: [],
+          remark: pick(row, ["备注"]),
+        });
+      }
+      // 组合险：按「组合保单号」互挂
+      for (const row of rows) {
+        const p = policies.find((x) => x.policyNo === pick(row, ["保单号"]));
+        const linked = byNo.get(pick(row, ["组合保单号"]));
+        if (p && linked) p.linkedPolicyId = linked;
+      }
+      const memName = wb.SheetNames.find((n) => n.includes("保险人员"));
+      if (memName) {
+        for (const row of sheetRecords(wb.Sheets[memName])) {
+          const name = pick(row, ["姓名"]);
+          if (!name || name === "合计") continue;
+          members.push({
+            id: uid(),
+            policyId: byNo.get(pick(row, ["保单号"])) || "",
+            name,
+            leader: pick(row, ["队长", "组长"]),
+            startDate: normalizeDate(pick(row, ["开始日期"])),
+            endDate: normalizeDate(pick(row, ["结束日期"])),
+            remark: pick(row, ["备注"]),
+          });
+        }
+      }
+    }
+  }
   return {
     year,
     people,
@@ -244,6 +309,8 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
     expenses: expName
       ? sheetRecords(wb.Sheets[expName]).map((row) => rowToExpense(row, year)).filter((x): x is Expense => x !== null)
       : [],
+    policies,
+    members,
   };
 }
 
@@ -606,13 +673,15 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
   if (insurancePolicies.length) {
     const paoa: unknown[][] = [
       ["保险保单"],
-      ["保单号", "名称", "购买公司", "保险公司", "每人保费", "人数", "保额/人", "保险期开始", "保险期结束", "保险期天数", "总保费", "备注"],
+      ["保单号", "名称", "购买公司", "保险公司", "每人保费", "人数", "保额/人", "保险期开始", "保险期结束", "保险期天数", "总保费", "组合保单号", "备注"],
     ];
     for (const p of insurancePolicies) {
+      const linked = insurancePolicies.find((x) => x.id === p.linkedPolicyId);
       paoa.push([
         p.policyNo, p.name, p.buyer, p.company, p.premiumPerPerson || "",
         p.headcount || "", p.coverage || "", dpart(p.periodStart), dpart(p.periodEnd),
-        daysBetween(p.periodStart, p.periodEnd) || "", (p.premiumPerPerson || 0) * (p.headcount || 0) || "", p.remark,
+        daysBetween(p.periodStart, p.periodEnd) || "", (p.premiumPerPerson || 0) * (p.headcount || 0) || "",
+        linked?.policyNo || "", p.remark,
       ]);
     }
     utils.book_append_sheet(wb, sheetFromAoa(paoa), "保险保单");

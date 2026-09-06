@@ -27,8 +27,16 @@ function safeFileBase(s: string): string {
   return (s || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "").trim();
 }
 
-function memberDays(m: InsuranceMember): number {
-  return daysBetween(m.startDate, m.endDate || today());
+function memberDays(m: InsuranceMember, clampTo?: { start: string; end: string }): number {
+  let start = m.startDate;
+  let end = m.endDate || today();
+  if (clampTo) {
+    // 手填或残留日期越出保单期的部分不计，避免结算超过保费本身
+    if (clampTo.start && (!start || start < clampTo.start)) start = clampTo.start;
+    if (clampTo.end && (!end || end > clampTo.end)) end = clampTo.end;
+  }
+  if (start && end && start > end) return 0;
+  return daysBetween(start, end);
 }
 
 /** 是否仍在保：没有结束日期，或结束日期还没到今天。 */
@@ -193,9 +201,12 @@ function InsurancePage() {
   const coverage = selected?.coverage || 0;
   const totalPremium = premiumPerPerson * headcount;
   const perPersonDaily = periodDays > 0 ? premiumPerPerson / periodDays : 0;
-  const settleOf = (m: InsuranceMember) => Math.round(perPersonDaily * memberDays(m) * 100) / 100;
+  // 使用天数统一夹紧到保单期，手填越界不参与结算
+  const clamp = { start: selected?.periodStart || "", end: selected?.periodEnd || "" };
+  const md = (m: InsuranceMember) => memberDays(m, clamp);
+  const settleOf = (m: InsuranceMember) => Math.round(perPersonDaily * md(m) * 100) / 100;
   const activeCount = policyMembers.filter((m) => isActive(m)).length;
-  const shownPersonDays = shownMembers.reduce((s, m) => s + memberDays(m), 0);
+  const shownPersonDays = shownMembers.reduce((s, m) => s + md(m), 0);
   const shownSettle = shownMembers.reduce((s, m) => s + settleOf(m), 0);
 
   // 打印清单下边的按班组（队长）汇总：人数 / 累计人天 / 保费金额
@@ -205,7 +216,7 @@ function InsurancePage() {
       const k = (m.leader || "").trim() || "未分班组";
       const cur = map.get(k) ?? { count: 0, days: 0, settle: 0 };
       cur.count += 1;
-      cur.days += memberDays(m);
+      cur.days += md(m);
       cur.settle += settleOf(m);
       map.set(k, cur);
     }
@@ -224,9 +235,18 @@ function InsurancePage() {
       toast.error("保单号必填");
       return;
     }
+    const pno = policyEdit.policyNo.trim();
+    // 保单号重复拦截：新增或改号撞车都拒绝，避免静默覆盖已有保单
+    const dup = (useApp.getState().insurancePolicies || []).find(
+      (p) => p.policyNo && p.policyNo === pno && p.id !== policyEdit.id,
+    );
+    if (dup) {
+      toast.error(`保单号「${pno}」已经用在另一张保单上（${dup.company || dup.name || "未命名"}）。要用它请直接改那张保单，或换一个号。`);
+      return;
+    }
     const id = policyEdit.id || uid();
     const linkedId = policyEdit.linkedPolicyId || "";
-    upsertPolicy({ ...policyEdit, id, policyNo: policyEdit.policyNo.trim(), linkedPolicyId: linkedId });
+    upsertPolicy({ ...policyEdit, id, policyNo: pno, linkedPolicyId: linkedId });
     // 组合险互相挂：只在一个保单上选一次，另一个保单自动反向挂上
     const st = useApp.getState();
     const all = st.insurancePolicies || [];
@@ -271,8 +291,15 @@ function InsurancePage() {
     const { target } = replaceState;
     const startDay = datePart(replaceState.startDate);
     const policy = policies.find((p) => p.id === target.policyId);
-    // 被替换人：结束 = 前一天 23:59
-    upsertMember({ ...target, endDate: prevDayEnd(replaceState.startDate) });
+    const newEnd = prevDayEnd(replaceState.startDate);
+    const origEnd = target.endDate || "";
+    // 已结束（或结束早于替换日）的人员不延长保险段：结束时间取「原结束」和「替换日前一天 23:59」中较早者
+    const endDate = origEnd && origEnd < newEnd ? origEnd : newEnd;
+    if (origEnd && origEnd.slice(0, 10) < startDay) {
+      toast.warning(`「${target.name}」已于 ${datePart(origEnd)} 结束保险，本次替换不会延长其保险段；新人员从 ${startDay} 起算。`);
+    }
+    // 被替换人：结束 = 前一天 23:59（不晚于原结束时间）
+    upsertMember({ ...target, endDate });
     // 替换人：开始 = 当天 00:00，结束 = 保险到期时间
     upsertMember({
       id: uid(),
@@ -474,7 +501,7 @@ function InsurancePage() {
                             <span className="text-ok">在保</span>
                           )}
                         </td>
-                        <td className="p-3 tabular-nums">{memberDays(m) || ""}</td>
+                        <td className="p-3 tabular-nums">{md(m) || ""}</td>
                         <td className="p-3 tabular-nums">{money(settleOf(m))}</td>
                         <td className="p-3 text-muted">{m.remark}</td>
                         <Can perm="insurance.edit">
@@ -739,7 +766,7 @@ function InsurancePage() {
                       <td className="border border-black px-2 py-1">{m.leader}</td>
                       <td className="border border-black px-2 py-1 whitespace-nowrap">{datePart(m.startDate) || "—"}</td>
                       <td className="border border-black px-2 py-1 whitespace-nowrap">{datePart(m.endDate) || "在保"}</td>
-                      <td className="border border-black px-2 py-1">{memberDays(m) || ""}</td>
+                      <td className="border border-black px-2 py-1">{md(m) || ""}</td>
                       <td className="border border-black px-2 py-1">{money(settleOf(m))}</td>
                     </tr>
                   ))}

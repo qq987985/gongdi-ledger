@@ -213,6 +213,13 @@ export function canWriteLedger(perms: string[] | undefined | null): boolean {
   );
 }
 
+/** 全量台账写权限：管理员或人员/考勤编辑/设置类权限（收窄版：仅照片/文件编辑不能覆盖整本台账） */
+export function canManageLedger(perms: string[] | undefined | null): boolean {
+  const list = perms || [];
+  if (list.includes("*")) return true;
+  return list.some((p) => p === "people.edit" || p === "attendance.edit" || p.startsWith("settings."));
+}
+
 export const NAV_PERM: Record<string, string> = {
   "/": "",
   "/people": "people.view",

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import {
   appendAudit,
   dataDir,
@@ -10,7 +11,7 @@ import {
   runWithBook,
   writeBookMeta,
 } from "./nas-fs.server";
-import { ALL_PERMS, PRESETS, canWriteLedger, hasPerm } from "./perms";
+import { ALL_PERMS, PRESETS, canWriteLedger, canManageLedger, hasPerm } from "./perms";
 import { uid } from "./utils";
 import { hashPassword } from "./auth";
 
@@ -21,6 +22,8 @@ export interface UserRecord {
   hash: string;
   role: "admin" | "user";
   disabled?: boolean;
+  /** 会话盐（随机）：令牌 = hash(sess:用户id:会话盐)，不随密码推导；改密码时刷新，其他设备自动下线 */
+  tokenSalt?: string;
 }
 
 export interface BookMember {
@@ -70,7 +73,30 @@ function cookies(request: Request): Record<string, string> {
 }
 
 async function sessionToken(user: UserRecord): Promise<string> {
-  return hashPassword(`sess:${user.id}:${user.hash}`);
+  return hashPassword(`sess:${user.id}:${user.tokenSalt || user.hash}`);
+}
+
+/* ── 登录限速：同一用户名连续失败 5 次，锁 5 分钟 ── */
+const authRate = new Map<string, { fails: number; until: number }>();
+function rateKey(kind: string, username: string) {
+  return `${kind}:${username.toLowerCase()}`;
+}
+function rateLocked(kind: string, username: string): boolean {
+  const rec = authRate.get(rateKey(kind, username));
+  return Boolean(rec && rec.until > Date.now());
+}
+function rateFail(kind: string, username: string): void {
+  const k = rateKey(kind, username);
+  const rec = authRate.get(k) || { fails: 0, until: 0 };
+  rec.fails += 1;
+  if (rec.fails >= 5) {
+    rec.until = Date.now() + 5 * 60e3;
+    rec.fails = 0;
+  }
+  authRate.set(k, rec);
+}
+function rateOk(kind: string, username: string): void {
+  authRate.delete(rateKey(kind, username));
 }
 
 async function readFileShape(): Promise<AccountsFile> {
@@ -89,7 +115,11 @@ async function writeFileShape(data: AccountsFile): Promise<void> {
   if (!persistOn()) return;
   const dir = join(dataDir(), "accounts");
   await mkdir(dir, { recursive: true });
-  await writeFile(accountsPath(), JSON.stringify(data, null, 2), "utf8");
+  // 原子写：先写临时文件再改名，避免断电/强杀留下截断的凭据库
+  const target = accountsPath();
+  const tmp = `${target}.tmp`;
+  await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
+  await rename(tmp, target);
   for (const b of data.books)
     try {
       await writeBookMeta({ id: b.id, name: b.name, ownerId: b.ownerId || "" });
@@ -98,6 +128,13 @@ async function writeFileShape(data: AccountsFile): Promise<void> {
 
 export async function ensureAccounts(): Promise<AccountsFile> {
   let data = await readFileShape();
+  let salted = false;
+  for (const u of data.users)
+    if (!u.tokenSalt) {
+      u.tokenSalt = randomBytes(16).toString("hex");
+      salted = true;
+    }
+  if (salted) await writeFileShape(data);
   if (!data.users.length) {
     const admin = await adminFromOldLedger();
     if (admin) {
@@ -197,7 +234,8 @@ export async function resolveTenant(request: Request): Promise<Tenant> {
 }
 
 function cookieHeaders(user: UserRecord, bookId: string, token: string): string[] {
-  const base = "Path=/; SameSite=Lax; Max-Age=2592000";
+  // HttpOnly：JS 不可读，只能随请求发送（防 XSS 偷 cookie）；旧 token 因会话盐刷新自动失效
+  const base = "Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000";
   return [
     `gongdi_u=${encodeURIComponent(user.id)}; ${base}`,
     `gongdi_t=${encodeURIComponent(token)}; ${base}`,
@@ -206,7 +244,7 @@ function cookieHeaders(user: UserRecord, bookId: string, token: string): string[
 }
 
 function clearCookieHeaders(): string[] {
-  const base = "Path=/; SameSite=Lax; Max-Age=0";
+  const base = "Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
   return [`gongdi_u=; ${base}`, `gongdi_t=; ${base}`, `gongdi_b=; ${base}`];
 }
 
@@ -254,9 +292,9 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     const username = (body.username || "admin").trim().toLowerCase();
     const password = (body.password || "").trim();
     const name = (body.name || "管理员").trim() || "管理员";
-    if (!username || password.length < 4)
-      return Response.json({ error: "用户名必填，密码至少 4 位" }, { status: 400 });
-    const user: UserRecord = { id: "admin", username, name, hash: await hashPassword(password), role: "admin" };
+    if (!username || password.length < 8)
+      return Response.json({ error: "用户名必填，密码至少 8 位" }, { status: 400 });
+    const user: UserRecord = { id: "admin", username, name, hash: await hashPassword(password), role: "admin", tokenSalt: randomBytes(16).toString("hex") };
     const books = data.books.length
       ? data.books.map((b) => {
           const ownerId = b.ownerId || user.id;
@@ -274,10 +312,15 @@ export async function handleAuthPost(request: Request): Promise<Response> {
   if (op === "login") {
     const username = (body.username || "").trim().toLowerCase();
     const password = (body.password || "").trim();
+    if (rateLocked("login", username))
+      return Response.json({ error: "尝试次数太多，请 5 分钟后再试" }, { status: 429 });
     const user = data.users.find((u) => u.username === username);
-    if (!user || user.hash !== (await hashPassword(password)))
+    if (!user || user.hash !== (await hashPassword(password))) {
+      rateFail("login", username);
       return Response.json({ error: "用户名或密码不对" }, { status: 401 });
+    }
     if (user.disabled) return Response.json({ error: "账户已停用" }, { status: 403 });
+    rateOk("login", username);
     const books = booksOf(user, data.books);
     const token = await sessionToken(user);
     await logAuth(books[0]?.id || "", user, "登录", "", "账户");
@@ -292,9 +335,14 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     const c = cookies(request);
     const userId = c.gongdi_u || "";
     const user = data.users.find((u) => u.id === userId);
-    if (!user || user.hash !== (await hashPassword(password)))
+    if (rateLocked("verify", userId))
+      return Response.json({ error: "尝试次数太多，请 5 分钟后再试" }, { status: 429 });
+    if (!user || user.hash !== (await hashPassword(password))) {
+      rateFail("verify", userId);
       return Response.json({ error: "密码错误" }, { status: 401 });
+    }
     if (user.disabled) return Response.json({ error: "账户已停用" }, { status: 403 });
+    rateOk("verify", userId);
     return Response.json({ ok: true, user: publicUser(user) });
   }
   const tenant = await resolveTenant(request);
@@ -357,9 +405,11 @@ export async function handleAuthPost(request: Request): Promise<Response> {
   if (op === "changePassword") {
     if (me.hash !== (await hashPassword(body.old || "")))
       return Response.json({ error: "当前密码不对" }, { status: 400 });
-    if ((body.password || "").trim().length < 4)
-      return Response.json({ error: "新密码至少 4 位" }, { status: 400 });
+    if ((body.password || "").trim().length < 8)
+      return Response.json({ error: "新密码至少 8 位" }, { status: 400 });
     me.hash = await hashPassword(body.password);
+    // 改密码刷新会话盐：所有设备重新登录，旧会话全部失效
+    me.tokenSalt = randomBytes(16).toString("hex");
     data.users = data.users.map((u) => (u.id === me.id ? me : u));
     await writeFileShape(data);
     const token = await sessionToken(me);
@@ -373,9 +423,10 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     if (me.role !== "admin") return Response.json({ error: "只有管理员能重置别人密码" }, { status: 403 });
     const target = data.users.find((u) => u.id === body.id);
     if (!target) return Response.json({ error: "没有这个人" }, { status: 404 });
-    if ((body.password || "").trim().length < 4)
-      return Response.json({ error: "新密码至少 4 位" }, { status: 400 });
+    if ((body.password || "").trim().length < 8)
+      return Response.json({ error: "新密码至少 8 位" }, { status: 400 });
     target.hash = await hashPassword(body.password);
+    target.tokenSalt = randomBytes(16).toString("hex");
     data.users = data.users.map((u) => (u.id === target.id ? target : u));
     await writeFileShape(data);
     await logAuth(tenant.bookId || "default", me, "重置他人密码", target.username, "账户");
@@ -416,8 +467,8 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     const username = (body.username || "").trim().toLowerCase();
     const password = (body.password || "").trim();
     const name = (body.name || username).trim();
-    if (!username || password.length < 4)
-      return Response.json({ error: "用户名必填，密码至少 4 位" }, { status: 400 });
+    if (!username || password.length < 8)
+      return Response.json({ error: "用户名必填，密码至少 8 位" }, { status: 400 });
     if (data.users.some((u) => u.username === username))
       return Response.json({ error: "用户名已存在" }, { status: 400 });
     const user: UserRecord = {
@@ -426,6 +477,7 @@ export async function handleAuthPost(request: Request): Promise<Response> {
       name,
       hash: await hashPassword(password),
       role: body.role === "admin" ? "admin" : "user",
+      tokenSalt: randomBytes(16).toString("hex"),
     };
     data.users.push(user);
     const book = body.joinCurrent !== "0" ? data.books.find((b) => b.id === (body.id || tenant.bookId)) : null;
@@ -546,7 +598,9 @@ export async function withTenant(
     return Response.json({ error: "还没有台账，请让管理员把你加入", noBook: true }, { status: 403 });
   if (need === "ledger.write" && !canWriteLedger(t.perms))
     return Response.json({ error: "没有修改权限" }, { status: 403 });
-  if (need && need !== "ledger.write" && !hasPerm(t.perms, need))
+  if (need === "ledger.manage" && !canManageLedger(t.perms))
+    return Response.json({ error: "没有修改整本台账的权限" }, { status: 403 });
+  if (need && need !== "ledger.write" && need !== "ledger.manage" && !hasPerm(t.perms, need))
     return Response.json({ error: "没有权限" }, { status: 403 });
   return runWithBook(t.bookId, fn);
 }

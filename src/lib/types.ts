@@ -112,7 +112,7 @@ export interface LedgerState {
   insurancePolicies: InsurancePolicy[];
   insuranceMembers: InsuranceMember[];
   accessHash: string;
-  /** 界面风格：classic = 原版，v2 = 新版仪表盘，apple = 苹果 Mac 风格，movie = MOVIEPILOT 暗黑霓虹 */
+  /** 界面风格：classic = 原版，v2 = 新版仪表盘，apple = 苹果 Mac 风格，movie = MOVIEPILOT 白底彩色渐变 */
   uiStyle: "classic" | "v2" | "apple" | "movie";
 }
 
