@@ -338,87 +338,77 @@ function InsurancePage() {
               保单、被保人、替换与天数统计。这里的人员与「人员」模块完全隔离。
             </p>
           </div>
-          <Can perm="insurance.edit">
-            <Button type="button" onClick={() => setPolicyEdit(emptyPolicy())}>
-              新增保单
-            </Button>
-          </Can>
         </header>
 
         <section className="rounded-xl border border-line bg-surface p-5">
-          <h2 className="font-semibold">保单</h2>
-          <p className="mt-1 text-sm text-muted">点一行查看该保单下的被保人。一个保单一个保险期，天数 = 结束 − 开始 + 1。</p>
-          <WideTable id="insurance-policies">
-            <table className="wide-table text-sm">
-              <thead className="border-b border-line text-xs text-muted">
-                <tr>
-                  <th className="p-3">序号</th>
-                  <th className="p-3">保单号</th>
-                  <th className="p-3">名称</th>
-                  <th className="p-3">保险公司</th>
-                  <th className="p-3">保险期</th>
-                  <th className="p-3">天数</th>
-                  <th className="p-3">总保费</th>
-                  <th className="p-3">在保/已结束</th>
-                  <th className="p-3">备注</th>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-semibold">保单</h2>
+              <p className="mt-1 text-sm text-muted">点一张保单查看它的被保人。一个保单一个保险期，天数 = 结束 − 开始 + 1。</p>
+            </div>
+            <Can perm="insurance.edit">
+              <Button size="sm" type="button" onClick={() => setPolicyEdit(emptyPolicy())}>
+                ＋ 新增保单
+              </Button>
+            </Can>
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {policies.map((p) => {
+              const pm = members.filter((m) => m.policyId === p.id);
+              const active = pm.filter((m) => isActive(m)).length;
+              const ended = pm.length - active;
+              const polActive = p.periodEnd ? p.periodEnd.slice(0, 10) >= today() : true;
+              return (
+                <div
+                  key={p.id}
+                  className={`cursor-pointer rounded-xl border bg-surface p-5 transition-colors ${selId === p.id ? "border-accent bg-accent-soft/50" : "border-line hover:border-accent"}`}
+                  onClick={() => setSelectedId(p.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="icon-c flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-lg" style={{ background: "var(--color-accent-soft)", color: "var(--color-accent-strong)" }}>
+                      🛡️
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[15px] font-bold">{p.policyNo}</div>
+                      <div className="mt-0.5 truncate text-xs text-muted">{p.company || p.name || "未命名保单"}</div>
+                    </div>
+                    <span className={`pill ${polActive ? "pill-ok" : "pill-gray"}`}>{polActive ? "在保" : "已结束"}</span>
+                  </div>
+                  <div className="mt-4 space-y-1 text-sm text-muted">
+                    <div>
+                      保险期 <b className="tabular-nums text-ink">{datePart(p.periodStart) || "—"} → {datePart(p.periodEnd) || "—"}</b> · <b className="tabular-nums text-ink">{daysBetween(p.periodStart, p.periodEnd) || "-"}</b> 天
+                    </div>
+                    <div>
+                      每人保费 <b className="tabular-nums text-ink">{money(p.premiumPerPerson || 0)}</b> × <b className="tabular-nums text-ink">{p.headcount || 0}</b> 人 = 总保费 <b className="tabular-nums text-ink">{money((p.premiumPerPerson || 0) * (p.headcount || 0))}</b>
+                    </div>
+                    <div>
+                      在保 <b className="tabular-nums text-ink">{active}</b> 人 · 已结束 <b className="tabular-nums text-ink">{ended}</b> 人 · 累计人天 <b className="tabular-nums text-ink">{pm.reduce((s, m) => s + memberDays(m, { start: p.periodStart, end: p.periodEnd }), 0) || 0}</b>
+                    </div>
+                    {p.linkedPolicyId ? (
+                      <div className="text-xs text-subtle">
+                        ↔ 组合险：{policies.find((x) => x.id === p.linkedPolicyId)?.policyNo || "已解除"}
+                      </div>
+                    ) : null}
+                  </div>
                   <Can perm="insurance.edit">
-                    <th className="p-3">操作</th>
+                    <div className="mt-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      <Button size="sm" variant="outline" className="flex-1" type="button" onClick={() => setPolicyEdit(p)}>
+                        编辑
+                      </Button>
+                      <Button size="sm" variant="ghost" className="flex-1" type="button" onClick={() => delPolicy(p)}>
+                        删除
+                      </Button>
+                    </div>
                   </Can>
-                </tr>
-              </thead>
-              <tbody>
-                {policies.map((p, i) => {
-                  const pm = members.filter((m) => m.policyId === p.id);
-                  const active = pm.filter((m) => isActive(m)).length;
-                  return (
-                    <tr
-                      key={p.id}
-                      className={`cursor-pointer border-b border-line last:border-0 hover:bg-accent-soft ${selId === p.id ? "bg-accent-soft" : ""}`}
-                      onClick={() => setSelectedId(p.id)}
-                    >
-                      <td className="p-3 tabular-nums text-muted">{i + 1}</td>
-                      <td className="p-3 font-medium">
-                        {p.policyNo}
-                        {p.linkedPolicyId ? (
-                          <div className="text-[11px] font-normal text-muted">
-                            ↔ 组合险 {policies.find((x) => x.id === p.linkedPolicyId)?.policyNo || ""}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="p-3">{p.name}</td>
-                      <td className="p-3">{p.company}</td>
-                      <td className="p-3 whitespace-nowrap">
-                        {datePart(p.periodStart) || "—"} ~ {datePart(p.periodEnd) || "—"}
-                      </td>
-                      <td className="p-3 tabular-nums">{daysBetween(p.periodStart, p.periodEnd) || ""}</td>
-                      <td className="p-3 tabular-nums">{(p.premiumPerPerson || 0) * (p.headcount || 0) ? money((p.premiumPerPerson || 0) * (p.headcount || 0)) : ""}</td>
-                      <td className="p-3 tabular-nums">
-                        {active} / {pm.length - active}
-                      </td>
-                      <td className="p-3 text-muted">{p.remark}</td>
-                      <Can perm="insurance.edit">
-                        <td className="whitespace-nowrap p-3" onClick={(e) => e.stopPropagation()}>
-                          <Button size="sm" variant="outline" type="button" onClick={() => setPolicyEdit(p)}>
-                            编辑
-                          </Button>
-                          <Button size="sm" variant="ghost" type="button" onClick={() => delPolicy(p)}>
-                            删除
-                          </Button>
-                        </td>
-                      </Can>
-                    </tr>
-                  );
-                })}
-                {!policies.length ? (
-                  <tr>
-                    <td colSpan={canEdit ? 10 : 9} className="py-8 text-center text-sm text-muted">
-                      还没有保单。点右上角「新增保单」。
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </WideTable>
+                </div>
+              );
+            })}
+            {!policies.length ? (
+              <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-muted md:col-span-2">
+                还没有保单。点「新增保单」开始。
+              </div>
+            ) : null}
+          </div>
         </section>
 
         <section className="rounded-xl border border-line bg-surface p-5">

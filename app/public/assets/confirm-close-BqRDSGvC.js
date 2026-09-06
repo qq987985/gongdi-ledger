@@ -1,1 +1,0 @@
-import{St as e,Tt as t}from"./index-fFVoBsLj.js";var n=t(e());function r(e){let t=n.useRef(!1),r=n.useCallback(()=>{t.current&&typeof window<`u`&&!window.confirm(`有未保存的更改，确定关闭吗？已填内容会丢失。`)||e()},[e]);return{markDirty:n.useCallback(()=>{t.current=!0},[]),requestClose:r}}export{r as t};

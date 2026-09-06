@@ -33,17 +33,18 @@ function SettingsPage() {
   }, []);
   
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="space-y-6">
       <header>
         <h1 className="font-display text-2xl font-semibold">设置</h1>
         <p className="mt-1 text-sm text-muted">年度、访问密码、批量工资。反代到公网请先设密码。</p>
       </header>
-      <AccountsCard />
-      <UiStyleCard />
-      <MembersCard />
-      <PasswordCard />
-      <Can perm="settings.year">
-        <section className="rounded-xl border border-line bg-surface p-5">
+      <div className="grid gap-5 lg:grid-cols-2">
+        <AccountsCard />
+        <UiStyleCard />
+        <MembersCard />
+        <PasswordCard />
+        <Can perm="settings.year">
+          <section className="rounded-xl border border-line bg-surface p-5">
           <h2 className="font-semibold">已展开的年度</h2>
           <p className="mt-1 text-sm text-muted">
             当前工作年 {year}。新增年份不会改人员。删除年份只去掉该年考勤，人员、照片、发放记录保留。至少留一年。
@@ -226,11 +227,13 @@ function SettingsPage() {
           </div>
         </section>
       </Can>
+      </div>
       {/* 软件更新放最底部 */}
-      <WinUpdate compact />
-      <p className="text-xs text-muted">
-        当前版本：<VersionLog /> · 检查更新按钮在上方
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <WinUpdate compact />
+        <span className="text-xs text-muted">当前版本：</span>
+        <VersionLog />
+      </div>
     </div>
   );
 }
