@@ -103,7 +103,7 @@ function NewHome(p: HomeProps) {
   ];
   return (
     <div className="space-y-5">
-      <section className="rounded-xl bg-gradient-to-r from-accent-strong via-accent to-violet-500 p-5 text-white shadow-panel">
+      <section className="hero-banner rounded-xl bg-gradient-to-r from-accent-strong via-accent to-violet-500 p-5 text-white shadow-panel">
         <div className="flex flex-wrap items-center gap-4">
           <div className="min-w-0">
             <h1 className="font-display text-xl font-semibold">{p.year} 年 · 总览</h1>

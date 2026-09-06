@@ -243,6 +243,8 @@ function UiStyleCard() {
   const setUiStyle = useApp((s) => s.setUiStyle);
   const current = uiStyle === "v2" || uiStyle === "apple" || uiStyle === "movie" ? uiStyle : "classic";
   const [val, setVal] = React.useState<"classic" | "v2" | "apple" | "movie">(current);
+  // stash rehydrate 竞态：存储恢复或已保存时同步下拉（不覆盖未保存的选择）
+  React.useEffect(() => setVal(current), [current]);
   const NAMES: Record<string, string> = { classic: "原版界面", v2: "新版界面", apple: "苹果 Mac 风格", movie: "MOVIEPILOT 风格" };
   function save() {
     setUiStyle(val);

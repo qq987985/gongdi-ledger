@@ -1,5 +1,6 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AppShell } from "~/components/shell";
+import { useApp } from "~/lib/store";
 import { Toaster } from "sonner";
 import "~/styles.css";
 
@@ -14,10 +15,6 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover",
       },
       { title: APP_NAME },
-      {
-        name: "theme-color",
-        content: "#1e56a0",
-      },
       {
         name: "description",
         content: "人员考勤、工资发放与合同台账",
@@ -41,6 +38,7 @@ export const Route = createRootRoute({
     <html lang="zh-CN" className="antialiased" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <ThemeColor />
       </head>
       <body>
         <noscript>
@@ -53,3 +51,20 @@ export const Route = createRootRoute({
     </html>
   ),
 });
+
+/** 浏览器顶栏/任务栏主题色跟随界面风格 */
+function ThemeColor() {
+  const uiStyle = useApp((s) => s.uiStyle);
+  const colors: Record<string, string> = {
+    classic: "#1e56a0",
+    v2: "#4f6bf5",
+    apple: "#0a84ff",
+    movie: "#7c3aed",
+  };
+  return (
+    <meta
+      name="theme-color"
+      content={uiStyle === "classic" ? colors.classic : colors[uiStyle] || colors.v2}
+    />
+  );
+}

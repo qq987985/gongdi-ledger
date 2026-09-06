@@ -50,7 +50,7 @@ function PhotosPage() {
               key={k}
               type="button"
               onClick={() => setFilter(k)}
-              className={`h-11 rounded-full border px-3 text-sm ${filter === k ? "border-accent bg-accent text-accent-fg" : "border-line bg-surface text-muted"}`}
+              className={`chip ${filter === k ? "on" : ""}`}
             >
               {label}
             </button>

@@ -212,6 +212,7 @@ export function BookSwitcher({ compact }: { compact?: boolean }) {
         className="field-select h-9 max-w-[9rem] text-sm"
         value={bookId}
         onChange={(e) => void switchTo(e.target.value)}
+        aria-label="当前台账"
       >
         {books.map((b) => (
           <option value={b.id} key={b.id}>
@@ -919,11 +920,11 @@ export function AppShell() {
               ) : null}
             </header>
           ) : null}
-          <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-bg/95 px-3 py-2 backdrop-blur md:hidden" style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}>
+          <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-2 overflow-x-auto border-b border-line bg-bg/95 px-3 py-2 backdrop-blur md:hidden" style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}>
             <Brand year={year} compact pathname={pathname} />
-            <div className="flex min-w-0 items-center gap-1">
+            <div className="flex min-w-0 items-center gap-1 [&_select]:shrink-0">
               {who ? (
-                <div className="mr-1 min-w-0 text-right">
+                <div className="mr-1 hidden min-w-0 text-right min-[400px]:block">
                   <div className="truncate text-xs font-medium">{who.name}</div>
                   <div className="truncate text-[10px] text-muted">{who.role === "admin" ? "管理员" : who.username}</div>
                 </div>
@@ -945,7 +946,7 @@ export function AppShell() {
               ) : null}
             </nav>
           ) : null}
-          <main className="px-3 py-4 md:px-8 md:py-6">
+          <main className="mx-auto w-full max-w-7xl px-3 py-4 md:px-8 md:py-6">
             <Outlet />
             <div className="no-print mt-10 md:hidden">
               <VersionLog />
@@ -979,6 +980,8 @@ export function AppShell() {
         })}
         <button
           type="button"
+          aria-label="菜单"
+          aria-expanded={open}
           className={cn("flex min-h-12 flex-col items-center justify-center gap-0.5 py-1.5 text-[11px]", open || !tabHit ? "text-accent" : "text-muted")}
           onClick={() => setOpen((v) => !v)}
         >

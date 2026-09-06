@@ -72,7 +72,7 @@ function ExportPage() {
                 key={k}
                 type="button"
                 onClick={() => setScope(k)}
-                className={`h-11 rounded-full border px-3 text-sm ${scope === k ? "border-accent bg-accent text-accent-fg" : "border-line bg-surface text-muted"}`}
+                className={`chip ${scope === k ? "on" : ""}`}
               >
                 {label}
               </button>

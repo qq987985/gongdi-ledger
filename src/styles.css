@@ -55,7 +55,7 @@
   /* 文字 */
   --color-ink: #1b2430;
   --color-muted: #5b6678;
-  --color-subtle: #93a0b5;
+  --color-subtle: #8a97ad;
 
   /* 边框 */
   --color-line: #e6eaf3;
@@ -116,7 +116,7 @@
   --color-bg-elevated: #ececf0;
   --color-ink: #1d1d1f;
   --color-muted: #6e6e73;
-  --color-subtle: #a1a1a6;
+  --color-subtle: #90909c;
   --color-line: rgba(20, 20, 30, 0.09);
   --color-line-strong: rgba(20, 20, 30, 0.16);
   --color-accent: #0a84ff;
@@ -153,7 +153,7 @@
   --color-surface: #ffffff;
   --color-ink: #17171e;
   --color-muted: #5f6070;
-  --color-subtle: #989aa8;
+  --color-subtle: #8b8d9e;
   --color-line: rgba(25, 22, 40, 0.08);
   --color-line-strong: rgba(25, 22, 40, 0.16);
   --color-accent: #7c3aed;
@@ -183,9 +183,9 @@
     0 1px 2px rgba(0, 0, 0, 0.03),
     0 12px 36px -10px rgba(124, 58, 237, 0.12);
 }
-/* 多彩渐变横幅：粉 → 紫 → 蓝 */
-.theme-movie .bg-gradient-to-r {
-  background-image: linear-gradient(105deg, #ec4899 0%, #a855f7 45%, #6366f1 100%) !important;
+/* 多彩渐变横幅：粉 → 紫 → 蓝（总览 hero 专用） */
+.theme-movie .hero-banner {
+  background-image: linear-gradient(105deg, #ec4899 0%, #a855f7 45%, #6366f1 100%);
 }
 
 @layer base {
