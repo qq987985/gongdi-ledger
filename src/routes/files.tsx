@@ -176,7 +176,7 @@ function FilesPage() {
         </div>
         <p className="text-sm text-muted">共 {filtered.length} 份</p>
         <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full min-w-[48rem] text-left text-sm">
+          <table className="fit-table min-w-[48rem] text-left text-sm">
             <thead className="border-b border-line text-xs text-muted">
               <tr>
                 <th className="p-3">类型</th>

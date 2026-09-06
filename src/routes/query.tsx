@@ -464,7 +464,7 @@ function QueryPage() {
                   {rangeLabelText} 考勤
                 </h3>
                 <div className="mt-3 overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                  <table className="fit-table text-left text-sm">
                     <thead className="text-xs text-muted">
                       <tr>
                         <th className="py-2">年月</th>

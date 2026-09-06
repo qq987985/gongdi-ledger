@@ -309,6 +309,15 @@
     min-width: 56rem;
   }
 
+  /* 普通数据表格（非 wide-table）：列宽贴合内容，不再铺满拉伸 */
+  .fit-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: max-content;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+
   .wide-scroll {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
@@ -329,8 +338,9 @@
   .wide-table {
     border-collapse: separate;
     border-spacing: 0;
+    /* 列宽贴合内容，不拉伸；超过容器时由外层 .wide-scroll 横向滚动 */
     width: max-content;
-    min-width: 100%;
+    max-width: 100%;
   }
   .wide-table th {
     white-space: normal;

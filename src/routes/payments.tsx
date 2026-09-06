@@ -317,7 +317,7 @@ function PaymentsPage() {
         {byOwner.length > 0 ? (
           <div className="overflow-x-auto rounded-xl border border-line bg-surface">
             <div className="border-b border-line px-4 py-2 text-xs text-muted">按实际收款人入账（只计已填日期的；待发放不算已发）</div>
-            <table className="w-full text-left text-sm">
+            <table className="fit-table text-left text-sm">
               <thead className="text-xs text-muted">
                 <tr>
                   <th className="p-3">实际收款人</th>

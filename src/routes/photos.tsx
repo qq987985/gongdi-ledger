@@ -57,7 +57,7 @@ function PhotosPage() {
           ))}
         </div>
         <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full min-w-ledger text-left text-sm">
+          <table className="fit-table min-w-ledger text-left text-sm">
             <thead className="border-b border-line text-xs text-muted">
               <tr>
                 <th className="p-3">操作</th>
