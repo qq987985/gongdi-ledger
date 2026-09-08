@@ -74,20 +74,23 @@ function cookies(request: Request): Record<string, string> {
 
 /* ── 密码哈希：scrypt + 随机盐（服务端账户库使用，抗离线破解） ── */
 function scryptHash(raw: string): string {
+  const t = raw.trim(); // 与旧 hashPassword 口径一致：首尾空格不参与哈希
+  if (!t) return "";
   const salt = randomBytes(16).toString("hex");
-  const key = scryptSync(raw, salt, 64, { N: 16384, r: 8, p: 1 }).toString("hex");
+  const key = scryptSync(t, salt, 64, { N: 16384, r: 8, p: 1 }).toString("hex");
   return `scrypt$16384$8$1$${salt}$${key}`;
 }
 
 /** 校验密码：新格式 scrypt；旧格式（无盐 sha256）兼容，并在登录成功后静默升级 */
 async function verifyStoredHash(stored: string, raw: string): Promise<boolean> {
-  if (!stored || !raw) return false;
+  const t = raw.trim(); // 与登录/改密 trim 口径一致，避免首尾空格导致锁死
+  if (!stored || !t) return false;
   if (stored.startsWith("scrypt$")) {
     const parts = stored.split("$");
     if (parts.length < 6) return false;
     const [, n, r, p, salt, key] = parts;
     try {
-      const calc = scryptSync(raw, salt, 64, { N: Number(n), r: Number(r), p: Number(p) });
+      const calc = scryptSync(t, salt, 64, { N: Number(n), r: Number(r), p: Number(p) });
       const expect = Buffer.from(key, "hex");
       return calc.length === expect.length && timingSafeEqual(calc, expect);
     } catch {
@@ -95,7 +98,7 @@ async function verifyStoredHash(stored: string, raw: string): Promise<boolean> {
     }
   }
   // 旧格式：sha256("gongdi-ledger::" + pwd)（与历史客户端门禁一致）
-  return createHash("sha256").update(`gongdi-ledger::${raw}`).digest("hex") === stored;
+  return createHash("sha256").update(`gongdi-ledger::${t}`).digest("hex") === stored;
 }
 
 async function sessionToken(user: UserRecord): Promise<string> {
