@@ -14,6 +14,9 @@ import {
 } from "./contracts";
 import type { AttendanceRow, Expense, InsuranceMember, InsurancePolicy, Payment, Person } from "./types";
 
+/** normalizeEntry 入参别名，避免 4 处重复断言 */
+type EntryInput = Parameters<typeof normalizeEntry>[0];
+
 const { utils } = XLSX;
 const readSync = XLSX.read;
 
@@ -822,7 +825,7 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
                 : "",
             no: pick(row, ["发票号", "期次", "单号"]),
             remark: pick(row, ["备注"]),
-          } as Parameters<typeof normalizeEntry>[0]),
+          } as EntryInput),
         );
         continue;
       }
@@ -870,14 +873,14 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
           normalizeEntry({
             contractId: c.id, kind: "report", date: `${year}-01-31`, amount: report,
             no: "导入合计", remark: "从表合计拆出，可再拆明细",
-          } as Parameters<typeof normalizeEntry>[0]),
+          } as EntryInput),
         );
       if (invoice)
         entries.push(
           normalizeEntry({
             contractId: c.id, kind: "invoice", date: `${year}-01-31`, amount: invoice,
             taxRate: c.taxRate, no: "导入合计", remark: "从表合计拆出，可再拆明细",
-          } as Parameters<typeof normalizeEntry>[0]),
+          } as EntryInput),
         );
       if (receipt)
         entries.push(
@@ -885,7 +888,7 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
             contractId: c.id, kind: "receipt", date: `${year}-01-31`, amount: receipt,
             workerPay: numPick(row, ["代付农民工", "总包代付农民工"]),
             no: "导入合计", remark: "从表合计拆出，可再拆明细",
-          } as Parameters<typeof normalizeEntry>[0]),
+          } as EntryInput),
         );
     }
   }

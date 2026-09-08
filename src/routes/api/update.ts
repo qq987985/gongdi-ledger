@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { checkUpdate, applyUpdate, isPortable } from "~/lib/update.server";
 import { resolveTenant } from "~/lib/accounts.server";
+import { persistOn } from "~/lib/nas-fs.server";
 
 /** 同源校验：请求带有 Origin 且与本站不同源时拒绝（防跨站触发更新） */
 function sameOrigin(request: Request): boolean {
@@ -20,6 +21,10 @@ export const Route = createFileRoute("/api/update")({
     handlers: {
       GET: async ({ request }) => {
         try {
+          // 已开启账户时需登录才能查询/触发外联，避免未登录者反复打 GitHub
+          const t = await resolveTenant(request);
+          if (persistOn() && !t.user)
+            return Response.json({ portable: false, error: "请先登录" }, { status: 401 });
           const fresh = new URL(request.url).searchParams.has("fresh");
           const info = await checkUpdate(fresh);
           return Response.json({ ...info, portable: isPortable() });

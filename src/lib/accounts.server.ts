@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
+import { randomBytes, scryptSync, createHash, timingSafeEqual } from "node:crypto";
 import {
   appendAudit,
   dataDir,
@@ -13,7 +13,7 @@ import {
 } from "./nas-fs.server";
 import { ALL_PERMS, PRESETS, canWriteLedger, canManageLedger, hasPerm } from "./perms";
 import { uid } from "./utils";
-import { hashPassword } from "./auth";
+
 
 export interface UserRecord {
   id: string;
@@ -72,8 +72,34 @@ function cookies(request: Request): Record<string, string> {
   return out;
 }
 
+/* ── 密码哈希：scrypt + 随机盐（服务端账户库使用，抗离线破解） ── */
+function scryptHash(raw: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const key = scryptSync(raw, salt, 64, { N: 16384, r: 8, p: 1 }).toString("hex");
+  return `scrypt$16384$8$1$${salt}$${key}`;
+}
+
+/** 校验密码：新格式 scrypt；旧格式（无盐 sha256）兼容，并在登录成功后静默升级 */
+async function verifyStoredHash(stored: string, raw: string): Promise<boolean> {
+  if (!stored || !raw) return false;
+  if (stored.startsWith("scrypt$")) {
+    const parts = stored.split("$");
+    if (parts.length < 6) return false;
+    const [, n, r, p, salt, key] = parts;
+    try {
+      const calc = scryptSync(raw, salt, 64, { N: Number(n), r: Number(r), p: Number(p) });
+      const expect = Buffer.from(key, "hex");
+      return calc.length === expect.length && timingSafeEqual(calc, expect);
+    } catch {
+      return false;
+    }
+  }
+  // 旧格式：sha256("gongdi-ledger::" + pwd)（与历史客户端门禁一致）
+  return createHash("sha256").update(`gongdi-ledger::${raw}`).digest("hex") === stored;
+}
+
 async function sessionToken(user: UserRecord): Promise<string> {
-  return hashPassword(`sess:${user.id}:${user.tokenSalt || user.hash}`);
+  return createHash("sha256").update(`sess:${user.id}:${user.tokenSalt || user.hash}`).digest("hex");
 }
 
 /* ── 登录限速：同一用户名连续失败 5 次，锁 5 分钟 ── */
@@ -294,7 +320,7 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     const name = (body.name || "管理员").trim() || "管理员";
     if (!username || password.length < 8)
       return Response.json({ error: "用户名必填，密码至少 8 位" }, { status: 400 });
-    const user: UserRecord = { id: "admin", username, name, hash: await hashPassword(password), role: "admin", tokenSalt: randomBytes(16).toString("hex") };
+    const user: UserRecord = { id: "admin", username, name, hash: scryptHash(password), role: "admin", tokenSalt: randomBytes(16).toString("hex") };
     const books = data.books.length
       ? data.books.map((b) => {
           const ownerId = b.ownerId || user.id;
@@ -315,12 +341,18 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     if (rateLocked("login", username))
       return Response.json({ error: "尝试次数太多，请 5 分钟后再试" }, { status: 429 });
     const user = data.users.find((u) => u.username === username);
-    if (!user || user.hash !== (await hashPassword(password))) {
+    if (!user || !(await verifyStoredHash(user.hash, password))) {
       rateFail("login", username);
       return Response.json({ error: "用户名或密码不对" }, { status: 401 });
     }
     if (user.disabled) return Response.json({ error: "账户已停用" }, { status: 403 });
     rateOk("login", username);
+    // 旧格式哈希静默升级为 scrypt
+    if (user.hash && !user.hash.startsWith("scrypt$")) {
+      user.hash = scryptHash(password);
+      data.users = data.users.map((u) => (u.id === user.id ? user : u));
+      await writeFileShape(data);
+    }
     const books = booksOf(user, data.books);
     const token = await sessionToken(user);
     await logAuth(books[0]?.id || "", user, "登录", "", "账户");
@@ -337,12 +369,17 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     const user = data.users.find((u) => u.id === userId);
     if (rateLocked("verify", userId))
       return Response.json({ error: "尝试次数太多，请 5 分钟后再试" }, { status: 429 });
-    if (!user || user.hash !== (await hashPassword(password))) {
+    if (!user || !(await verifyStoredHash(user.hash, password))) {
       rateFail("verify", userId);
       return Response.json({ error: "密码错误" }, { status: 401 });
     }
     if (user.disabled) return Response.json({ error: "账户已停用" }, { status: 403 });
     rateOk("verify", userId);
+    if (user.hash && !user.hash.startsWith("scrypt$")) {
+      user.hash = scryptHash(password);
+      data.users = data.users.map((u) => (u.id === user.id ? user : u));
+      await writeFileShape(data);
+    }
     return Response.json({ ok: true, user: publicUser(user) });
   }
   const tenant = await resolveTenant(request);
@@ -403,11 +440,11 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     return jsonWithCookies({ ok: true, books: rest, bookId: nextId }, cookieHeaders(me, nextId, token));
   }
   if (op === "changePassword") {
-    if (me.hash !== (await hashPassword(body.old || "")))
+    if (!(await verifyStoredHash(me.hash, body.old || "")))
       return Response.json({ error: "当前密码不对" }, { status: 400 });
     if ((body.password || "").trim().length < 8)
       return Response.json({ error: "新密码至少 8 位" }, { status: 400 });
-    me.hash = await hashPassword(body.password);
+    me.hash = scryptHash(body.password);
     // 改密码刷新会话盐：所有设备重新登录，旧会话全部失效
     me.tokenSalt = randomBytes(16).toString("hex");
     data.users = data.users.map((u) => (u.id === me.id ? me : u));
@@ -425,7 +462,7 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     if (!target) return Response.json({ error: "没有这个人" }, { status: 404 });
     if ((body.password || "").trim().length < 8)
       return Response.json({ error: "新密码至少 8 位" }, { status: 400 });
-    target.hash = await hashPassword(body.password);
+    target.hash = scryptHash(body.password);
     target.tokenSalt = randomBytes(16).toString("hex");
     data.users = data.users.map((u) => (u.id === target.id ? target : u));
     await writeFileShape(data);
@@ -475,7 +512,7 @@ export async function handleAuthPost(request: Request): Promise<Response> {
       id: uid(),
       username,
       name,
-      hash: await hashPassword(password),
+      hash: scryptHash(password),
       role: body.role === "admin" ? "admin" : "user",
       tokenSalt: randomBytes(16).toString("hex"),
     };
@@ -560,6 +597,9 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     if (!canManageMembers()) return Response.json({ error: "没有分配权限" }, { status: 403 });
     const book = data.books.find((b) => b.id === (body.id || tenant.bookId));
     if (!book) return Response.json({ error: "没有这套台账" }, { status: 404 });
+    // 与 addMember/setMember 一致：非管理员只能操作自己有权限管理的台账，禁止越权动别人的台账
+    if (me.role !== "admin" && book.ownerId !== me.id && !hasPerm(permsOf(me, book), "members.manage"))
+      return Response.json({ error: "只能管理自己的台账成员" }, { status: 403 });
     if (body.userId === book.ownerId) return Response.json({ error: "不能移除创建人" }, { status: 400 });
     book.members = (book.members || []).filter((m) => m.userId !== body.userId);
     await writeFileShape(data);

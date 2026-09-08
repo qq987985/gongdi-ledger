@@ -530,9 +530,9 @@ export const useApp = create<AppStore>()(
           contracts: Array.isArray(p.contracts) ? p.contracts : [],
           remark: p.remark || "",
         };
-        // 优先按 id；新增时按保单号去重（同保单号视为同一张保单）
+        // 优先按 id；无论是否有 id，同名保单号都按「同一张保单」处理（新增同名合并修改，避免重复建档）
         let i = list.findIndex((x) => x.id === p.id);
-        if (i < 0 && p.id) i = list.findIndex((x) => x.policyNo && x.policyNo === next.policyNo);
+        if (i < 0) i = list.findIndex((x) => x.policyNo && x.policyNo === next.policyNo);
         if (i >= 0) {
           const copy = list.slice();
           copy[i] = { ...next, id: list[i].id };
