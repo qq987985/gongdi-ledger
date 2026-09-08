@@ -13,6 +13,9 @@ import { ContractImport } from "~/components/excel-import";
 import { DocActions, prepareNamedFile, setDoc, removeDoc, invoiceBase, reportBase, receiptSubBase, receiptWorkerBase } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
 import { emptyContract, contractRollup, normalizeEntry, CONTRACT_STATUSES } from "~/lib/contracts";
+
+/** 完成类状态（绿） */
+const CONTRACT_DONE = new Set(["完工", "结算完成", "结算已开票", "退质保金"]);
 import { buildContractWorkbook } from "~/lib/excel";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
@@ -452,7 +455,7 @@ function ContractsPage() {
                       <td className="p-2 text-right tabular-nums">{money(r.dueRemain)}</td>
                       <td className="p-2 text-right tabular-nums">{money(r.remain)}</td>
                       <td className="p-2">
-                        <Badge tone={c.status === "finished" ? "ok" : c.status === "aborted" ? "danger" : "warn"}>
+                        <Badge tone={CONTRACT_DONE.has(c.status) ? "ok" : "warn"}>
                           {CONTRACT_STATUSES.find((s) => s === c.status) || c.status}
                         </Badge>
                       </td>
@@ -469,7 +472,8 @@ function ContractsPage() {
                     <td className="p-2 text-right tabular-nums">{money(totals.amount)}</td>
                     <td className="p-2" colSpan={2} />
                     <td className="p-2 text-right tabular-nums">
-                      {totals.reportIncl ? money(totals.reportIncl) : money(totals.reportExcl)}
+                      <div>{money(totals.reportIncl)}</div>
+                      <div className="text-xs text-muted">含税 {money(totals.reportExcl)}</div>
                     </td>
                     <td className="p-2" />
                     <td className="p-2 text-right tabular-nums">{money(totals.payable)}</td>
@@ -552,7 +556,9 @@ function ContractEditor({
   const [c, setC] = React.useState(draft);
   const roll = contractRollup(c, entries);
   const { markDirty, requestClose } = useGuardedClose(onCancel);
+  const dirtyRef = React.useRef(false);
   function patch(key: keyof ContractRecord, value: any) {
+    dirtyRef.current = true;
     setC((prev) => ({ ...prev, [key]: value }));
   }
   React.useEffect(() => {
@@ -707,6 +713,8 @@ function ContractEditor({
         <ContractScanBox
           contract={c}
           onFileName={(name) => {
+            // 上传扫描件会保存表单：若编辑器里有未保存改动，先明示，避免绕过「保存」确认
+            if (dirtyRef.current && !confirm("刚才改的合同信息（金额/税率等）还没保存。上传扫描件会把它们一并保存，确定继续吗？")) return;
             const next = { ...c, scanFileName: name };
             setC(next);
             onSave(next);
@@ -898,6 +906,16 @@ function InvoiceBook({
   const [remark, setRemark] = React.useState("");
   const [file, setFile] = React.useState<File>();
   const taken = useTakenNames();
+  // 切换合同（编辑器复用同一组件）时重置开票表单，避免上一份合同的税率/编号残留
+  React.useEffect(() => {
+    setRate(contract.taxRate || 9);
+    setIncl(0);
+    setExcl(0);
+    setNo("");
+    setRemark("");
+    setFile(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contract.id]);
   const total = entries.reduce((s, e) => s + (e.amount || 0), 0);
   function fromIncl(n: number) {
     setIncl(n);

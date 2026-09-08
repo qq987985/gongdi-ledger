@@ -342,8 +342,14 @@ function MonthTable({
   }
   function removeAt(i: number) {
     const name = rows[i]?.name;
-    setRows((prev) => prev.filter((_, idx) => idx !== i));
-    if (name) setSelected((s) => s.filter((n) => n !== name));
+    if (!name) return;
+    // 与「删除所选」口径一致：确认后立即保存本月（避免行已消失但实际未删除）
+    if (!confirm(`从本月考勤里去掉「${name}」？\n\n人员档案和发放记录不动，本月会立即保存。`)) return;
+    const keep = rows.filter((_, idx) => idx !== i);
+    setRows(keep);
+    setSelected((s) => s.filter((n) => n !== name));
+    onSave(keep);
+    toast.success(`已从本月去掉 ${name}`);
   }
   function removeSelected() {
     if (!selected.length) return;
@@ -379,6 +385,8 @@ function MonthTable({
   const missingRule = calcRows.filter((r) => r.known && !r.rule).length;
   const unknown = calcRows.filter((r) => !r.known).length;
   function patch(i: number, key: keyof MonthRow, value: string | number) {
+    if (key === "days" && Number(value) > 31)
+      toast.warning(`${rows[i]?.name || ""} 的出勤天数填了 ${value}，一个月最多 31 天，请核对`);
     setRows((prev) => {
       const next = prev.slice();
       const row = { ...next[i] };

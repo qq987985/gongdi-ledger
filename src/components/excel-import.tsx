@@ -56,14 +56,18 @@ export function PeopleImport() {
     const byName = Object.fromEntries(store.people.map((p) => [p.name, p]));
     const c: { incoming: Person; existing: Person; action: "skip" | "overwrite" }[] = [];
     const f: Person[] = [];
+    const seen = new Set<string>(); // 文件内重名：同名只留第一行，后面的按重复处理，避免同名档案
     for (const row of rows) {
       const ex = byName[row.name];
-      if (ex) c.push({ incoming: row, existing: ex, action: "skip" });
-      else f.push(row);
+      const dupInFile = seen.has(row.name);
+      seen.add(row.name);
+      if (!ex && !dupInFile) f.push(row);
+      else if (!ex && dupInFile) c.push({ incoming: row, existing: row, action: "skip" });
+      else c.push({ incoming: row, existing: ex, action: "skip" });
     }
     setFresh(f);
     setConflicts(c);
-    toast.message(`解析到 ${rows.length} 人：新增 ${f.length}，重复 ${c.length}`);
+    toast.message(`解析到 ${rows.length} 人：新增 ${f.length}，重复 ${c.length}${c.some((x) => x.incoming === x.existing) ? "（含文件内重名）" : ""}`);
   }
   function apply() {
     let people = store.people.slice();
@@ -500,6 +504,16 @@ export function FullBookImport() {
           toast.error("没有读到人员、考勤、发放、报销或保险");
           return;
         }
+        // 整本导入直接合并写入，风险最大：先列出清单确认
+        if (
+          !confirm(
+            `导入「${file.name}」？\n\n` +
+              `人员 ${parsed.people.length} 人 · 考勤 ${parsed.attendance.length} 条 · 发放 ${parsed.payments.length} 条 · ` +
+              `报销 ${(parsed.expenses || []).length} 条 · 保单 ${(parsed.policies || []).length} 份 · 保险人员 ${(parsed.members || []).length} 人。\n\n` +
+              "同名人员、同保单号保单与重复考勤（姓名+年月）会被跳过；现有数据追加保留。",
+          )
+        )
+          return;
         const byName = Object.fromEntries(store.people.map((p) => [p.name, p]));
         const merged = store.people.slice();
         let added = 0;

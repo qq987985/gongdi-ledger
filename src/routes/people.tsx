@@ -619,13 +619,14 @@ function PersonEditor({
         </div>
         {form.name ? (
           <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <PhotoSlot key={`id-${refresh}`} name={form.name} kind="id" onChanged={onChanged} />
-            <PhotoSlot key={`bank-${refresh}`} name={form.name} kind="bank" onChanged={onChanged} />
-            <PhotoSlot key={`ic-${refresh}`} name={form.name} kind="ic" onChanged={onChanged} />
+            {/* 照片挂「档案当前姓名」：编辑时用原名，未保存改名不会导致照片挂到新名 */}
+            <PhotoSlot key={`id-${refresh}`} name={creating ? form.name : person?.name || form.name} kind="id" onChanged={onChanged} />
+            <PhotoSlot key={`bank-${refresh}`} name={creating ? form.name : person?.name || form.name} kind="bank" onChanged={onChanged} />
+            <PhotoSlot key={`ic-${refresh}`} name={creating ? form.name : person?.name || form.name} kind="ic" onChanged={onChanged} />
           </div>
         ) : (
           <p className="mt-4 text-xs text-muted">
-            先填姓名再上传。身份证格子只显示正面，边上可点「查看反面」。也可直接拷到 NAS：data/photos/id，文件名「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。
+            先填姓名再上传。身份证格子只显示正面，边上可点「查看反面」。也可直接拷到 NAS：data/photos/id，文件名「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。编辑老档案时照片挂在档案原姓名下，改名保存后请重传。
           </p>
         )}
       </div>

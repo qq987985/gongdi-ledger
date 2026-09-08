@@ -80,11 +80,11 @@ export function YmPick({
         {onD ? (
           <select
             className="field-select w-auto"
-            value={d || 1}
+            value={Math.min(d || 1, new Date(y, m, 0).getDate())}
             onChange={(e) => onD(Number(e.target.value))}
             aria-label={`${label}日`}
           >
-            {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => (
+            {Array.from({ length: new Date(y, m, 0).getDate() }, (_, i) => i + 1).map((n) => (
               <option value={n} key={n}>
                 {n}日
               </option>

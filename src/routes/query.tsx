@@ -57,12 +57,16 @@ function buildSlips({
   span,
   attendance,
   payments,
+  dateFrom,
+  dateTo,
 }: {
   people: Person[];
   names: string[];
   span: { year: number; month: number }[];
   attendance: AttendanceRow[];
   payments: Payment[];
+  dateFrom: string;
+  dateTo: string;
 }) {
   return names
     .map((name) => {
@@ -88,7 +92,14 @@ function buildSlips({
         });
       }
       const pays = payments
-        .filter((x) => x.owner === name && x.date)
+        .filter((x) => {
+          if (x.owner !== name && x.receiver !== name) return false;
+          const d = x.date || "";
+          if (!d) return false;
+          if (dateFrom && d < dateFrom) return false;
+          if (dateTo && d > dateTo) return false;
+          return true;
+        })
         .slice()
         .sort((a, b) => a.date.localeCompare(b.date))
         .map((x) => ({
@@ -101,6 +112,7 @@ function buildSlips({
       if (!months.length && !pays.length) return null;
       return {
         person: p,
+        hasHistory: (p.wageHistory || []).some((h) => (h.fromDate || "").trim() !== ""),
         months,
         total: months.reduce((s, m) => s + m.pay, 0),
         pays,
@@ -160,7 +172,7 @@ function PayslipSheets({
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm md:grid-cols-4">
                 <div>姓名：{s.person.name}</div>
                 <div>班组：{s.person.team || "—"}</div>
-                <div>工资：{wageLabel(s.person)}</div>
+                <div>工资：{s.hasHistory ? "按各月生效工资（见明细）" : wageLabel(s.person)}</div>
                 <div>加班：{parseOtRule(s.person.otRule).label || "—"}</div>
               </div>
           {s.months.length ? (
@@ -280,14 +292,10 @@ function QueryPage() {
   const p = people.find((x) => x.name === name);
   const span = React.useMemo(() => monthsInRange(fromY, fromM, toY, toM), [fromY, fromM, toY, toM]);
   const swapped = ymKey(fromY, fromM) > ymKey(toY, toM);
-  const startDate = React.useMemo(() => {
-    const d = new Date(fromY, fromM - 1, fromD);
-    return isNaN(d.getTime()) ? new Date(fromY, fromM - 1, 1) : d;
-  }, [fromY, fromM, fromD]);
-  const endDate = React.useMemo(() => {
-    const d = new Date(toY, toM - 1, toD);
-    return isNaN(d.getTime()) ? new Date(toY, toM - 1, 28) : d;
-  }, [toY, toM, toD]);
+  // 日期字符串（YYYY-MM-DD）比较：无时区问题；日 clamp 到当月最后一天（防 2 月 31 溢出到下月）
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const startDate = `${fromY}-${pad2(fromM)}-${pad2(Math.min(fromD, new Date(fromY, fromM, 0).getDate()))}`;
+  const endDate = `${toY}-${pad2(toM)}-${pad2(Math.min(toD, new Date(toY, toM, 0).getDate()))}`;
   const rows = span.map(({ year: y, month: m }) => {
     const a = attendance.find((x) => x.year === y && x.month === m && x.name === name);
     const wage = getWageAt(p, y, m);
@@ -309,15 +317,15 @@ function QueryPage() {
   const end = span[span.length - 1];
   const pays = payments.filter((x) => {
     if (x.owner !== name && x.receiver !== name) return false;
-    const d = x.date ? new Date(x.date) : null;
-    if (!d || isNaN(d.getTime())) return false;
+    const d = x.date || "";
+    if (!d) return false;
     return d >= startDate && d <= endDate;
   });
   const paidAsOwner = pays.filter((x) => x.owner === name).reduce((s, x) => s + x.amount, 0);
   const rangeLabelText = rangeLabel(fromY, fromM, toY, toM);
   const slips = React.useMemo(
-    () => buildSlips({ people, names: printNames, span, attendance, payments }),
-    [people, printNames, span, attendance, payments],
+    () => buildSlips({ people, names: printNames, span, attendance, payments, dateFrom: startDate, dateTo: endDate }),
+    [people, printNames, span, attendance, payments, startDate, endDate],
   );
   const teams = [...new Set(people.map((x) => x.team).filter(Boolean))];
   return (

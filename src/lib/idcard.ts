@@ -20,6 +20,12 @@ export function parseIdCard(idCard: string | undefined | null): IdCardInfo {
       gcode = Number(s[14]);
     }
     if (Number.isNaN(birth.getTime())) return { gender: "", age: null, birthday: "" };
+    // 防 Date 溢出进位（如 2 月 31 日 → 3 月 3 日）：回读比对年月日
+    const yIn = Number(s.length === 18 ? s.slice(6, 10) : "19" + s.slice(6, 8));
+    const mIn = Number(s.slice(s.length === 18 ? 10 : 8, s.length === 18 ? 12 : 10));
+    const dIn = Number(s.slice(s.length === 18 ? 12 : 10, s.length === 18 ? 14 : 12));
+    if (birth.getFullYear() !== yIn || birth.getMonth() + 1 !== mIn || birth.getDate() !== dIn)
+      return { gender: "", age: null, birthday: "" };
     const gender = gcode % 2 === 1 ? "男" : "女";
     const today = new Date();
     let age = today.getFullYear() - birth.getFullYear();
@@ -45,12 +51,18 @@ export function validateIdCard(idCard: string | undefined | null): string {
     const year = yy >= 70 ? 1900 + yy : 2000 + yy;
     const birth = new Date(`${year}-${s.slice(8, 10)}-${s.slice(10, 12)}T00:00:00`);
     if (Number.isNaN(birth.getTime())) return "身份证号中的出生日期无效";
+    // 防 Date 溢出进位（如 2 月 31 日）：回读比对
+    if (birth.getMonth() + 1 !== Number(s.slice(8, 10)) || birth.getDate() !== Number(s.slice(10, 12)))
+      return "身份证号中的出生日期无效";
     return "";
   }
   if (s.length > 18) return "身份证号应为 18 位";
   if (!/^\d{17}[\dX]$/.test(s)) return "身份证号格式不对：前 17 位数字，末位数字或 X";
   const birth = new Date(`${s.slice(6, 10)}-${s.slice(10, 12)}-${s.slice(12, 14)}T00:00:00`);
   if (Number.isNaN(birth.getTime())) return "身份证号中的出生日期无效";
+  // 防 Date 溢出进位（如 2 月 31 日）：回读比对
+  if (birth.getMonth() + 1 !== Number(s.slice(10, 12)) || birth.getDate() !== Number(s.slice(12, 14)))
+    return "身份证号中的出生日期无效";
   const w = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
   const codes = "10X98765432";
   let sum = 0;
