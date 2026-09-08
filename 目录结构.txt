@@ -103,7 +103,7 @@ README.md
 win/启动.bat
 win/停止.bat
 win/pack.sh
-app/                            ← 含 app/public/templates 空白导入模板，要上传
+app/                            ← 构建产物（含运行时代码；空白导入模板由软件内「下载模板」实时生成）
 
 
 六、双版本压缩包

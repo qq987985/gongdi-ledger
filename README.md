@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.6.14**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.6.15**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -26,6 +26,10 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.6.15
+
+- 人员模板补餐补列；移除旧静态模板，模板一律实时生成。
 
 ### 1.6.14
 
@@ -452,7 +456,7 @@ qq987985/gongdi-ledger
 
 | 东西 | 上传？ |
 |---|---|
-| `app/` 整份（含空白模板 `app/public/templates/*.xlsx`） | **要** |
+| `app/` 整份（空白导入模板由软件内「下载模板」按钮实时生成，仓库不再放静态副本） | **要** |
 | Dockerfile、compose、脚本、`VERSION.txt`、`win/`、说明文档 | **要** |
 | `.github/workflows/docker.yml` | **要** |
 | `data/` 整个目录 | **不要** |
@@ -460,7 +464,7 @@ qq987985/gongdi-ledger
 | `node/node.exe`、`*.zip` 安装包 | **不要** |
 | `data/templates/`（运行时目录） | **不要** |
 
-判断：软件空白模板在 `app/public/templates/`，要进仓库。工地自己的表和照片在 `data/`，不要进仓库。
+判断：空白模板在软件里点「下载模板」生成（代码实时产出，与版本同步），够不到 `data/`；工地自己的表和照片在 `data/`，不要进仓库。
 
 ---
 
@@ -534,7 +538,7 @@ data/photos/id/张三-身份证-反面.jpg
 
 | 位置 | 内容 | GitHub |
 |---|---|
-| `app/public/templates/*.xlsx` | 软件自带的空白导入模板 | **要上传** |
+| `app/public/templates/` | 旧静态模板已移除（模板由软件内「下载模板」按钮实时生成，列结构与版本同步） | **无** |
 | `data/` 里任何人的人员表、考勤表、合同表、照片 | 工地自己的数据 | **不要上传** |
 
 合同 Excel 导入不再要求「有无合同」「无合同原因」这两列。扫描件在软件里上传，不通过表格。
