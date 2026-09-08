@@ -56,8 +56,9 @@ export interface MonthPayResult {
 export function getWageAt(person: Person | null | undefined, year: number, month: number): WageSource {
   if (!person) return {};
   
-  // 构建查询日期（该月最后一天）
-  const queryDate = `${year}-${String(month).padStart(2, "0")}-28`;
+  // 构建查询日期 = 该月最后一天（29/30/31 号生效的调薪当月即生效，不会延迟到下月）
+  const lastDay = new Date(year, month, 0).getDate();
+  const queryDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
   
   // 如果有工资历史，找匹配的记录
   const history = person.wageHistory || [];

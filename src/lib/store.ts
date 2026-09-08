@@ -330,14 +330,15 @@ export const useApp = create<AppStore>()(
           idValidTo: normalizeIdDate(p.idValidTo, true),
         };
         // 只按 id 匹配，避免编辑改名撞到重名者时覆盖他人档案
-        const i = nextP.id ? people.findIndex((x) => x.id === nextP.id) : -1;
+        const pid = nextP.id?.trim();
+        const i = pid ? people.findIndex((x) => x.id === pid) : -1;
         if (i >= 0) {
           const next = people.slice();
           next[i] = { ...nextP, id: people[i].id };
           set({ people: next });
           logOp("修改人员", nextP.name, "人员");
         } else {
-          set({ people: [...people, { ...nextP, id: nextP.id || uid() }] });
+          set({ people: [...people, { ...nextP, id: pid || uid() }] });
           logOp("新增人员", nextP.name, "人员");
         }
       },
@@ -460,8 +461,12 @@ export const useApp = create<AppStore>()(
         }),
       removeContractEntries: (ids) =>
         set({ contractEntries: get().contractEntries.filter((e) => !ids.includes(e.id)) }),
-      replaceContracts: (contracts, entries) =>
-        set({ contracts, contractEntries: entries ?? get().contractEntries }),
+      replaceContracts: (contracts, entries) => {
+        // 与 removeContracts 口径一致：旧合同被替换时，其条目一并清理，避免孤儿数据
+        const keepIds = new Set(contracts.map((c) => c.id));
+        const nextEntries = (entries ?? get().contractEntries).filter((e) => keepIds.has(e.contractId));
+        set({ contracts, contractEntries: nextEntries });
+      },
       upsertExpense: (row) => {
         const list = get().expenses || [];
         const i = list.findIndex((x) => x.id === row.id);

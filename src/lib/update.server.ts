@@ -374,7 +374,7 @@ async function pullImage(ref: string): Promise<void> {
       errors.push(e instanceof Error ? e.message : String(e));
     }
   }
-  throw new Error(errors.join("；").slice(0, 240) || "拉镜像失败");
+  throw new Error(errors.join("；").slice(0, 500) || "拉镜像失败");
 }
 
 function uniqueImages(list: unknown[]): string[] {
@@ -452,7 +452,7 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
     }
   }
   if (!image)
-    throw new Error(lastErr.slice(0, 180) || "拉镜像失败。请确认 Packages 是 Public，或到飞牛再运行一次「一键拉取」。");
+    throw new Error(lastErr.slice(0, 500) || "拉镜像失败。请确认 Packages 是 Public，或到飞牛再运行一次「一键拉取」。");
   const binds = [...(me.HostConfig?.Binds || [])];
   if (!binds.some((b: string) => String(b).includes("docker.sock"))) binds.push(`${SOCK}:${SOCK}`);
   const hostConfig: Record<string, unknown> = { ...me.HostConfig, Binds: binds };
