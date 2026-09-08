@@ -7,6 +7,9 @@ import { Label } from "~/components/ui/input";
 import { Can, useCan } from "~/components/can";
 import { PayTypePick, OtRulePick } from "~/components/pay-fields";
 import { WinUpdate, VersionLog } from "~/components/shell";
+import { uid } from "~/lib/utils";
+import type { Person } from "~/lib/types";
+import { localToday } from "~/lib/dates";
 import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear, confirmRemoveYear } from "~/lib/dates";
 import { wageLabel, parseOtRule } from "~/lib/wage";
@@ -940,26 +943,60 @@ function BatchRules({
   });
   const visibleIds = visible.map((p) => p.id);
   const selectedVisible = ids.filter((id) => visibleIds.includes(id));
+  const [asHistory, setAsHistory] = React.useState(true);
+  /** 把本次改动记入工资历史（今天生效），或替换今天已有的记录；不勾选则只改当前字段（历史月份会追溯重算） */
+  function withHistory(p: Person, nextPayType: "day" | "month"): Person {
+    const today = localToday();
+    const entry = {
+      id: uid(),
+      fromDate: today,
+      payType: nextPayType,
+      dailyWage: nextPayType === "month" ? p.monthWage : wage,
+      monthWage: nextPayType === "month" ? monthWage : 0,
+      otRule: rule,
+      mealAllowance: p.mealAllowance || 0,
+      remark: "批量设置",
+    };
+    const rest = (p.wageHistory || []).filter((h) => h.fromDate !== today);
+    return { ...p, wageHistory: [...rest, entry] };
+  }
   function apply(idsToUse: string[], onlyBlank: boolean) {
     if (!idsToUse.length) {
       toast.error("请先勾选人员");
       return;
     }
+    const isAll = idsToUse.length >= people.length;
+    const scope = isAll ? `全部 ${people.length} 人` : `所选 ${idsToUse.length} 人`;
+    const desc =
+      payType === "month"
+        ? `按月 · 月薪 ${monthWage || 0}${rule ? ` · ${rule}` : ""}`
+        : `按工天 · 日薪 ${wage || 0}${rule ? ` · ${rule}` : ""}`;
+    const warn =
+      onlyBlank
+        ? `只填「${scope}」的空白工资（已填过的不动）。确定？`
+        : `将把「${scope}」的计薪方式/工资/加班规则改成：${desc}\n\n${
+            asHistory
+              ? "勾选了「记为工资历史（今天生效）」：过去月份保持原工资，不会追溯重算。"
+              : "未记工资历史：没有调薪记录的人员，历史月份会按新工资重算（旧工资条、查询会变）。"
+          }\n\n确定？`;
+    if (!confirm(warn)) return;
     const set = new Set(idsToUse);
+    const nextPayType: "day" | "month" = payType === "month" ? "month" : "day";
     let n = 0;
     replacePeople(
-      people.map((p) => {
+      people.map((p: Person): Person => {
         if (!set.has(p.id)) return p;
         if (onlyBlank) {
           // 只填空白：只补工资数额，不动计薪方式和加班规则
           if (payType === "month" ? p.monthWage : p.dailyWage) return p;
           n += 1;
-          return payType === "month" ? { ...p, monthWage } : { ...p, dailyWage: wage };
+          const blanked: Person = nextPayType === "month" ? { ...p, monthWage } : { ...p, dailyWage: wage };
+          return asHistory ? withHistory(blanked, nextPayType) : blanked;
         }
         n += 1;
-        return payType === "month"
-          ? { ...p, payType: "month", monthWage, otRule: rule }
-          : { ...p, payType: "day", dailyWage: wage, otRule: rule };
+        const next: Person =
+          nextPayType === "month" ? { ...p, payType: "month", monthWage, otRule: rule } : { ...p, payType: "day", dailyWage: wage, otRule: rule };
+        return asHistory ? withHistory(next, nextPayType) : next;
       }),
     );
     toast.success(`已更新 ${n} 人`);
@@ -1028,6 +1065,18 @@ function BatchRules({
       <p className="text-xs text-muted">
         已选 {ids.length} 人（当前列表中 {selectedVisible.length} 人）
       </p>
+      <label className="flex items-start gap-2 rounded-lg bg-bg-elevated px-3 py-2 text-xs text-muted">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-4"
+          checked={asHistory}
+          onChange={(e) => setAsHistory(e.target.checked)}
+        />
+        <span>
+          同时记为工资历史（今天生效）——过去月份保持原工资，不会追溯重算；不勾选则只改当前工资，
+          有调薪记录的人员历史月份会按新工资算。
+        </span>
+      </label>
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={() => apply(ids, false)}>
           应用到所选

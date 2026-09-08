@@ -162,7 +162,7 @@ export const Route = createFileRoute("/api/file/$kind")({
     handlers: {
       GET: async ({ params, request }) => {
         const url = new URL(request.url);
-        const year = Number(url.searchParams.get("year") || "2026") || 2026;
+        const year = Number(url.searchParams.get("year") || String(new Date().getFullYear())) || new Date().getFullYear();
         const kind = params.kind;
         // 模板下载需导入权限，导出需导出权限
         const need = kind.endsWith("-template") ? "import.use" : "export.use";

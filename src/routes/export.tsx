@@ -47,7 +47,17 @@ function ExportPage() {
         : fromY === toY && fromM === toM
           ? `${fromY}年${fromM}月`
           : `${fromY}年${fromM}月至${toY}年${toM}月`;
-  const href = (kind: string) => exportHref(kind, scope, year, fromY, fromM, toY, toM);
+  const rangeSwapped = fromY * 12 + fromM > toY * 12 + toM;
+  const href = (kind: string) =>
+    exportHref(
+      kind,
+      scope,
+      year,
+      rangeSwapped ? Math.min(fromY * 12 + fromM, toY * 12 + toM) === fromY * 12 + fromM ? fromY : toY : fromY,
+      rangeSwapped ? Math.min(fromY * 12 + fromM, toY * 12 + toM) === fromY * 12 + fromM ? fromM : toM : fromM,
+      rangeSwapped ? Math.max(fromY * 12 + fromM, toY * 12 + toM) === fromY * 12 + fromM ? fromY : toY : toY,
+      rangeSwapped ? Math.max(fromY * 12 + fromM, toY * 12 + toM) === fromY * 12 + fromM ? fromM : toM : toM,
+    );
   const outline =
     "btn inline-flex cursor-pointer items-center rounded-sm border border-line bg-surface text-xs hover:bg-accent-soft";
   return (
@@ -95,7 +105,10 @@ function ExportPage() {
               <YmPick label="到" years={yearList} y={toY} m={toM} onY={setToY} onM={setToM} />
             </div>
           ) : null}
-          <p className="mt-3 text-sm text-muted">导出范围：{rangeText}</p>
+          <p className="mt-3 text-sm text-muted">
+            导出范围：{rangeText}
+            {scope === "range" && rangeSwapped ? <span className="ml-2 text-warn">起止选反了，会把区间自动换回来再导出。</span> : null}
+          </p>
         </section>
         <section className="rounded-xl border border-line bg-surface p-5">
           <h2 className="font-semibold">导出内容</h2>

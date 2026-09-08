@@ -137,7 +137,7 @@ function FilesPage() {
     if (kind !== "all" && r.kind !== kind) return false;
     if (!q.trim()) return true;
     const s = q.trim();
-    return [r.fileName, r.belong, r.extra, DOC_KIND_LABEL[r.kind]].some((x) => x.includes(s));
+    return [r.fileName, r.belong, r.extra, DOC_KIND_LABEL[r.kind]].some((x) => String(x || "").includes(s));
   });
   return (
     <Need perm="files.view">
