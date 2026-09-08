@@ -15,7 +15,7 @@ import { useApp } from "~/lib/store";
 import { emptyContract, contractRollup, normalizeEntry, CONTRACT_STATUSES } from "~/lib/contracts";
 
 /** 完成类状态（绿） */
-const CONTRACT_DONE = new Set(["完工", "结算完成", "结算已开票", "退质保金"]);
+const CONTRACT_DONE = new Set(["完工", "结算完成", "结算已开票", "退质保金", "完成"]);
 import { buildContractWorkbook } from "~/lib/excel";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
@@ -472,8 +472,10 @@ function ContractsPage() {
                     <td className="p-2 text-right tabular-nums">{money(totals.amount)}</td>
                     <td className="p-2" colSpan={2} />
                     <td className="p-2 text-right tabular-nums">
-                      <div>{money(totals.reportIncl)}</div>
-                      <div className="text-xs text-muted">含税 {money(totals.reportExcl)}</div>
+                      <div>
+                        {money(totals.reportIncl)} <span className="text-xs text-muted">含税</span>
+                      </div>
+                      <div className="text-xs text-muted">不含税 {money(totals.reportExcl)}</div>
                     </td>
                     <td className="p-2" />
                     <td className="p-2 text-right tabular-nums">{money(totals.payable)}</td>
