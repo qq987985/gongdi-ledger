@@ -296,6 +296,12 @@ function Quick({ to, title, desc }: { to: string; title: string; desc: string })
   );
 }
 
+function maskIdCard(id: string): string {
+  const s = (id || "").trim();
+  if (s.length <= 8) return s;
+  return `${s.slice(0, 4)}********${s.slice(-4)}`;
+}
+
 function OverAges({
   people,
   count,
@@ -318,11 +324,11 @@ function OverAges({
         <span className="text-[10px]">{show ? "▲" : "▼"}</span>
       </button>
       {show ? (
-        <ul className="mt-2 space-y-1 border-t border-line pt-2">
+        <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto border-t border-line pt-2">
           {people.map((p) => (
             <li key={p.id} className="flex flex-wrap items-center justify-between gap-2">
               <span>{p.name}</span>
-              <span className="font-mono tabular-nums">{p.idCard || "—"}</span>
+              <span className="font-mono tabular-nums">{p.idCard ? maskIdCard(p.idCard) : "—"}</span>
             </li>
           ))}
         </ul>

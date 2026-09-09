@@ -3,7 +3,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.6.19**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.6.20**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -26,6 +26,10 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.6.20
+
+- 总览超龄提醒：身份证号中间位打码显示；名单加高度上限与滚动。
 
 ### 1.6.19
 
