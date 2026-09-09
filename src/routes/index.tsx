@@ -302,6 +302,13 @@ function maskIdCard(id: string): string {
   return `${s.slice(0, 4)}********${s.slice(-4)}`;
 }
 
+function fmtBirthday(b: string): string {
+  const s = (b || "").trim();
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (m) return `${Number(m[1])}年${Number(m[2])}月${Number(m[3])}日`;
+  return s || "—";
+}
+
 function OverAges({
   people,
   count,
@@ -324,14 +331,23 @@ function OverAges({
         <span className="text-[10px]">{show ? "▲" : "▼"}</span>
       </button>
       {show ? (
-        <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto border-t border-line pt-2">
-          {people.map((p) => (
-            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2">
-              <span>{p.name}</span>
-              <span className="font-mono tabular-nums">{p.idCard ? maskIdCard(p.idCard) : "—"}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-2 border-t border-line pt-2">
+          <div className="mb-1.5 text-xs font-semibold text-warn">超龄人员名单</div>
+          <ul className="max-h-64 space-y-1 overflow-y-auto">
+            {people.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  {p.name}
+                  {p.gender ? <span className="ml-1 text-muted">{p.gender}</span> : null}
+                </span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono tabular-nums">
+                  <span>{fmtBirthday(p.birthday)}</span>
+                  <span>{p.idCard ? maskIdCard(p.idCard) : "—"}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </div>
   );
