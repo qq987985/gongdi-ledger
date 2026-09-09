@@ -122,11 +122,11 @@ function buildSlips({
     .filter(Boolean);
 }
 
-function groupSlips(slips: any[], showPays: boolean): any[][] {
+function groupSlips(slips: any[], showMonths: boolean, showPays: boolean): any[][] {
   const groups: any[][] = [];
   const isBig = (s: any) => {
-    // 内容行数 = 月份数 + 打款记录数（打印打款时），超过 8 行视为内容多，单人一张
-    const lines = s.months.length + (showPays ? s.pays.length : 0);
+    // 内容行数 = 月份数（打印工资时）+ 打款记录数（打印打款时），超过 8 行视为内容多，单人一张
+    const lines = (showMonths ? s.months.length : 0) + (showPays ? s.pays.length : 0);
     return lines > 8;
   };
   let i = 0;
@@ -152,13 +152,15 @@ function groupSlips(slips: any[], showPays: boolean): any[][] {
 function PayslipSheets({
   slips,
   rangeLabel: label,
-  showPays,
+  printMode,
 }: {
   slips: NonNullable<ReturnType<typeof buildSlips>>;
   rangeLabel: string;
-  showPays: boolean;
+  printMode: "wage" | "both" | "pays";
 }) {
-  const groups = React.useMemo(() => groupSlips(slips as any[], showPays), [slips, showPays]);
+  const showMonths = printMode !== "pays";
+  const showPays = printMode !== "wage";
+  const groups = React.useMemo(() => groupSlips(slips as any[], showMonths, showPays), [slips, showMonths, showPays]);
   return (
     <div className="print-only text-black">
       {groups.map((group, gi) => (
@@ -175,7 +177,7 @@ function PayslipSheets({
                 <div>工资：{s.hasHistory ? "按各月生效工资（见明细）" : wageLabel(s.person)}</div>
                 <div>加班：{parseOtRule(s.person.otRule).label || "—"}</div>
               </div>
-          {s.months.length ? (
+          {showMonths ? (s.months.length ? (
             <table className="mt-3 w-full border-collapse text-center text-xs">
               <thead>
                 <tr>
@@ -217,11 +219,13 @@ function PayslipSheets({
             </table>
           ) : (
             <p className="mt-3 text-xs">本区间无出勤记录。</p>
-          )}
-          <p className="mt-2 text-xs">
-            {s.person.payType === "month" ? "按月：当月有出勤发月工资 + 加班费 + 补助 − 扣款。" : "按工天：应发 = 出勤×日工资 + 加班费 + 补助 − 扣款。"}
-            本区间应发合计 ¥{money(s.total)}。
-          </p>
+          )) : null}
+          {showMonths ? (
+            <p className="mt-2 text-xs">
+              {s.person.payType === "month" ? "按月：当月有出勤发月工资 + 加班费 + 补助 − 扣款。" : "按工天：应发 = 出勤×日工资 + 加班费 + 补助 − 扣款。"}
+              本区间应发合计 ¥{money(s.total)}。
+            </p>
+          ) : null}
           {showPays ? (
             <section className="mt-4">
               <div className="text-sm font-medium">打款记录</div>
@@ -250,7 +254,7 @@ function PayslipSheets({
                       <td className="border border-black px-1 py-1 font-medium">已打款合计</td>
                       <td className="border border-black px-1 py-1 font-semibold">{money(s.paid)}</td>
                       <td className="border border-black px-1 py-1" colSpan={3}>
-                        未打款 ¥{money(s.total - s.paid)}
+                        {showMonths ? `未打款 ¥${money(s.total - s.paid)}` : ""}
                       </td>
                     </tr>
                   </tbody>
@@ -281,7 +285,7 @@ function QueryPage() {
   const yearOpts = years.length ? years : [year];
   const [name, setName] = React.useState("");
   const [printNames, setPrintNames] = React.useState<string[]>([]);
-  const [printPays, setPrintPays] = React.useState(true);
+  const [printMode, setPrintMode] = React.useState<"wage" | "both" | "pays">("both");
   const [showPicker, setShowPicker] = React.useState(false);
   const [fromY, setFromY] = React.useState(year);
   const [fromM, setFromM] = React.useState(1);
@@ -326,6 +330,11 @@ function QueryPage() {
   const slips = React.useMemo(
     () => buildSlips({ people, names: printNames, span, attendance, payments, dateFrom: startDate, dateTo: endDate }),
     [people, printNames, span, attendance, payments, startDate, endDate],
+  );
+  // 仅打印打款记录时：只有该区间有打款的人才出单，避免打印出「无打款记录的工资单」
+  const effectiveSlips = React.useMemo(
+    () => (printMode === "pays" ? slips.filter((s: any) => s.pays.length > 0) : slips),
+    [slips, printMode],
   );
   const teams = [...new Set(people.map((x) => x.team).filter(Boolean))];
   return (
@@ -385,7 +394,16 @@ function QueryPage() {
                   <ChevronDown className={`size-3.5 transition-transform ${showPicker ? "rotate-180" : ""}`} />
                 </Button>
                 <label className="inline-flex items-center gap-1.5 text-sm">
-                  <input type="checkbox" className="size-4" checked={printPays} onChange={(e) => setPrintPays(e.target.checked)} /> 打印打款记录
+                  打印
+                  <select
+                    className="field-select w-auto px-2 py-1.5"
+                    value={printMode}
+                    onChange={(e) => setPrintMode(e.target.value as "wage" | "both" | "pays")}
+                  >
+                    <option value="both">工资 + 打款记录</option>
+                    <option value="wage">仅工资</option>
+                    <option value="pays">仅打款记录</option>
+                  </select>
                 </label>
                 <Button
                   size="sm"
@@ -395,14 +413,18 @@ function QueryPage() {
                       toast.error("先勾选要打印的人");
                       return;
                     }
-                    if (!slips.length) {
-                      toast.error("所选人在该区间没有出勤或打款，没有工资条");
+                    if (!effectiveSlips.length) {
+                      toast.error(
+                        printMode === "pays"
+                          ? "所选人在该区间没有打款记录"
+                          : "所选人在该区间没有出勤或打款，没有工资条",
+                      );
                       return;
                     }
                     window.print();
                   }}
                 >
-                  打印 {slips.length} 张
+                  打印 {effectiveSlips.length} 张
                 </Button>
               </div>
             </div>
@@ -569,7 +591,7 @@ function QueryPage() {
             <p className="text-sm text-muted">还没有人员。先在「人员」里添加。</p>
           )}
         </div>
-        <PayslipSheets slips={slips as any} rangeLabel={rangeLabelText} showPays={printPays} />
+        <PayslipSheets slips={effectiveSlips} rangeLabel={rangeLabelText} printMode={printMode} />
       </div>
     </Need>
   );
