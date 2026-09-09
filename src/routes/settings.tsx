@@ -951,7 +951,7 @@ function BatchRules({
       id: uid(),
       fromDate: today,
       payType: nextPayType,
-      dailyWage: nextPayType === "month" ? p.monthWage : wage,
+      dailyWage: nextPayType === "month" ? p.dailyWage : wage,
       monthWage: nextPayType === "month" ? monthWage : 0,
       otRule: rule,
       mealAllowance: p.mealAllowance || 0,
@@ -973,7 +973,11 @@ function BatchRules({
         : `按工天 · 日薪 ${wage || 0}${rule ? ` · ${rule}` : ""}`;
     const warn =
       onlyBlank
-        ? `只填「${scope}」的空白工资（已填过的不动）。确定？`
+        ? `只填「${scope}」的空白工资（已填过的不动）。${
+            asHistory
+              ? "且会为本次填写的人记一条今天生效的工资历史（过去月份保持原工资，不追溯重算）。"
+              : ""
+          }\n\n确定？`
         : `将把「${scope}」的计薪方式/工资/加班规则改成：${desc}\n\n${
             asHistory
               ? "勾选了「记为工资历史（今天生效）」：过去月份保持原工资，不会追溯重算。"

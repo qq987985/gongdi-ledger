@@ -168,14 +168,18 @@ function PayslipSheets({
           {group.map((s: any) => (
             <article key={s.person.id} className="payslip border border-black p-4">
               <header className="border-b border-black pb-2 text-center">
-                <div className="text-lg font-semibold tracking-widest">台账 · 工资条</div>
+                <div className="text-lg font-semibold tracking-widest">{printMode === "pays" ? "台账 · 打款记录" : "台账 · 工资条"}</div>
                 <div className="mt-1 text-sm">{label}</div>
               </header>
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm md:grid-cols-4">
                 <div>姓名：{s.person.name}</div>
                 <div>班组：{s.person.team || "—"}</div>
-                <div>工资：{s.hasHistory ? "按各月生效工资（见明细）" : wageLabel(s.person)}</div>
-                <div>加班：{parseOtRule(s.person.otRule).label || "—"}</div>
+                {printMode === "pays" ? null : (
+                  <>
+                    <div>工资：{s.hasHistory ? "按各月生效工资（见明细）" : wageLabel(s.person)}</div>
+                    <div>加班：{parseOtRule(s.person.otRule).label || "—"}</div>
+                  </>
+                )}
               </div>
           {showMonths ? (s.months.length ? (
             <table className="mt-3 w-full border-collapse text-center text-xs">
@@ -331,11 +335,13 @@ function QueryPage() {
     () => buildSlips({ people, names: printNames, span, attendance, payments, dateFrom: startDate, dateTo: endDate }),
     [people, printNames, span, attendance, payments, startDate, endDate],
   );
-  // 仅打印打款记录时：只有该区间有打款的人才出单，避免打印出「无打款记录的工资单」
-  const effectiveSlips = React.useMemo(
-    () => (printMode === "pays" ? slips.filter((s: any) => s.pays.length > 0) : slips),
-    [slips, printMode],
-  );
+  // 打印内容按模式过滤：仅打款记录 → 只留有打款的人（避免打款记录空单）；
+  // 仅工资 → 只留有出勤月的人（避免工资空单）；工资+打款记录 → 不设限，按需显示。
+  const effectiveSlips = React.useMemo(() => {
+    if (printMode === "pays") return slips.filter((s: any) => s.pays.length > 0);
+    if (printMode === "wage") return slips.filter((s: any) => s.months.length > 0);
+    return slips;
+  }, [slips, printMode]);
   const teams = [...new Set(people.map((x) => x.team).filter(Boolean))];
   return (
     <Need perm="query.view">

@@ -552,7 +552,7 @@ function peopleSheetAoa(people: Person[]): unknown[][] {
     ["人员信息表"],
     [
       "序号", "姓名", "班组", "IC卡号", "联系电话", "计薪方式", "日工资", "月工资",
-      "加班规则", "性别", "年龄", "生日", "身份证号", "身份证签发机关", "身份证有效期开始",
+      "加班规则", "餐补/天", "性别", "年龄", "生日", "身份证号", "身份证签发机关", "身份证有效期开始",
       "身份证有效期结束", "开户行", "银行卡号", "户籍地址", "备注",
     ],
   ];
@@ -560,7 +560,7 @@ function peopleSheetAoa(people: Person[]): unknown[][] {
     peopleAoa.push([
       i + 1, p.name, p.team, p.personNo || "", p.phone || "",
       p.payType === "month" ? "按月" : "按工天", p.dailyWage || "", p.monthWage || "",
-      p.otRule || "", p.gender || "", p.age ?? "", p.birthday || "", p.idCard || "",
+      p.otRule || "", p.mealAllowance || "", p.gender || "", p.age ?? "", p.birthday || "", p.idCard || "",
       p.idIssuer || "", p.idValidFrom || "", p.idValidTo || "", p.bank || "", p.cardNo || "",
       p.address || "", p.remark || "",
     ]);
