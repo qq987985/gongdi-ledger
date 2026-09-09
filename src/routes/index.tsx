@@ -1,3 +1,4 @@
+import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, paymentsInYear } from "~/lib/dates";
@@ -5,6 +6,7 @@ import { monthPay, getWageAt } from "~/lib/wage";
 import { overAgeLabel } from "~/lib/idcard";
 import { contractRollup } from "~/lib/contracts";
 import { money, cn } from "~/lib/utils";
+import type { Person } from "~/lib/types";
 
 function Home() {
   const store = useApp();
@@ -26,7 +28,8 @@ function Home() {
   const pendingAmt = yearPays.filter((p) => !p.date).reduce((s, p) => s + p.amount, 0);
   const proxy = yearPays.filter((p) => p.date && p.owner !== p.receiver).length;
   const teams = [...new Set(people.map((p) => p.team).filter(Boolean))];
-  const over = people.filter((p) => overAgeLabel(p.age, p.gender) === "超龄").length;
+  const overPeople = people.filter((p) => overAgeLabel(p.age, p.gender) === "超龄");
+  const over = overPeople.length;
   const noWage = people.filter((p) => p.payType === "month" && !p.monthWage).length;
   const monthsFilled = Array.from({ length: 12 }, (_, i) => monthStatus(attendance, year, i + 1).filled > 0).filter(Boolean).length;
   const contractPay = contracts
@@ -50,6 +53,7 @@ function Home() {
         .map((t) => ({ team: t, count: people.filter((p) => p.team === t).length }))
         .sort((a, b) => b.count - a.count)}
       over={over}
+      overPeople={overPeople}
       onYear={setYear}
     />
   ) : (
@@ -70,6 +74,7 @@ function Home() {
         .map((t) => ({ team: t, count: people.filter((p) => p.team === t).length }))
         .sort((a, b) => b.count - a.count)}
       over={over}
+      overPeople={overPeople}
       onYear={setYear}
     />
   );
@@ -88,6 +93,7 @@ type HomeProps = {
   proxy: number;
   contractPay: number;
   over: number;
+  overPeople: Person[];
   teamRows: { team: string; count: number }[];
   maxTeam?: number;
   onYear: (y: number) => void;
@@ -179,7 +185,7 @@ function NewHome(p: HomeProps) {
             <Quick to="/export" title="导出" desc="按年导出整本 Excel，WPS 可打开" />
           </div>
           {p.over > 0 ? (
-            <p className="mt-4 rounded-lg bg-warn-bg px-3 py-2 text-xs text-warn">超龄提醒：{p.over} 人（男≥55 / 女≥45）</p>
+            <OverAges className="mt-4 rounded-lg bg-warn-bg px-3 py-2 text-xs text-warn" count={p.over} people={p.overPeople} />
           ) : null}
         </div>
       </section>
@@ -248,7 +254,7 @@ function ClassicHome(p: HomeProps) {
             <Quick to="/expenses" title="报销单" desc="未报销可勾选打印，现金不用传凭证" />
             <Quick to="/export" title="导出" desc="按年导出整本 Excel，WPS 可打开" />
           </div>
-          {p.over > 0 ? <p className="mt-4 text-xs text-warn">超龄提醒：{p.over} 人（男≥55 / 女≥45）</p> : null}
+          {p.over > 0 ? <OverAges className="mt-4 text-xs text-warn" count={p.over} people={p.overPeople} /> : null}
         </div>
       </section>
     </div>
@@ -287,6 +293,41 @@ function Quick({ to, title, desc }: { to: string; title: string; desc: string })
       <div className="text-sm font-medium">{title}</div>
       <div className="mt-1 text-xs text-muted">{desc}</div>
     </Link>
+  );
+}
+
+function OverAges({
+  people,
+  count,
+  className,
+}: {
+  people: Person[];
+  count: number;
+  className?: string;
+}) {
+  const [show, setShow] = React.useState(false);
+  if (!count) return null;
+  return (
+    <div className={className}>
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        className="inline-flex cursor-pointer items-center gap-1 font-medium underline decoration-dotted underline-offset-2 hover:opacity-90"
+      >
+        超龄提醒：{count} 人（男≥55 / 女≥45）
+        <span className="text-[10px]">{show ? "▲" : "▼"}</span>
+      </button>
+      {show ? (
+        <ul className="mt-2 space-y-1 border-t border-line pt-2">
+          {people.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2">
+              <span>{p.name}</span>
+              <span className="font-mono tabular-nums">{p.idCard || "—"}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
