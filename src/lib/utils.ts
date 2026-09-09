@@ -24,6 +24,14 @@ export function money(n: number): string {
   });
 }
 
+// 银行卡号打印格式化：每 4 位一组加空格（如 9999 9999 9999 999）。
+// 仅用于打印等展示场景，页面编辑/复制仍保留原始连续数字。
+export function formatCardNo(value: string | null | undefined): string {
+  const digits = (value || "").replace(/\s+/g, "");
+  if (!/^\d+$/.test(digits)) return value || "";
+  return digits.replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
 export function copyText(text: unknown): boolean {
   const t = String(text ?? "").trim();
   if (!t || typeof document === "undefined") return false;

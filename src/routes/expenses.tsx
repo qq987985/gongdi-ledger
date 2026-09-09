@@ -11,7 +11,7 @@ import { Need } from "~/components/can";
 import { ExpenseImport, TplLink } from "~/components/excel-import";
 import { DocActions, prepareNamedFile, setDoc } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
-import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
+import { money, formatCardNo, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
 import { useGuardedClose } from "~/lib/confirm-close";
 
@@ -1203,7 +1203,7 @@ function ExpenseSheets({ rows, showVoucher }: { rows: any[]; showVoucher?: boole
           </thead>
           <tbody>
             <tr>
-              {[claimants.join("、") || "—", forWhoms.join("、") || "—", banks.join("、") || "—", cards.join("、") || "—"].map(
+              {[claimants.join("、") || "—", forWhoms.join("、") || "—", banks.join("、") || "—", cards.map(formatCardNo).join("、") || "—"].map(
                 (v, i) => (
                   <td key={i} className="border border-black px-1 py-1">
                     {v}
