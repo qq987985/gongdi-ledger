@@ -1,5 +1,10 @@
 # 工地台账
 
+[![GitHub stars](https://img.shields.io/github/stars/qq987985/gongdi-ledger?style=flat-square)](https://github.com/qq987985/gongdi-ledger/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/qq987985/gongdi-ledger?style=flat-square)](https://github.com/qq987985/gongdi-ledger/network/members)
+[![License: MIT](https://img.shields.io/github/license/qq987985/gongdi-ledger?style=flat-square)](LICENSE)
+[![GHCR Image](https://img.shields.io/badge/ghcr.io-gongdi--ledger-blue?style=flat-square&logo=docker&logoColor=white)](https://github.com/qq987985/gongdi-ledger/pkgs/container/gongdi-ledger)
+
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
@@ -611,3 +616,11 @@ data/photos/id/张三-身份证-反面.jpg
 
 **Windows 点更新没反应**  
 Releases 里要先有比本机新的 `gongdi-windows.zip`。NAS 没有「点更新」，用脚本重建或拉取。
+
+---
+
+## 开源协议
+
+本项目基于 [MIT License](LICENSE) 开源，可自由使用、修改和分发。本工具仅供学习交流，软件内的示例人员（张三 / 李四等）均为虚构演示数据，请使用者对自己录入的真实数据负责。
+
+**关键词 / Keywords**：工地台账、工地记账、考勤工资、工资发放、合同收款、劳务管理、NAS 自托管、construction ledger、attendance payroll、wage management、self-hosted accounting、docker
