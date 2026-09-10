@@ -8,7 +8,7 @@
 人员、考勤、工资发放、合同收款。浏览器操作。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.7.5**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.7.6**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -31,6 +31,10 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 1. `VERSION.txt` 第一行
 2. `VERSION.txt` 加一节说明（网页左下角只显示最近 10 条）
 3. 本 README 这一节
+
+### 1.7.6
+
+- 修复飞牛「一键更新」必失败的真因：创建更新容器时请求体被丢掉（Docker 报 `config cannot be empty in order to create a container`）。现在正确按 `{ body: … }` 发送，并对历史写法兜底；Docker 的错误也取成一句话显示。新增守卫测试防复发。
 
 ### 1.7.5
 

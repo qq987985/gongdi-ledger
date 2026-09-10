@@ -66,8 +66,11 @@
 
 **D. 待现场确认**
 
-10. **反代环境的一键更新**（1.7.4 已改成异步 + 反代兼容 + 可回滚），需要在真实飞牛 NAS 上验证一次；
-    失败时看 `data/logs/update.log` 与 `data/.gongdi-update-error.txt`。
+10. **飞牛「一键更新」**：真因已于 1.7.6 修复——`dockerReq` 的第三参数期待 `{ body: … }`，
+    而创建更新容器时把容器配置直传了进去，请求体被当成空对象丢弃，Docker 报
+    `config cannot be empty in order to create a container`（现场截图确认）。1.7.4 的异步化 /
+    反代兼容 / 回滚顺序也都是为这条路做的。**仍需在真实 NAS 上点一次「更新到 1.7.7（或更高）」确认闭环**：
+    成功会在提示里给出结果并自动刷新；失败看 `data/logs/update.log` 与 `data/.gongdi-update-error.txt`。
 
 **E. 文档滞后**
 

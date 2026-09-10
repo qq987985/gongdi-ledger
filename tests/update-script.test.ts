@@ -8,7 +8,71 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkSameOrigin, isPortable, startUpdateJob, UPDATER_SCRIPT, updateJobStatus } from "../src/lib/update.server";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import {
+  checkSameOrigin,
+  dockerMessage,
+  isPortable,
+  startUpdateJob,
+  UPDATER_SCRIPT,
+  updateJobStatus,
+} from "../src/lib/update.server";
+
+/** 去掉注释再扫：源码注释里也会出现 `dockerReq(...)` 示例写法，不能当成真实调用 */
+function stripComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .map((l) => l.replace(/(^|[^:"'`])\/\/.*$/, "$1"))
+    .join("\n");
+}
+
+/**
+ * 把源码里的 dockerReq(...) 调用切成参数列表（够用的括号/引号处理）。
+ * 用途：锁住「第三参数必须写成 { body: … } 或 { stream: … }」这条约定——
+ * 曾经把容器配置直接当第三参数传，被当成"没有请求体"补成 "{}"，
+ * Docker 回 `config cannot be empty in order to create a container`，飞牛一键更新一直失败。
+ */
+function dockerReqCalls(src: string): string[][] {
+  const out: string[][] = [];
+  for (const m of src.matchAll(/dockerReq\(/g)) {
+    let depth = 1; // 只统计 ( ) —— 参数的括号层级
+    let inner = 0; // { } 与 [ ] 的层级：这些里面的逗号不是参数分隔符
+    let inStr: string | null = null;
+    const args: string[] = [];
+    let cur = "";
+    for (let i = m.index! + m[0].length; i < src.length; i++) {
+      const ch = src[i];
+      if (inStr) {
+        cur += ch;
+        if (ch === inStr && src[i - 1] !== "\\") inStr = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") {
+        inStr = ch;
+        cur += ch;
+        continue;
+      }
+      if (ch === "{" || ch === "[") inner++;
+      if (ch === "}" || ch === "]") inner--;
+      if (ch === "(") depth++;
+      if (ch === ")") {
+        depth--;
+        if (depth === 0) break;
+      }
+      if (ch === "," && depth === 1 && inner === 0) {
+        args.push(cur.trim());
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    args.push(cur.trim());
+    out.push(args);
+  }
+  return out;
+}
 
 test("更新脚本：先创建新容器，再停/删老容器（配置有问题时老容器还在）", () => {
   const create = UPDATER_SCRIPT.indexOf("/containers/create?name=");
@@ -119,4 +183,30 @@ test("后台更新任务：抛异常时状态里带出原因（前端据此提�
   assert.equal(st.running, false);
   assert.equal(st.ok, false);
   assert.match(st.error, /unauthorized/);
+});
+
+test("dockerReq 调用：第三参数必须写成 { body } / { stream }（防「请求体被丢掉」重演）", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  const calls = dockerReqCalls(stripComments(src));
+  assert.equal(calls.length >= 8, true, `应能解析出 dockerReq 调用（实际 ${calls.length} 处）`);
+  const bad = calls
+    .filter((args) => args.length >= 3 && args[2].startsWith("{"))
+    .filter((args) => !/(^|[{,\s])(body|stream)\s*:/.test(args[2]))
+    .map((args) => args[2].slice(0, 80).replace(/\s+/g, " "));
+  assert.deepEqual(bad, [], `这些 dockerReq 调用的第三参数会被当成「没有请求体」而丢掉：\n${bad.join("\n")}`);
+});
+
+test("dockerReq：容器配置直传（历史写法）也要能发出请求体", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  assert.match(src, /body === undefined && o\.stream === undefined && Object\.keys\(opts\)\.length > 0/);
+});
+
+test('dockerMessage：把 Docker 的 {"message":"…"} 取成一句话，别再给用户看整段 JSON', () => {
+  assert.equal(
+    dockerMessage('{"message":"config cannot be empty in order to create a container"}'),
+    "config cannot be empty in order to create a container",
+  );
+  assert.equal(dockerMessage('{"message":"  No such container  "}'), "No such container");
+  assert.equal(dockerMessage("pull access denied for x"), "pull access denied for x");
+  assert.equal(dockerMessage(""), "");
 });

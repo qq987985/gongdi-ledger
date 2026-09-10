@@ -288,9 +288,35 @@ export async function checkUpdate(fresh = false): Promise<UpdateInfo> {
   };
 }
 
-function dockerReq(method: string, path: string, opts: { body?: unknown; stream?: boolean } = {}): Promise<any> {
+/**
+ * 把 Docker 的 `{"message":"..."}` 错误体取成一句话给人看（原来直接把整段 JSON 抛出去，
+ * 界面上就是 `{"message":"config cannot be empty..."}` 这种半成品）。
+ */
+export function dockerMessage(raw: string): string {
+  const t = (raw || "").trim();
+  if (!t) return "";
+  try {
+    const j = JSON.parse(t) as { message?: unknown };
+    if (j && typeof j.message === "string" && j.message.trim()) return j.message.trim();
+  } catch {}
+  return t.slice(0, 400);
+}
+
+function dockerReq(
+  method: string,
+  path: string,
+  opts: { body?: unknown; stream?: boolean } | Record<string, unknown> = {},
+): Promise<any> {
   return new Promise((resolve, reject) => {
-    let data = opts.body == null ? null : typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body);
+    // 第三参数有两种写法，必须都认：
+    //   ① dockerReq("POST", path, { body: {…} })          ← 推荐
+    //   ② dockerReq("POST", path, { Image, Cmd, … })      ← 直接把容器配置当第三参数（历史写法）
+    // 曾经只认 ①，写法 ② 被当成「没有请求体」补成 "{}"，Docker 于是报
+    // 「config cannot be empty in order to create a container」——飞牛「一键更新」一直失败就是它。
+    const o = opts as { body?: unknown; stream?: boolean };
+    let body = o.body;
+    if (body === undefined && o.stream === undefined && Object.keys(opts).length > 0) body = opts;
+    let data = body == null ? null : typeof body === "string" ? body : JSON.stringify(body);
     // Docker 对「POST 且无请求体」的调用会报 invalid JSON: got EOF while reading request body，
     // 统一补一个最小的空 JSON 对象 {}（stop/start/images/create 都接受）。
     if (data == null && method.toUpperCase() === "POST") data = "{}";
@@ -309,7 +335,7 @@ function dockerReq(method: string, path: string, opts: { body?: unknown; stream?
         res.on("end", () => {
           const raw = Buffer.concat(chunks).toString("utf8");
           if ((res.statusCode || 0) >= 300)
-            return reject(new Error(raw.slice(0, 400) || String(res.statusCode)));
+            return reject(new Error(dockerMessage(raw) || String(res.statusCode)));
           if (opts.stream) {
             for (const line of raw.split("\n").filter(Boolean))
               try {
@@ -513,16 +539,14 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
   if (!helperBinds.some((b: string) => String(b).includes(":/data")))
     helperBinds.unshift("/vol1/1000/docker/attendance/data:/data");
   if (!helperBinds.some((b: string) => String(b).includes("docker.sock"))) helperBinds.push(`${SOCK}:${SOCK}`);
-  const helper = await dockerReq(
-    "POST",
-    "/containers/create?name=gongdi-updater",
-    {
+  const helper = await dockerReq("POST", "/containers/create?name=gongdi-updater", {
+    body: {
       Image: image,
       Cmd: ["node", "/data/.gongdi-updater.cjs"],
       WorkingDir: "/data",
       HostConfig: { Binds: helperBinds, AutoRemove: true, RestartPolicy: { Name: "no" } },
-    } as any,
-  );
+    },
+  });
   await dockerReq("POST", `/containers/${helper.Id}/start`);
   await logServer("info", "已启动更新容器，稍后自动替换", { image, helper: helper.Id });
   return { ok: true, restarting: true };
