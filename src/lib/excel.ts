@@ -232,8 +232,10 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
     const monthMatch = name.match(/(\d+)\s*月/);
     if (!monthMatch) continue;
     const month = Number(monthMatch[1]);
+    // sheet 名里带年份（如「2025年3月考勤」）时以它为准，否则跨年度总台账会把所有年份都算成第一年
+    const sheetYear = name.match(/(20\d{2})/);
     for (const row of sheetRecords(wb.Sheets[name])) {
-      const rec = attFromRow(row, year, month);
+      const rec = attFromRow(row, sheetYear ? Number(sheetYear[1]) : year, month);
       if (rec) attendance.push(rec);
     }
   }
@@ -779,6 +781,9 @@ function parsePct(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** 合同导出文件里由软件生成、不参与导入的派生表 */
+const CONTRACT_SKIP_SHEETS = new Set(["资金对照", "影像资料"]);
+
 export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
   contracts: ContractRecord[];
   entries: ContractEntry[];
@@ -791,7 +796,8 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
     return `${c.year}|${c.code}|${c.name}`;
   }
   for (const name of wb.SheetNames) {
-    if (name.includes("填写说明")) continue;
+    // 导出文件里的派生表：资金对照是公式结果、影像资料只是文件名清单，都按数据表解析会重复生成合同/明细
+    if (name.includes("填写说明") || CONTRACT_SKIP_SHEETS.has(name)) continue;
     const rows = sheetRecords(wb.Sheets[name]);
     const isEntrySheet = /报量|开票|收款/.test(name) && !name.includes("合同");
     for (const row of rows) {
@@ -814,7 +820,16 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
             contractId: c.id,
             kind,
             date: pick(row, ["日期", "发放日期"]) || `${c.year}-01-01`,
-            amount: numPick(row, ["金额", "含税金额", "收款总金额", "月报量金额", "开票金额", "收款账金额", "收款金额"]),
+            amount: numPick(row, [
+              "录入金额", // 明细表（月报量明细/合同管理表导出）用的是这一列；漏了会退到「含税金额」，导出再导入金额被放大
+              "金额",
+              "含税金额",
+              "收款总金额",
+              "月报量金额",
+              "开票金额",
+              "收款账金额",
+              "收款金额",
+            ]),
             amountExcl: numPick(row, ["不含税金额", "开票不含税"]),
             taxRate: parsePct(pick(row, ["开票税率", "税率"])) || (kind === "invoice" ? c.taxRate : 0),
             workerPay: numPick(row, ["代付农民工", "总包代付农民工", "农民工代付"]),
@@ -823,7 +838,8 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
               : kind === "receipt"
                 ? "sub"
                 : "",
-            no: pick(row, ["发票号", "期次", "单号"]),
+            no: pick(row, ["发票号", "期次", "单号", "回单号"]),
+            fileName: pick(row, ["影像文件", "文件名"]),
             remark: pick(row, ["备注"]),
           } as EntryInput),
         );
@@ -868,21 +884,24 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
       const report = numPick(row, ["月报量金额", "月报量"]);
       const invoice = numPick(row, ["开票金额"]);
       const receipt = numPick(row, ["收款账金额", "收款金额"]);
-      if (report)
+      // 明细 sheet 已经带了逐笔数据时，不能再从合同管理表的合计列再造一笔，
+      // 否则同一份导出文件再导入，开票/报量/收款会翻倍。
+      const hasDetail = (kw: string) => wb.SheetNames.some((n) => !n.includes("合同") && n.includes(kw));
+      if (report && !hasDetail("报量"))
         entries.push(
           normalizeEntry({
             contractId: c.id, kind: "report", date: `${year}-01-31`, amount: report,
             no: "导入合计", remark: "从表合计拆出，可再拆明细",
           } as EntryInput),
         );
-      if (invoice)
+      if (invoice && !hasDetail("开票"))
         entries.push(
           normalizeEntry({
             contractId: c.id, kind: "invoice", date: `${year}-01-31`, amount: invoice,
             taxRate: c.taxRate, no: "导入合计", remark: "从表合计拆出，可再拆明细",
           } as EntryInput),
         );
-      if (receipt)
+      if (receipt && !hasDetail("收款"))
         entries.push(
           normalizeEntry({
             contractId: c.id, kind: "receipt", date: `${year}-01-31`, amount: receipt,

@@ -352,9 +352,17 @@ export function ledgerRevisionOf(data: unknown): string {
   return createHash("sha256").update(JSON.stringify(data)).digest("hex");
 }
 
-export async function ledgerRevision(): Promise<string> {
-  const data = await readLedger();
+/**
+ * 台账版本号：空台账（ledger.json 还不存在或读不出来）一律用 "" 作为哨兵。
+ * GET 的 X-Ledger-Revision 响应头与 PUT 的 CAS 基准必须都走这里：
+ * 两边口径不一致时空台账第一笔保存会被误判成「已被其他设备修改」，永远写不进去。
+ */
+export function ledgerRevisionValue(data: Partial<LedgerState> & { empty?: boolean }): string {
   return "empty" in data && data.empty ? "" : ledgerRevisionOf(data);
+}
+
+export async function ledgerRevision(): Promise<string> {
+  return ledgerRevisionValue(await readLedger());
 }
 
 let ledgerWriteQueue: Promise<boolean> = Promise.resolve(true);

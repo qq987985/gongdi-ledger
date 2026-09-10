@@ -29,7 +29,7 @@ import { Label } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
 import { authOp, authStatus, hashPassword, lockGate, unlockGate, gateUnlocked } from "~/lib/auth";
 import { confirmRemoveYear, monthStatus, nextYear } from "~/lib/dates";
-import { pullNasLedger, nasEnabled } from "~/lib/nas-sync";
+import { pullNasLedger, flushPendingLedger, nasEnabled } from "~/lib/nas-sync";
 import { can, NAV_PERM, setLivePerms, subscribePerms } from "~/lib/perms";
 import { useApp } from "~/lib/store";
 import { formatVersion } from "~/lib/changelog";
@@ -197,6 +197,8 @@ export function BookSwitcher({ compact }: { compact?: boolean }) {
   if (!user || !books.length) return null;
   async function switchTo(id: string) {
     if (id === bookId) return;
+    // 先把当前台账还没保存的改动推上去，再切台账
+    await flushPendingLedger();
     await authOp("useBook", { id });
     setBookId(id);
     const n = books.find((b) => b.id === id)?.name || id;
@@ -267,6 +269,8 @@ export function BookSwitcher({ compact }: { compact?: boolean }) {
             type="button"
             onClick={async () => {
               if (!name.trim()) return;
+              // 先把当前台账还没保存的改动推上去，再新建（否则这批改动会落到新台账）
+              await flushPendingLedger();
               const r = await authOp("createBook", { name: name.trim() });
               setName("");
               setAdding(false);
@@ -783,7 +787,8 @@ export function AppShell() {
         try {
           const { detectNas, pullNasLedger } = await import("~/lib/nas-sync");
           await detectNas();
-          await pullNasLedger();
+          // 登录后第一次进当前台账：允许把本机旧数据升级上去（空台账时）
+          await pullNasLedger({ seed: true });
         } catch {}
       }
     } catch {

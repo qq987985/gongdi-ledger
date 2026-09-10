@@ -110,13 +110,18 @@ function buildSlips({
           remark: x.remark || "",
         }));
       if (!months.length && !pays.length) return null;
+      // 「已打款」必须和「应发」同口径：只算打进本人名下的款。
+      // 代收他人的钱记在 collected 里单列，否则工资条上会出现负数未打款。
+      const paid = pays.filter((x: any) => x.owner === name).reduce((s: number, x: any) => s + x.amount, 0);
+      const collected = pays.filter((x: any) => x.owner !== name).reduce((s: number, x: any) => s + x.amount, 0);
       return {
         person: p,
         hasHistory: (p.wageHistory || []).some((h) => (h.fromDate || "").trim() !== ""),
         months,
         total: months.reduce((s, m) => s + m.pay, 0),
         pays,
-        paid: pays.reduce((s, x) => s + x.amount, 0),
+        paid,
+        collected,
       };
     })
     .filter(Boolean);
@@ -255,12 +260,19 @@ function PayslipSheets({
                       </tr>
                     ))}
                     <tr>
-                      <td className="border border-black px-1 py-1 font-medium">已打款合计</td>
+                      <td className="border border-black px-1 py-1 font-medium">已打款合计（本人）</td>
                       <td className="border border-black px-1 py-1 font-semibold">{money(s.paid)}</td>
                       <td className="border border-black px-1 py-1" colSpan={3}>
                         {showMonths ? `未打款 ¥${money(s.total - s.paid)}` : ""}
                       </td>
                     </tr>
+                    {s.collected ? (
+                      <tr>
+                        <td className="border border-black px-1 py-1" colSpan={5}>
+                          另代收他人 ¥{money(s.collected)}，不计入本人应发、也不算本人已打款。
+                        </td>
+                      </tr>
+                    ) : null}
                   </tbody>
                 </table>
               ) : (

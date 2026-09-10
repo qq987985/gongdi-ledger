@@ -8,13 +8,13 @@ import { Can, useCan } from "~/components/can";
 import { PayTypePick, OtRulePick } from "~/components/pay-fields";
 import { WinUpdate, VersionLog } from "~/components/shell";
 import { uid } from "~/lib/utils";
-import type { Person } from "~/lib/types";
+import type { Person, WageHistory } from "~/lib/types";
 import { localToday } from "~/lib/dates";
 import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear, confirmRemoveYear } from "~/lib/dates";
 import { wageLabel, parseOtRule } from "~/lib/wage";
 import { hashPassword, unlockGate, lockGate, authStatus, authOp } from "~/lib/auth";
-import { nasEnabled, pushNasBackup, pullNasLedger } from "~/lib/nas-sync";
+import { nasEnabled, pushNasBackup, pullNasLedger, flushPendingLedger } from "~/lib/nas-sync";
 import { clearAllPhotos } from "~/lib/photos";
 import { PERM_GROUPS, PRESETS } from "~/lib/perms";
 
@@ -625,6 +625,7 @@ function AccountsCard() {
                       size="sm"
                       type="button"
                       onClick={async () => {
+                        await flushPendingLedger();
                         await authOp("useBook", { id: b.id });
                         window.dispatchEvent(new CustomEvent("gongdi-book", { detail: b.name }));
                         window.dispatchEvent(new Event("gongdi-books"));
@@ -652,6 +653,7 @@ function AccountsCard() {
                         type="button"
                         onClick={async () => {
                           if (!confirm(`删除台账「${b.name}」？该套数据会删掉。`)) return;
+                          await flushPendingLedger();
                           await authOp("deleteBook", { id: b.id });
                           await load();
                           window.dispatchEvent(new Event("gongdi-books"));
@@ -679,6 +681,7 @@ function AccountsCard() {
             type="button"
             onClick={async () => {
               if (!bookName.trim()) return;
+              await flushPendingLedger();
               await authOp("createBook", { name: bookName.trim() });
               setBookName("");
               await load();
@@ -944,21 +947,40 @@ function BatchRules({
   const visibleIds = visible.map((p) => p.id);
   const selectedVisible = ids.filter((id) => visibleIds.includes(id));
   const [asHistory, setAsHistory] = React.useState(true);
-  /** 把本次改动记入工资历史（今天生效），或替换今天已有的记录；不勾选则只改当前字段（历史月份会追溯重算） */
-  function withHistory(p: Person, nextPayType: "day" | "month"): Person {
+  /**
+   * 把本次改动记入工资历史（今天生效），或替换今天已有的记录；不勾选则只改当前字段（历史月份会追溯重算）。
+   * prev 是改动前的人（取旧工资），next 是算好新工资的人：只有这样才能给没有历史的人补一条基准，
+   * 否则 getWageAt 匹配不到今天之前的历史就会回退到「当前工资」= 新工资，过去月份照样被追溯重算。
+   */
+  function withHistory(prev: Person, next: Person, nextPayType: "day" | "month"): Person {
     const today = localToday();
-    const entry = {
+    const entry: WageHistory = {
       id: uid(),
       fromDate: today,
       payType: nextPayType,
-      dailyWage: nextPayType === "month" ? p.dailyWage : wage,
+      dailyWage: nextPayType === "month" ? prev.dailyWage : wage,
       monthWage: nextPayType === "month" ? monthWage : 0,
       otRule: rule,
-      mealAllowance: p.mealAllowance || 0,
+      mealAllowance: prev.mealAllowance || 0,
       remark: "批量设置",
     };
-    const rest = (p.wageHistory || []).filter((h) => h.fromDate !== today);
-    return { ...p, wageHistory: [...rest, entry] };
+    const rest = (prev.wageHistory || []).filter((h) => h.fromDate !== today);
+    const hasPast = rest.some((h) => (h.fromDate || "").trim() !== "" && h.fromDate < today);
+    const baseline: WageHistory[] = hasPast
+      ? []
+      : [
+          {
+            id: uid(),
+            fromDate: "2000-01-01",
+            payType: prev.payType,
+            dailyWage: prev.dailyWage,
+            monthWage: prev.monthWage,
+            otRule: prev.otRule,
+            mealAllowance: prev.mealAllowance || 0,
+            remark: "调薪前基准（批量设置自动补录）",
+          },
+        ];
+    return { ...next, wageHistory: [...baseline, ...rest, entry] };
   }
   function apply(idsToUse: string[], onlyBlank: boolean) {
     if (!idsToUse.length) {
@@ -995,12 +1017,12 @@ function BatchRules({
           if (payType === "month" ? p.monthWage : p.dailyWage) return p;
           n += 1;
           const blanked: Person = nextPayType === "month" ? { ...p, monthWage } : { ...p, dailyWage: wage };
-          return asHistory ? withHistory(blanked, nextPayType) : blanked;
+          return asHistory ? withHistory(p, blanked, nextPayType) : blanked;
         }
         n += 1;
         const next: Person =
           nextPayType === "month" ? { ...p, payType: "month", monthWage, otRule: rule } : { ...p, payType: "day", dailyWage: wage, otRule: rule };
-        return asHistory ? withHistory(next, nextPayType) : next;
+        return asHistory ? withHistory(p, next, nextPayType) : next;
       }),
     );
     toast.success(`已更新 ${n} 人`);
