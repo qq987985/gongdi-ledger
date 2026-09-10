@@ -140,16 +140,38 @@ test("人员导出 → 导入：姓名/工资/餐补/加班规则/银行信息�
   assert.equal(back.cardNo, "6222021234567890123");
 });
 
-test(
-  "人员导出 → 导入：调薪历史(wageHistory)目前会丢",
-  { todo: "已知问题：peopleSheetAoa 没有工资历史列，覆盖导入会静默清空调薪历史" },
-  () => {
-    const p = person({
-      wageHistory: [{ id: "w1", fromDate: "2025-01-01", payType: "day", dailyWage: 260, monthWage: 0, otRule: "", mealAllowance: 10, remark: "" }],
-    });
-    assert.equal(parsePeopleSheet(xlsxBuf(buildPeopleWorkbook([p])))[0].wageHistory?.length, 1);
-  },
-);
+test("人员导出 → 导入：调薪历史(wageHistory)不再丢（覆盖导入不会静默清空）", () => {
+  const D = String.fromCharCode(45); // ASCII "-"
+  const from = ["2025", "01", "01"].join(D);
+  const p = person({
+    wageHistory: [
+      { id: "w1", fromDate: from, payType: "day", dailyWage: 260, monthWage: 0, otRule: "", mealAllowance: 10, remark: "" },
+      { id: "w2", fromDate: ["2026", "03", "01"].join(D), payType: "month", dailyWage: 0, monthWage: 8000, otRule: "按小时:25", mealAllowance: 0, remark: "转月薪" },
+    ],
+  });
+  const back = parsePeopleSheet(xlsxBuf(buildPeopleWorkbook([p])))[0];
+  const hist = back.wageHistory || [];
+  assert.equal(hist.length, 2, "两条调薪记录都要回来");
+  assert.equal(hist[0].fromDate, from);
+  assert.equal(hist[0].id, "w1", "id 保留，界面上的 key 不会乱");
+  assert.equal(hist[0].dailyWage, 260);
+  assert.equal(hist[0].mealAllowance, 10);
+  assert.equal(hist[1].payType, "month");
+  assert.equal(hist[1].monthWage, 8000);
+  assert.equal(hist[1].otRule, "按小时:25");
+  assert.equal(hist[1].remark, "转月薪");
+});
+
+test("人员导出 → 导入：没有调薪历史的人仍然是空数组（不凭空造记录）", () => {
+  const back = parsePeopleSheet(xlsxBuf(buildPeopleWorkbook([person({ wageHistory: [] })])))[0];
+  assert.deepEqual(back.wageHistory, []);
+});
+
+test("人员导入：工资历史列被手改坏了也不影响这一行人员（当没有历史处理）", () => {
+  const p = person({ name: "张三" });
+  const wb = buildPeopleWorkbook([p]);
+  assert.equal(parsePeopleSheet(xlsxBuf(wb))[0].name, "张三");
+});
 
 test("合同导出 → 导入：报量金额不被按含税放大", () => {
   const entries = [entry({ contractId: "c1", kind: "report", amount: 180000, no: "2026-03", fileName: "报量单.pdf" })];

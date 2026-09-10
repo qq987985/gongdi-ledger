@@ -27,9 +27,9 @@
 - `pnpm test` 用 **Node 内置测试器**直接跑 `tests/*.test.ts`（零依赖，不需要 vitest/jest —— 因为 `package.json` 里全是 `latest`，`pnpm add` 会顺带重解析无关依赖）。
 - 只在 `tests/*.test.ts` 里测纯函数；`tests/register.mjs` 负责给省略扩展名的相对导入补 `.ts`。Node 需 ≥ 22.18。
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
-- 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。现在只有 1 个 todo（人员导出丢 `wageHistory`）。
+- 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。**现在 0 个 todo（已知缺陷已清零）**。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.8.0 起覆盖 127 个用例（126 pass + 1 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.0 起覆盖 129 个用例（129 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
@@ -124,7 +124,6 @@
 - **HTTP 层无请求体上限**：`scripts/app-server-index.mjs` 在鉴权前把整个 body 读进内存。
 - **`dates.ts` 的日校验、`idcard.ts` 的 16/17 位、工资历史 `fromDate` 补零**：均已于 1.7.8 修复
   （原来的 `todo` 用例已转成正式用例）。
-- **人员导出丢 `wageHistory`**：测试里以 `todo` 标记着（Excel 往返改造，单独排期）。
 - **照片类型仍按文件名匹配**（张三-身份证-正面.jpg）：跨台账隔离已做，但同名不同人仍需人工核对。
 
 ## 已知部署风险

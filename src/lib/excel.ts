@@ -12,7 +12,7 @@ import {
   type ContractEntry,
   type ContractRecord,
 } from "./contracts";
-import type { AttendanceRow, Expense, InsuranceMember, InsurancePolicy, Payment, Person } from "./types";
+import type { AttendanceRow, Expense, InsuranceMember, InsurancePolicy, Payment, Person, WageHistory } from "./types";
 
 /** normalizeEntry 入参别名，避免 4 处重复断言 */
 type EntryInput = Parameters<typeof normalizeEntry>[0];
@@ -126,6 +126,55 @@ export function detectWorkbookYear(wb: XLSX.WorkBook, fallback: number): number 
   return fallback;
 }
 
+/** 调薪历史在表里存成一段 JSON（列名「工资历史」）：导出/导入必须无损，否则覆盖导入会静默清空它 */
+function parseWageHistoryCell(raw: string): WageHistory[] {
+  const t = (raw || "").trim();
+  if (!t || t === "[]") return [];
+  let arr: unknown;
+  try {
+    arr = JSON.parse(t);
+  } catch {
+    return []; // 手改坏了就当没有，不能让整行人员解析失败
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: WageHistory[] = [];
+  for (const x of arr) {
+    if (!x || typeof x !== "object") continue;
+    const e = x as Record<string, unknown>;
+    const fromDate = normalizeDate(String(e.fromDate || ""));
+    if (!fromDate) continue;
+    out.push({
+      id: String(e.id || uid()),
+      fromDate,
+      payType: String(e.payType || "") === "month" ? "month" : "day",
+      dailyWage: Number(e.dailyWage) || 0,
+      monthWage: Number(e.monthWage) || 0,
+      otRule: String(e.otRule || ""),
+      mealAllowance: Number(e.mealAllowance) || 0,
+      remark: String(e.remark || ""),
+    });
+  }
+  return out.sort((a, b) => a.fromDate.localeCompare(b.fromDate));
+}
+
+/** 导出一段 JSON（字段名保持可读，方便直接在表里核对） */
+function wageHistoryCell(list: WageHistory[] | undefined): string {
+  const arr = (list || []).filter((h) => (h.fromDate || "").trim() !== "");
+  if (!arr.length) return "";
+  return JSON.stringify(
+    arr.map((h) => ({
+      id: h.id,
+      fromDate: h.fromDate,
+      payType: h.payType,
+      dailyWage: h.dailyWage,
+      monthWage: h.monthWage,
+      otRule: h.otRule,
+      mealAllowance: h.mealAllowance,
+      remark: h.remark,
+    })),
+  );
+}
+
 export function rowToPerson(row: Row): Person | null {
   const name = pick(row, ["姓名", "name"]);
   if (!name || name === "合计" || name.includes("使用说明") || name === "人员信息表") return null;
@@ -146,7 +195,7 @@ export function rowToPerson(row: Row): Person | null {
     payType: /月/.test(pick(row, ["计薪方式", "计薪", "payType"])) ? "month" : "day",
     otRule: pick(row, ["加班规则", "计算加班规则", "otRule"]),
     mealAllowance: Number(pick(row, ["餐补/天", "餐补", "mealAllowance"])) || 0,
-    wageHistory: [],
+    wageHistory: parseWageHistoryCell(pick(row, ["工资历史", "调薪历史", "wageHistory"])),
     bank: pick(row, ["开户行", "bank"]),
     cardNo: pick(row, ["银行卡号", "卡号", "cardNo"]),
     address: pick(row, ["户籍地址", "户籍地地址", "户籍地", "address"]),
@@ -555,7 +604,7 @@ function peopleSheetAoa(people: Person[]): unknown[][] {
     [
       "序号", "姓名", "班组", "IC卡号", "联系电话", "计薪方式", "日工资", "月工资",
       "加班规则", "餐补/天", "性别", "年龄", "生日", "身份证号", "身份证签发机关", "身份证有效期开始",
-      "身份证有效期结束", "开户行", "银行卡号", "户籍地址", "备注",
+      "身份证有效期结束", "开户行", "银行卡号", "户籍地址", "备注", "工资历史",
     ],
   ];
   people.forEach((p, i) => {
@@ -564,7 +613,7 @@ function peopleSheetAoa(people: Person[]): unknown[][] {
       p.payType === "month" ? "按月" : "按工天", p.dailyWage || "", p.monthWage || "",
       p.otRule || "", p.mealAllowance || "", p.gender || "", p.age ?? "", p.birthday || "", p.idCard || "",
       p.idIssuer || "", p.idValidFrom || "", p.idValidTo || "", p.bank || "", p.cardNo || "",
-      p.address || "", p.remark || "",
+      p.address || "", p.remark || "", wageHistoryCell(p.wageHistory),
     ]);
   });
   return peopleAoa;
