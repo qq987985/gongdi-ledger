@@ -29,7 +29,7 @@
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。现在只有 1 个 todo（人员导出丢 `wageHistory`）。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.8.0 起覆盖 122 个用例（121 pass + 1 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.0 起覆盖 127 个用例（126 pass + 1 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
@@ -93,6 +93,22 @@
   版本不比本机新 → 换下一个源；全都不新 → 抛错且**不替换容器**。读不到版本号时退回镜像 ID 比对（`sameImageId`）。
 - 拉到的版本会写进 `updateJobState.imageVersion`，前端在「版本没变」时直接说明「本次拉到的镜像就是 X」。
   现场教训：1.7.8 发布 1 分钟后在 1.7.7 里点更新，加速站给的还是 1.7.7 的镜像 → 容器换了、版本没变。
+
+## 1.7.10 一键更新的真因（重要教训）
+
+- **更新脚本必须做语法检查**。`UPDATER_SCRIPT` 是「用模板字符串拼出来的一段 JS」，
+  里面写 `"\n"` 会被模板字符串变成**真换行**，生成的 .cjs 里字符串字面量跨行 →
+  node 连解析都过不去（报 SyntaxError 到 stderr）→ 容器 AutoRemove 删掉 →
+  界面只有「已受理」，日志一字没有。**症状是「更新说成功、什么都不变」，极难猜。**
+  `tests/update-script.test.ts` 现在用 `new Function(UPDATER_SCRIPT)` 真的解析一遍 —— 改脚本必须过这条。
+- 生成脚本要写日志，用 `log()` / `fail()`（同时写 stdout 与 `data/logs/update.log`），
+  第一步就写「更新容器已启动」：脚本没跑起来时也要有痕迹。
+- 更新容器：任务走 `GONGDI_JOB` 环境变量 + `Cmd: ["node","-e",UPDATER_SCRIPT]`（不依赖 data 挂载）；
+  `AutoRemove: false`（失败后还能查它的日志）；启动两秒后 `GET /containers/{id}/json` 检查是否已退出，
+  退出就抛错并把 `readContainerLogs()` 的输出贴出来；`/api/update-log` 会带上
+  「更新容器：已退出（exit N）」+ 它的日志。
+- 镜像侧的两道保险（`buildImageCandidates()` 按 sha 拉、`imageVersionOf()` 读镜像内 VERSION.txt、
+  `sameImageId()` 比对）保留：对付加速站缓存旧 `latest` 有用，但**不是**上面那个病根。
 
 ## 仍待处理（已核实、未修）
 

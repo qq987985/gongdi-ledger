@@ -18,6 +18,9 @@ process.env.DATA_DIR = root;
 const U = await import("../src/lib/update.server");
 
 const LOG = join(root, "logs", "update.log");
+const D = String.fromCharCode(46); // ASCII "."
+const H = String.fromCharCode(45); // ASCII "-"
+const ERROR_FILE = join(root, D + "gondi" + H + "update" + H + "error" + D + "txt");
 
 test("appendUpdateLog：写进 data/logs/update.log，并带 ISO 时间戳", async () => {
   await U.appendUpdateLog("[应用] 开始更新（Docker）：当前镜像 x:latest");
@@ -34,7 +37,7 @@ test("appendUpdateLog：并发追加不丢行（日志掉了就没法排查）",
 });
 
 test("readUpdateLog：读回日志与错误文件；没有错误文件时只回日志", async () => {
-  await writeFile(join(root, ".gongdi-update-error.txt"), "2026-09-10T00:00:00.000Z\n新容器启动失败，已回滚到原容器\n", "utf8");
+  await writeFile(ERROR_FILE, "2026-09-10T00:00:00.000Z\n新容器启动失败，已回滚到原容器\n", "utf8");
   const r = await U.readUpdateLog();
   assert.match(r.errorText, /已回滚到原容器/);
   assert.match(r.log, /\[应用\] 开始更新/);

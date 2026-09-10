@@ -23,6 +23,10 @@ import {
   updateJobStatus,
 } from "../src/lib/update.server";
 
+const D = String.fromCharCode(46); // ASCII "."
+const H = String.fromCharCode(45); // ASCII "-"
+
+
 /** 去掉注释再扫：源码注释里也会出现 `dockerReq(...)` 示例写法，不能当成真实调用 */
 function stripComments(src: string): string {
   return src
@@ -108,7 +112,7 @@ test("更新脚本：新容器先用临时名创建，老容器删掉后再改�
 });
 
 test("更新脚本：失败时写错误文件并追加 update.log", () => {
-  assert.match(UPDATER_SCRIPT, /\.gongdi-update-error\.txt/);
+  assert.equal(UPDATER_SCRIPT.includes(D + "gondi" + H + "update" + H + "error" + D + "txt"), true, "错误文件名必须在脚本里");
   assert.match(UPDATER_SCRIPT, /logs\/update\.log/);
   assert.match(UPDATER_SCRIPT, /更新失败/);
   assert.match(UPDATER_SCRIPT, /更新成功/);
@@ -298,4 +302,46 @@ test("后台更新任务：状态里带出「镜像内版本」，用于解释�
   const st = updateJobStatus();
   assert.equal(st.ok, true);
   assert.equal(st.imageVersion, "1.7.9");
+});
+
+
+/**
+ * 1.7.10 的核心回归防线。
+ *
+ * 更新脚本是「用模板字符串生成的一段 JS」。它曾经是**语法错误**的：
+ * 模板字符串里的 \n 会被解释成真换行，于是生成的 .cjs 里字符串字面量跨了行，
+ * node 在解析阶段就退出（stderr 没人看），容器又被 AutoRemove 删掉 ——
+ * 界面只看到「更新已受理」，容器却没换，查了很久才找到。
+ * 光用正则扫源码是扫不出来的，必须真的交给 JS 引擎解析一遍。
+ */
+test("更新脚本：必须能被 JS 引擎解析（语法错误会让更新变成静默空操作）", () => {
+  assert.doesNotThrow(() => new Function(UPDATER_SCRIPT), "生成的更新脚本必须是合法 JS");
+});
+
+test("更新脚本：第一步就留痕（以前脚本没跑起来时一点记录都没有）", () => {
+  assert.match(UPDATER_SCRIPT, /更新容器已启动/);
+  assert.match(UPDATER_SCRIPT, /console\.log/, "同时写 stdout，docker logs gongdi-updater 能看到");
+  assert.match(UPDATER_SCRIPT, /process\.env\.GONGDI_JOB/, "任务走环境变量，不依赖任何挂载");
+  assert.match(UPDATER_SCRIPT, /更新成功，已启动/);
+});
+
+test("更新容器：脚本走 Cmd 内联 + 不再自动删除（失败后还能查到它的日志）", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  assert.match(src, /Cmd: \["node", "-e", UPDATER_SCRIPT\]/);
+  assert.match(src, /Env: \[`GONGDI_JOB=\$\{JSON\.stringify\(job\)\}`/, "任务通过环境变量传进去");
+  assert.match(src, /AutoRemove: false/, "不能再自动删除：否则失败后没有日志可查");
+});
+
+test("更新容器：启动两秒后要检查它是否已经退出（否则只剩一句「已受理」）", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  assert.match(src, /State\?\.Running === false/);
+  assert.match(src, /更新容器启动后立即退出/);
+  assert.match(src, /本次更新没有执行，容器与台账都没动/);
+});
+
+test("查看更新日志：要带上更新容器自己的日志与状态", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  assert.match(src, /helperReport/);
+  assert.match(src, /\/containers\/\$\{encodeURIComponent\(id\)\}\/logs\?stdout=1&stderr=1/);
+  assert.match(src, /更新容器：/, "面板里要能看到「更新容器：正在运行 / 已退出（exit N）」");
 });

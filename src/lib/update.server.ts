@@ -9,6 +9,7 @@ import http from "node:http";
 const REPO = (process.env.UPDATE_REPO || "qq987985/gongdi-ledger").trim();
 const DEFAULT_IMAGE = (process.env.GONGDI_IMAGE || "ghcr.1ms.run/qq987985/gongdi-ledger:latest").trim();
 const SOCK = "/var/run/docker.sock";
+const HELPER_NAME = "gongdi-updater"; // 专门跑替换容器的临时容器名
 
 let updateLogQueue: Promise<void> = Promise.resolve();
 
@@ -63,14 +64,52 @@ async function tailFile(path: string): Promise<string> {
  * `data/.gongdi-update-error.txt`（更新容器失败时写的最后一份错误）。
  * 供界面上的「查看更新日志」使用，只读、不抛。
  */
-export async function readUpdateLog(): Promise<{ log: string; errorText: string; note: string }> {
+export async function readUpdateLog(): Promise<{ log: string; errorText: string; note: string; helper: string }> {
   const root = dataDir();
-  if (!root) return { log: "", errorText: "", note: "未开启 NAS 持久化，本机运行没有更新日志" };
-  const [log, errorText] = await Promise.all([
+  if (!root) return { log: "", errorText: "", note: "未开启 NAS 持久化，本机运行没有更新日志", helper: "" };
+  const [log, errorText, helper] = await Promise.all([
     tailFile(join(root, "logs", "update.log")),
-    tailFile(join(root, ".gongdi-update-error.txt")),
+    tailFile(join(root, ".gondi-update-error.txt")),
+    helperReport(),
   ]);
-  return { log, errorText, note: log || errorText ? "" : "还没有更新记录（data/logs/update.log 不存在）" };
+  return {
+    log,
+    errorText,
+    helper,
+    note: log || errorText || helper ? "" : "还没有更新记录（data/logs/update.log 不存在）",
+  };
+}
+
+/**
+ * 更新容器（gongdi-updater）自己的状态与日志。
+ *
+ * 为什么要看它：换容器是它干的，应用侧只看到「已启动更新容器」。它一声不响地退出
+ * （脚本语法错误、挂载不对、镜像有问题）时，界面以前完全看不出来。现在更新容器不再
+ * 自动删除（AutoRemove:false），所以随时能读到它的 docker logs。
+ */
+async function helperReport(): Promise<string> {
+  try {
+    const j = await dockerReq("GET", `/containers/${HELPER_NAME}/json`);
+    const st = (j?.State || {}) as { Running?: boolean; ExitCode?: number; StartedAt?: string; FinishedAt?: string };
+    const when = (t?: string) => (t && !t.startsWith("0001") ? String(t).slice(11, 19) : "");
+    const head = st.Running
+      ? `更新容器：正在运行（${when(st.StartedAt)} 启动）`
+      : `更新容器：已退出（exit ${st.ExitCode ?? "?"}${when(st.FinishedAt) ? `，${when(st.FinishedAt)}` : ""}）`;
+    const logs = await readContainerLogs(HELPER_NAME, 80);
+    return `${head}\n${logs || "（更新容器没有任何输出）"}`;
+  } catch {
+    return ""; // 没挂 docker.sock / 还没跑过更新
+  }
+}
+
+/** 读某个容器的 stdout+stderr；未开 TTY 时日志带二进制帧头，清掉再给人看 */
+async function readContainerLogs(id: string, tail = 120): Promise<string> {
+  const r = await dockerReq("GET", `/containers/${encodeURIComponent(id)}/logs?stdout=1&stderr=1&tail=${tail}`);
+  const raw = typeof r === "string" ? r : String((r as { raw?: string })?.raw || "");
+  return raw
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
+    .replace(/\r\n/g, "\n")
+    .trimEnd();
 }
 
 let cache: { at: number; data: RemoteInfo | null } = { at: 0, data: null };
@@ -684,11 +723,27 @@ function uniqueImages(list: unknown[]): string[] {
 
 export const UPDATER_SCRIPT = `const http=require("node:http");
 const fs=require("node:fs");
-function docker(method,path,body){
+const nodePath=require("node:path");
+const DATA_DIR=process.env.DATA_DIR||"/data";
+// 进展既写 stdout（docker logs gongdi-updater 能看到），也追加到 data/logs/update.log。
+// 教训（1.7.10）：这段脚本以前是**语法错误**的 —— 模板字符串里的 \\n 变成了真换行，
+// 生成的 .cjs 里字符串字面量跨行，node 直接 SyntaxError 退出，容器又被 AutoRemove 删掉，
+// 于是「更新已受理」之后再无任何痕迹、容器也没换。第一步就先落一行「我起来了」。
+function log(msg){
+  const line=new Date().toISOString()+" "+msg;
+  try{console.log(line)}catch(e){}
+  try{fs.mkdirSync(nodePath.join(DATA_DIR,"logs"),{recursive:true})}catch(e){}
+  try{fs.appendFileSync(nodePath.join(DATA_DIR,"logs","update.log"),line+"\\n")}catch(e){}
+}
+function fail(msg){
+  log("更新失败: "+msg);
+  try{fs.writeFileSync(nodePath.join(DATA_DIR,".gondi-update-error.txt"),new Date().toISOString()+"\\n"+msg+"\\n")}catch(e){}
+}
+function docker(method,apiPath,body){
   return new Promise((resolve,reject)=>{
     let data=body==null?null:typeof body==="string"?body:JSON.stringify(body);
     if(data==null&&method==="POST")data="{}";
-    const req=http.request({socketPath:"/var/run/docker.sock",path,method,headers:data?{"Content-Type":"application/json","Content-Length":Buffer.byteLength(data)}:{}},res=>{
+    const req=http.request({socketPath:"/var/run/docker.sock",path:apiPath,method,headers:data?{"Content-Type":"application/json","Content-Length":Buffer.byteLength(data)}:{}},res=>{
       const chunks=[];
       res.on("data",c=>chunks.push(c));
       res.on("end",()=>{
@@ -704,27 +759,37 @@ function docker(method,path,body){
   });
 }
 (async()=>{
-  const job=JSON.parse(fs.readFileSync("/data/.gongdi-next.json","utf8"));
+  // 任务优先从环境变量拿（不依赖任何挂载）；兼容旧写法：读 data/.gondi-next.json
+  let job=null;
+  if(process.env.GONGDI_JOB){
+    try{job=JSON.parse(process.env.GONGDI_JOB)}catch(e){throw new Error("更新任务解析失败："+String((e&&e.message)||e))}
+  }
+  if(!job) job=JSON.parse(fs.readFileSync(nodePath.join(DATA_DIR,".gondi-next.json"),"utf8"));
+  if(!job||!job.create) throw new Error("更新任务为空（缺少容器配置）");
+  log("更新容器已启动：新镜像 "+String(job.create.Image||"")+"，待替换容器 "+String(job.oldId||"").slice(0,12));
   await new Promise(r=>setTimeout(r,2500));
   const nextName=job.name+"-next";
   try{await docker("DELETE","/containers/"+encodeURIComponent(nextName)+"?force=true")}catch(e){}
   // 先用临时名把新容器创建出来：镜像/挂载/配置有问题会在这一步失败，
   // 此时老容器还活着、业务不中断（原实现先删老容器，创建一失败就直接没服务了）。
   const created=await docker("POST","/containers/create?name="+encodeURIComponent(nextName),job.create);
+  log("新容器已创建 "+String(created.Id||"").slice(0,12)+"（临时名 "+nextName+"）");
   // 2) 停老容器（先不删，留着回滚），把端口让出来
   let oldStopped=false;
-  try{await docker("POST","/containers/"+job.oldId+"/stop?t=12");oldStopped=true}catch(e){}
+  try{await docker("POST","/containers/"+job.oldId+"/stop?t=12");oldStopped=true;log("老容器已停止")}catch(e){log("停老容器失败（继续尝试启动新容器）："+String((e&&e.message)||e))}
   // 3) 启动新容器；起不来就把老容器拉回来（回滚），保证业务不中断
   try{
     await docker("POST","/containers/"+created.Id+"/start");
+    log("新容器已启动");
   }catch(err){
     try{await docker("DELETE","/containers/"+created.Id+"?force=true")}catch(e){}
-    if(oldStopped){try{await docker("POST","/containers/"+job.oldId+"/start")}catch(e){}}
+    if(oldStopped){try{await docker("POST","/containers/"+job.oldId+"/start")}catch(e){log("回滚启动老容器也失败了")}}
     throw new Error("新容器启动失败，已回滚到原容器："+String((err&&err.message)||err));
   }
   // 4) 新容器已经在跑：移除老容器，再让新容器接管正式名字
   try{await docker("DELETE","/containers/"+job.oldId+"?force=true")}catch(e){}
   await docker("POST","/containers/"+created.Id+"/rename?name="+encodeURIComponent(job.name));
+  log("已接管名称 "+job.name);
   // 5) 顺手清掉上一个版本的镜像：老容器已经删了，这份镜像再没人用，
   //    留着只会让 NAS 每更新一次就多占几百 MB。删错了也不会影响新容器（层是共享的、按引用计数）。
   try{
@@ -733,20 +798,16 @@ function docker(method,path,body){
     if(oldImage&&(!newImage||oldImage!==newImage)){
       const r=await docker("DELETE","/images/"+encodeURIComponent(oldImage)+"?force=1&noprune=1");
       const mb=Math.round(((r&&r.Size)||0)/1048576);
-      try{fs.appendFileSync("/data/logs/update.log",new Date().toISOString()+" 已清理旧镜像 "+(oldImage+"").slice(0,19)+(mb?"（约 "+mb+" MB）":"")+"\n")}catch(e){}
+      log("已清理旧镜像 "+(oldImage+"").slice(0,19)+(mb?"（约 "+mb+" MB）":""));
     }
   }catch(e){
-    try{fs.appendFileSync("/data/logs/update.log",new Date().toISOString()+" 清理旧镜像失败（不影响本次更新）: "+String((e&&e.message)||e)+"\n")}catch(e){}
+    log("清理旧镜像失败（不影响本次更新）: "+String((e&&e.message)||e));
   }
-  try{fs.mkdirSync("/data/logs",{recursive:true})}catch(e){}
-  try{fs.appendFileSync("/data/logs/update.log",new Date().toISOString()+" 更新成功，已启动 "+job.name+"\n")}catch(e){}
-  try{fs.unlinkSync("/data/.gongdi-next.json")}catch(e){}
-  try{fs.unlinkSync("/data/.gongdi-updater.cjs")}catch(e){}
+  log("更新成功，已启动 "+job.name);
+  try{fs.unlinkSync(nodePath.join(DATA_DIR,".gondi-next.json"))}catch(e){}
+  try{fs.unlinkSync(nodePath.join(DATA_DIR,".gondi-updater.cjs"))}catch(e){}
 })().catch(e=>{
-  const msg=String((e&&e.message)||e);
-  try{fs.writeFileSync("/data/.gongdi-update-error.txt",new Date().toISOString()+"\n"+msg+"\n"+String((e&&e.stack)||""))}catch(e){}
-  try{fs.mkdirSync("/data/logs",{recursive:true})}catch(e){}
-  try{fs.appendFileSync("/data/logs/update.log",new Date().toISOString()+" 更新失败: "+msg+"\n")}catch(e){}
+  fail(String((e&&e.message)||e));
   process.exit(1);
 });
 `;
@@ -839,13 +900,14 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
     HostConfig: hostConfig,
     NetworkingConfig: { EndpointsConfig: endpoints },
   };
-  await writeFile("/data/.gongdi-next.json", JSON.stringify({ oldId: me.Id, oldImage: String(me.Image || ""), name, create }));
+  const job = { oldId: me.Id, oldImage: String(me.Image || ""), name, create };
+  await writeFile("/data/.gondi-next.json", JSON.stringify(job));
   await writeFile("/data/.gongdi-updater.cjs", UPDATER_SCRIPT);
   try {
-    await dockerReq("POST", "/containers/gongdi-updater/stop?t=2");
+    await dockerReq("POST", `/containers/${HELPER_NAME}/stop?t=2`);
   } catch {}
   try {
-    await dockerReq("DELETE", "/containers/gongdi-updater?force=true");
+    await dockerReq("DELETE", `/containers/${HELPER_NAME}?force=true`);
   } catch {}
   const helperBinds = binds.filter(
     (b: string) => String(b).includes(":/data") || String(b).includes("docker.sock"),
@@ -853,15 +915,32 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
   if (!helperBinds.some((b: string) => String(b).includes(":/data")))
     helperBinds.unshift("/vol1/1000/docker/attendance/data:/data");
   if (!helperBinds.some((b: string) => String(b).includes("docker.sock"))) helperBinds.push(`${SOCK}:${SOCK}`);
-  const helper = await dockerReq("POST", "/containers/create?name=gongdi-updater", {
+  const helper = await dockerReq("POST", `/containers/create?name=${HELPER_NAME}`, {
     body: {
       Image: image,
-      Cmd: ["node", "/data/.gongdi-updater.cjs"],
-      WorkingDir: "/data",
-      HostConfig: { Binds: helperBinds, AutoRemove: true, RestartPolicy: { Name: "no" } },
+      Entrypoint: [],
+      Cmd: ["node", "-e", UPDATER_SCRIPT],
+      WorkingDir: "/",
+      Env: [`GONGDI_JOB=${JSON.stringify(job)}`, "DATA_DIR=/data"],
+      HostConfig: { Binds: helperBinds, AutoRemove: false, RestartPolicy: { Name: "no" } },
     },
   });
   await dockerReq("POST", `/containers/${helper.Id}/start`);
+  // 更新容器必须是真的在跑：以前它因脚本语法错误/挂载不对而瞬间退出，应用侧却回「已受理」，
+  // 用户看到的就是「更新说成功、什么都没变」。这里等两秒看它是否还活着，顺便带回它自己的日志。
+  await new Promise((r) => setTimeout(r, 2000));
+  const helperState = await dockerReq("GET", `/containers/${helper.Id}/json`).catch(() => null);
+  if (helperState?.State?.Running === false) {
+    const code = String(helperState.State.ExitCode ?? "?");
+    const logs = await readContainerLogs(helper.Id).catch(() => "");
+    await logServer("error", "更新容器启动后立即退出", { exitCode: code, image, logs: logs.slice(-800) });
+    await appendUpdateLog(`[应用] 更新容器启动后立即退出（exit ${code}）：${logs.slice(-400) || "(没有任何输出)"}`);
+    await dockerReq("DELETE", `/containers/${helper.Id}?force=true`).catch(() => {});
+    throw new Error(
+      `更新容器启动后立刻退出了（exit ${code}），本次更新没有执行，容器与台账都没动。原因：` +
+        `${logs.slice(-300) || "更新容器没有任何输出"}`
+    );
+  }
   await logServer("info", "已启动更新容器，稍后自动替换", { image, helper: helper.Id });
   await appendUpdateLog(`[应用] 已启动更新容器，约 10 秒后替换 ${name}（镜像 ${image}）`);
   return { ok: true, restarting: true, imageVersion: pickedVersion };

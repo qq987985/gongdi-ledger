@@ -435,7 +435,7 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
     | { running?: boolean; startedAt?: number; doneAt?: number; ok?: boolean; error?: string; step?: string }
     | undefined;
   const stamp = (t?: number) => (t && t > 0 ? new Date(t).toLocaleString("zh-CN", { hour12: false }) : "");
-  const [jobLog, setJobLog] = React.useState<{ log?: string; errorText?: string; note?: string } | null>(null);
+  const [jobLog, setJobLog] = React.useState<{ log?: string; errorText?: string; note?: string; helper?: string } | null>(null);
   const [logBusy, setLogBusy] = React.useState(false);
   /** 把更新日志读回界面：以前只能去 NAS 一层层点开 data/logs/update.log */
   async function toggleLog() {
@@ -446,7 +446,13 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
     setLogBusy(true);
     try {
       const r = await fetch("/api/update-log", { cache: "no-store", signal: AbortSignal.timeout(2e4) });
-      const d = (await r.json().catch(() => ({}))) as { log?: string; errorText?: string; note?: string; error?: string };
+      const d = (await r.json().catch(() => ({}))) as {
+        log?: string;
+        errorText?: string;
+        note?: string;
+        helper?: string;
+        error?: string;
+      };
       if (!r.ok || d.error) {
         toast.error(d.error || `读取日志失败（HTTP ${r.status}）`);
         return;
@@ -587,9 +593,9 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
         </button>
       </div>
       {jobLog ? (
-        jobLog.log || jobLog.errorText ? (
+        jobLog.log || jobLog.errorText || jobLog.helper ? (
           <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-line bg-surface p-2 text-[11px] leading-relaxed text-muted">
-            {[jobLog.errorText, jobLog.log].filter(Boolean).join("\n\n")}
+            {[jobLog.errorText, jobLog.helper, jobLog.log].filter(Boolean).join(String.fromCharCode(10,10))}
           </pre>
         ) : (
           <p className="mt-1 text-xs text-subtle">{jobLog.note || "没有日志内容"}</p>
