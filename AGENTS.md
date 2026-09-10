@@ -29,7 +29,7 @@
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。**现在 0 个 todo（已知缺陷已清零）**。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.8.0 起覆盖 129 个用例（129 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.0 起覆盖 130 个用例（130 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
@@ -109,6 +109,17 @@
   「更新容器：已退出（exit N）」+ 它的日志。
 - 镜像侧的两道保险（`buildImageCandidates()` 按 sha 拉、`imageVersionOf()` 读镜像内 VERSION.txt、
   `sameImageId()` 比对）保留：对付加速站缓存旧 `latest` 有用，但**不是**上面那个病根。
+
+## 1.7.12 更新容器（gongdi-updater）的生命周期
+
+- 它是**容器**不是镜像：由 `applyDockerUpdate()` 用应用镜像创建，`Cmd: ["node","-e",UPDATER_SCRIPT]`，
+  任务走 `GONGDI_JOB` 环境变量；换完容器就退出（exit 0）。
+- **故意不自动删**（`AutoRemove: false`，1.7.10 起）：失败时 `docker logs gongdi-updater` 与
+  `/api/update-log` 的「更新容器：已退出（exit N）」是唯一的现场证据。
+- 但它是可丢弃的：手动 `docker rm -f gongdi-updater` 无副作用；下次更新会先 stop/remove 再重建。
+- **别让它占住镜像**：已退出的更新容器在 Docker 里仍算「引用了镜像」。`usedImageIdsOf()` 在统计占用时
+  跳过「已退出且名为 gongdi-updater」的容器；`pruneLocalImages()` 在清理前先把它删掉。
+  否则它会让上一次更新拉到的那份镜像永远删不掉。
 
 ## 仍待处理（已核实、未修）
 

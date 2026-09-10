@@ -665,6 +665,35 @@ export function pickRemovableImages(
   return out;
 }
 
+/**
+ * 从容器列表里算出「真正占住镜像」的镜像 ID。
+ *
+ * 为什么要挑出来：更新容器（`gongdi-updater`）是一次性的，跑完就退出、也已经没人再用它，
+ * 但它作为「已停止的容器」仍会被 Docker 记着，于是它那个镜像永远删不掉（几百 MB）。
+ * 规则：正在跑的容器一律算占用；已退出的更新容器不算占用（它随时可以被删）。
+ */
+export function usedImageIdsOf(containers: { ImageID?: string; Image?: string; State?: string; Names?: string[] }[]): string[] {
+  const out: string[] = [];
+  for (const c of containers || []) {
+    const names = (c?.Names || []).map((n) => String(n || "").replace(/^\//, ""));
+    const isHelper = names.includes(HELPER_NAME);
+    if (isHelper && String(c?.State || "") !== "running") continue; // 已退出的更新容器不占镜像
+    const id = String(c?.ImageID || c?.Image || "");
+    if (id) out.push(id);
+  }
+  return out;
+}
+
+/** 本地是否有一个已经退出、可以随手删掉的更新容器 */
+export async function staleHelperContainer(): Promise<boolean> {
+  try {
+    const j = await dockerReq("GET", `/containers/${HELPER_NAME}/json`);
+    return Boolean(j?.State) && j.State.Running === false;
+  } catch {
+    return false;
+  }
+}
+
 /** 列出本地属于本项目的镜像（用于界面提示）与其中可清理的部分 */
 export async function listLocalImages(): Promise<{ images: LocalImage[]; removable: LocalImage[]; totalBytes: number }> {
   const [raw, containers, me] = await Promise.all([
@@ -672,7 +701,7 @@ export async function listLocalImages(): Promise<{ images: LocalImage[]; removab
     dockerReq("GET", "/containers/json?all=1"),
     selfContainer().catch(() => null),
   ]);
-  const usedIds: string[] = (containers || []).map((c: any) => String(c?.ImageID || c?.Image || ""));
+  const usedIds = usedImageIdsOf(containers || []);
   const currentId = String(me?.Image || "");
   const all: LocalImage[] = (raw || [])
     .filter((img: any) => (img?.RepoTags || []).some((t: string) => t && /gongdi-ledger/i.test(t)))
@@ -689,7 +718,25 @@ export async function listLocalImages(): Promise<{ images: LocalImage[]; removab
  * 删掉不再使用的历史镜像，返回释放的字节数与失败原因。
  * 安全性由 `pickRemovableImages` 保证：动不到当前镜像，也动不到任何容器在用的镜像。
  */
-export async function pruneLocalImages(): Promise<{ removed: LocalImage[]; freed: number; errors: string[] }> {
+export async function pruneLocalImages(): Promise<{
+  removed: LocalImage[];
+  freed: number;
+  errors: string[];
+  helperRemoved: boolean;
+}> {
+  // 更新容器（gongdi-updater）是一次性的：跑完就退出，留着只为方便查日志。
+  // 清理镜像时顺手把它删掉，否则它会把「上一次更新用的那个镜像」一直占住。
+  let helperRemoved = false;
+  try {
+    const j = await dockerReq("GET", `/containers/${HELPER_NAME}/json`);
+    if (j?.State && j.State.Running === false) {
+      await dockerReq("DELETE", `/containers/${HELPER_NAME}?force=true`);
+      helperRemoved = true;
+      await appendUpdateLog("[应用] 已删除更新容器 gongdi-updater（它只是一次性的临时容器）");
+    }
+  } catch {
+    /* 没有这个容器就跳过 */
+  }
   const { removable } = await listLocalImages();
   const removed: LocalImage[] = [];
   const errors: string[] = [];
@@ -709,7 +756,7 @@ export async function pruneLocalImages(): Promise<{ removed: LocalImage[]; freed
       ? `[应用] 已清理 ${removed.length} 个旧镜像，释放约 ${(freed / 1048576).toFixed(0)} MB`
       : "[应用] 清理旧镜像：没有可清理的镜像",
   );
-  return { removed, freed, errors };
+  return { removed, freed, errors, helperRemoved };
 }
 
 function uniqueImages(list: unknown[]): string[] {

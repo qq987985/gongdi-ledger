@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { hasDockerSock, listLocalImages, pruneLocalImages, checkSameOrigin } from "~/lib/update.server";
+import { hasDockerSock, listLocalImages, pruneLocalImages, staleHelperContainer, checkSameOrigin } from "~/lib/update.server";
 import { resolveTenant } from "~/lib/accounts.server";
 import { persistOn } from "~/lib/nas-fs.server";
 import { logServer } from "~/lib/log.server";
@@ -10,6 +10,10 @@ import { logServer } from "~/lib/log.server";
  * 为什么需要它：每次「一键更新」都会拉一份新镜像，旧镜像留在 NAS 的 Docker 里，
  * 越积越多（一份几百 MB）。更新流程本身现在会自动删掉上一个版本（见 UPDATER_SCRIPT），
  * 这里再给一个手动入口，把历史上积攒的那几份一次清掉。
+ *
+ * 顺带说明：`gongdi-updater` 是**更新时临时起的容器**（不是镜像），跑完就退出。
+ * 它不影响本次台账运行，随时可以删；这里清理时会顺手删掉它，
+ * 否则它会把「上一次更新用的那个镜像」一直占住，让那个镜像永远删不掉。
  *
  * 安全边界（`pickRemovableImages`）：只删名字里带 gongdi-ledger 的镜像，
  * 且必须「不是当前镜像、没有被任何容器引用」——不会动到 NAS 上其它容器的镜像。
@@ -24,8 +28,8 @@ export const Route = createFileRoute("/api/images")({
         if (!(await hasDockerSock()))
           return Response.json({ ok: true, available: false, images: [], removable: [], totalBytes: 0, note: "本机没有挂载 docker.sock，无法清理" });
         try {
-          const r = await listLocalImages();
-          return Response.json({ ok: true, available: true, ...r });
+          const [r, helperContainer] = await Promise.all([listLocalImages(), staleHelperContainer()]);
+          return Response.json({ ok: true, available: true, helperContainer, ...r });
         } catch (e) {
           return Response.json({ error: e instanceof Error ? e.message : "读取镜像列表失败" }, { status: 500 });
         }
@@ -39,7 +43,13 @@ export const Route = createFileRoute("/api/images")({
           return Response.json({ error: "本机没有挂载 docker.sock，无法清理" }, { status: 400 });
         try {
           const r = await pruneLocalImages();
-          return Response.json({ ok: true, count: r.removed.length, freed: r.freed, errors: r.errors });
+          return Response.json({
+            ok: true,
+            count: r.removed.length,
+            freed: r.freed,
+            errors: r.errors,
+            helperRemoved: r.helperRemoved,
+          });
         } catch (e) {
           const msg = e instanceof Error ? e.message : "清理失败";
           await logServer("error", "清理旧镜像异常", { error: msg });

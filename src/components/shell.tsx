@@ -476,6 +476,7 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
         totalBytes?: number;
         note?: string;
         error?: string;
+        helperContainer?: boolean;
       };
       if (!r.ok || d.error) {
         toast.error(d.error || `读取镜像失败（HTTP ${r.status}）`);
@@ -486,20 +487,37 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
         return;
       }
       const n = d.removable?.length || 0;
-      if (!n) {
+      if (!n && !d.helperContainer) {
         toast.success("没有可清理的旧镜像（当前版本和正在用的镜像不会被删）");
         return;
       }
       const mb = Math.round((d.totalBytes || 0) / 1048576);
-      if (!confirm(`将删除 ${n} 个不再使用的旧镜像，约释放 ${mb} MB。\n当前运行的镜像与其它容器的镜像不会被删除。继续？`)) return;
+      const helper = d.helperContainer ? "\n顺带删掉「更新容器 gongdi-updater」（它只是更新时的临时容器，删了不影响台账）。" : "";
+      if (
+        !confirm(
+          `将删除 ${n} 个不再使用的旧镜像，约释放 ${mb} MB。\n当前运行的镜像与其它容器的镜像不会被删除。${helper}继续？`,
+        )
+      )
+        return;
       const p = await fetch("/api/images", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-      const j = (await p.json().catch(() => ({}))) as { count?: number; freed?: number; errors?: string[]; error?: string };
+      const j = (await p.json().catch(() => ({}))) as {
+        count?: number;
+        freed?: number;
+        errors?: string[];
+        helperRemoved?: boolean;
+        error?: string;
+      };
       if (!p.ok || j.error) {
         toast.error(j.error || `清理失败（HTTP ${p.status}）`);
         return;
       }
       const freedMb = Math.round((j.freed || 0) / 1048576);
-      toast.success(`已清理 ${j.count || 0} 个旧镜像，释放约 ${freedMb} MB`);
+      const tail = j.helperRemoved ? "，并删掉了临时更新容器" : "";
+      toast.success(
+        j.count
+          ? `已清理 ${j.count} 个旧镜像，释放约 ${freedMb} MB${tail}`
+          : `没有旧镜像要清理${j.helperRemoved ? "（已删掉临时更新容器）" : ""}`,
+      );
       if (j.errors?.length) toast.error(`有 ${j.errors.length} 个没删掉：${j.errors[0]}`);
     } catch {
       toast.error("清理失败（服务未响应）");

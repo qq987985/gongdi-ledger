@@ -17,6 +17,7 @@ import {
   isPortable,
   parseImageVersion,
   pickRemovableImages,
+  usedImageIdsOf,
   sameImageId,
   startUpdateJob,
   UPDATER_SCRIPT,
@@ -344,4 +345,19 @@ test("查看更新日志：要带上更新容器自己的日志与状态", async
   assert.match(src, /helperReport/);
   assert.match(src, /\/containers\/\$\{encodeURIComponent\(id\)\}\/logs\?stdout=1&stderr=1/);
   assert.match(src, /更新容器：/, "面板里要能看到「更新容器：正在运行 / 已退出（exit N）」");
+});
+
+/** 更新容器是一次性的：它不该把「上一次更新用的镜像」一直占住 */
+test("usedImageIdsOf：正在跑的容器算占用；已退出的更新容器不算", () => {
+  const H = String.fromCharCode(45);
+  const helper = "/gongdi" + H + "updater";
+  const list = [
+    { ImageID: "sha256:app", State: "running", Names: ["/attendance-app"] },
+    { ImageID: "sha256:db", State: "exited", Names: ["/postgres"] },
+    { ImageID: "sha256:new", State: "exited", Names: [helper] },
+    { ImageID: "sha256:old", State: "running", Names: [helper] },
+  ];
+  const used = usedImageIdsOf(list);
+  assert.deepEqual(used, ["sha256:app", "sha256:db", "sha256:old"]);
+  assert.equal(used.includes("sha256:new"), false, "已退出的更新容器不占镜像（否则旧镜像永远删不掉）");
 });
