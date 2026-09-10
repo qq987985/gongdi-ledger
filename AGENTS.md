@@ -12,7 +12,15 @@
 - 自动保存是整本台账快照，必须通过 `pushNasLedger()` 的串行队列，不能直接并发 PUT。
 - 日期必须使用 `src/lib/dates.ts` 的解析函数；金额必须使用 `round2()`；工资计算必须集中在 `src/lib/wage.ts`。
 - 修改数据模型时同步检查 `types.ts`、`store.ts`、`nas-sync.ts`、Excel 导入导出。
-- 发版前运行 `pnpm exec tsc --noEmit` 和 `pnpm run build`。
+- 提交前跑三道闸：`pnpm run typecheck`、`pnpm test`、`pnpm build`（规范 §2，测试见 §10）。
+
+## 回归测试与质量闸门（2026-09-10 起）
+
+- `pnpm test` 用 **Node 内置测试器**直接跑 `tests/*.test.ts`（零依赖，不需要 vitest/jest —— 因为 `package.json` 里全是 `latest`，`pnpm add` 会顺带重解析无关依赖）。
+- 只在 `tests/*.test.ts` 里测纯函数；`tests/register.mjs` 负责给省略扩展名的相对导入补 `.ts`。Node 需 ≥ 22.18。
+- **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
+- 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。现在有 4 个 todo。
+- CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
 
 ## 台账同步的三条硬约束（1.7.1 起）
 
