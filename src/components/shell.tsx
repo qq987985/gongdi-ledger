@@ -338,34 +338,88 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
   React.useEffect(() => {
     load(true);
   }, []);
-  async function waitRestart() {
-    for (let i = 0; i < 40; i++) {
+  /** 轮询 /api/version：既判断服务有没有回来，也拿到真实版本号（用来核对更新到底成没成） */
+  async function pollVersion(tries: number): Promise<{ back: boolean; version: string }> {
+    for (let i = 0; i < tries; i++) {
       await new Promise((r) => setTimeout(r, 3e3));
       try {
-        if ((await fetch("/api/version", { cache: "no-store" })).ok) {
-          location.reload();
-          return;
-        }
+        const r = await fetch("/api/version", { cache: "no-store" });
+        if (!r.ok) continue;
+        const j = (await r.json()) as { current?: string };
+        return { back: true, version: String(j?.current || "") };
       } catch {}
+    }
+    return { back: false, version: "" };
+  }
+  /** 更新已受理后的收尾：等服务回来、核对版本真的变了再刷新 */
+  async function finishUpdate(target: string) {
+    const p = await pollVersion(40);
+    if (!p.back) {
+      toast.error("服务 2 分钟内没有恢复。请到 NAS 执行 docker ps -a | grep attendance 查看容器状态");
+      setBusy(false);
+      return;
+    }
+    if (target && p.version && formatVersion(p.version) !== formatVersion(target)) {
+      toast.error(`服务已重启，但版本还是 ${formatVersion(p.version)}（期望 ${formatVersion(target)}）；请查看 data/logs/update.log`);
+      setBusy(false);
+      return;
     }
     location.reload();
   }
+  /** 轮询后台更新任务进度；轮询本身失败 = 容器正在被替换，转入等待重启 */
+  async function pollJob(): Promise<{ settled: boolean; ok: boolean; error: string }> {
+    for (let i = 0; i < 150; i++) {
+      await new Promise((r) => setTimeout(r, 2e3));
+      try {
+        const r = await fetch("/api/update?status=1", { cache: "no-store" });
+        if (!r.ok) continue;
+        const j = (await r.json()) as { status?: { running?: boolean; ok?: boolean; error?: string } };
+        const s = j.status;
+        if (!s) continue;
+        if (s.running) continue;
+        return { settled: true, ok: Boolean(s.ok), error: String(s.error || "") };
+      } catch {
+        return { settled: false, ok: false, error: "" }; // 服务已下线，进入等重启阶段
+      }
+    }
+    return { settled: false, ok: false, error: "" };
+  }
   async function apply() {
     const docker = info?.mode === "docker";
+    const target = String(info?.remote || "");
     if (!confirm(docker ? "将拉取新镜像并重启容器。data 台账不会动。大约一两分钟。" : "将下载新版本并重启。data 台账不会动。")) return;
     setBusy(true);
     try {
       const r = await fetch("/api/update?apply=1", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-      const d = await r.json();
+      const d = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok || d.error) {
-        toast.error(d.error || "更新失败");
+        // 服务端明确说失败：把原因原样显示出来（以前空原因会被兜底成「更新失败」，看不出所以然）
+        toast.error(d.error || `更新未执行（HTTP ${r.status}；详情见 data/logs）`);
         setBusy(false);
         return;
       }
-      toast.success("正在更新并重启…");
-      void waitRestart();
+      toast.success("已开始更新（拉镜像/替换容器），请稍候…");
+      const job = await pollJob();
+      if (job.settled && !job.ok) {
+        toast.error(job.error || "更新失败；详情见 data/logs/update.log");
+        setBusy(false);
+        return;
+      }
+      void finishUpdate(target);
     } catch {
-      toast.error("更新失败");
+      // 请求中断不等于失败：容器/进程被替换时响应本来就会被切断。去问服务端真实结果。
+      toast.message("更新请求中断，正在确认服务状态…");
+      const p = await pollVersion(10);
+      if (p.back && (!target || formatVersion(p.version) === formatVersion(target))) {
+        toast.success(`已更新到 ${formatVersion(p.version)}`);
+        location.reload();
+        return;
+      }
+      toast.error(
+        p.back
+          ? `更新似乎没有生效，当前仍是 ${formatVersion(p.version)}；请查看 data/logs/update.log`
+          : "更新请求中断且服务未响应；请查看 data/logs/update.log，或用「一键拉取 / 解压新包」手动更新",
+      );
       setBusy(false);
     }
   }

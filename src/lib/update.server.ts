@@ -1,4 +1,5 @@
 import { readVersionText } from "./nas-fs.server";
+import { logServer } from "./log.server";
 import { join } from "node:path";
 import { access, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
@@ -374,7 +375,7 @@ async function pullImage(ref: string): Promise<void> {
       errors.push(e instanceof Error ? e.message : String(e));
     }
   }
-  throw new Error(errors.join("；").slice(0, 500) || "拉镜像失败");
+  throw new Error(`${ref} 拉取失败：${errors.join("；").slice(0, 400) || "未知原因"}`);
 }
 
 function uniqueImages(list: unknown[]): string[] {
@@ -386,7 +387,7 @@ function uniqueImages(list: unknown[]): string[] {
   return out;
 }
 
-const HELPER = `const http=require("node:http");
+export const UPDATER_SCRIPT = `const http=require("node:http");
 const fs=require("node:fs");
 function docker(method,path,body){
   return new Promise((resolve,reject)=>{
@@ -410,14 +411,34 @@ function docker(method,path,body){
 (async()=>{
   const job=JSON.parse(fs.readFileSync("/data/.gongdi-next.json","utf8"));
   await new Promise(r=>setTimeout(r,2500));
-  try{await docker("POST","/containers/"+job.oldId+"/stop?t=12")}catch(e){}
+  const nextName=job.name+"-next";
+  try{await docker("DELETE","/containers/"+encodeURIComponent(nextName)+"?force=true")}catch(e){}
+  // 先用临时名把新容器创建出来：镜像/挂载/配置有问题会在这一步失败，
+  // 此时老容器还活着、业务不中断（原实现先删老容器，创建一失败就直接没服务了）。
+  const created=await docker("POST","/containers/create?name="+encodeURIComponent(nextName),job.create);
+  // 2) 停老容器（先不删，留着回滚），把端口让出来
+  let oldStopped=false;
+  try{await docker("POST","/containers/"+job.oldId+"/stop?t=12");oldStopped=true}catch(e){}
+  // 3) 启动新容器；起不来就把老容器拉回来（回滚），保证业务不中断
+  try{
+    await docker("POST","/containers/"+created.Id+"/start");
+  }catch(err){
+    try{await docker("DELETE","/containers/"+created.Id+"?force=true")}catch(e){}
+    if(oldStopped){try{await docker("POST","/containers/"+job.oldId+"/start")}catch(e){}}
+    throw new Error("新容器启动失败，已回滚到原容器："+String((err&&err.message)||err));
+  }
+  // 4) 新容器已经在跑：移除老容器，再让新容器接管正式名字
   try{await docker("DELETE","/containers/"+job.oldId+"?force=true")}catch(e){}
-  const created=await docker("POST","/containers/create?name="+encodeURIComponent(job.name),job.create);
-  await docker("POST","/containers/"+created.Id+"/start");
+  await docker("POST","/containers/"+created.Id+"/rename?name="+encodeURIComponent(job.name));
+  try{fs.mkdirSync("/data/logs",{recursive:true})}catch(e){}
+  try{fs.appendFileSync("/data/logs/update.log",new Date().toISOString()+" 更新成功，已启动 "+job.name+"\n")}catch(e){}
   try{fs.unlinkSync("/data/.gongdi-next.json")}catch(e){}
   try{fs.unlinkSync("/data/.gongdi-updater.cjs")}catch(e){}
 })().catch(e=>{
-  try{fs.writeFileSync("/data/.gongdi-update-error.txt",String(e&&e.stack||e))}catch(e){}
+  const msg=String((e&&e.message)||e);
+  try{fs.writeFileSync("/data/.gongdi-update-error.txt",new Date().toISOString()+"\n"+msg+"\n"+String((e&&e.stack)||""))}catch(e){}
+  try{fs.mkdirSync("/data/logs",{recursive:true})}catch(e){}
+  try{fs.appendFileSync("/data/logs/update.log",new Date().toISOString()+" 更新失败: "+msg+"\n")}catch(e){}
   process.exit(1);
 });
 `;
@@ -426,6 +447,7 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
   if (!(await hasDockerSock()))
     return { ok: false, error: "还不能自动更新。请到飞牛运行一次「一键拉取」，以后就能在软件里点更新。" };
   const me = await selfContainer();
+  await logServer("info", "开始一键更新（Docker）", { currentImage: String(me.Config?.Image || "") });
   const name = String(me.Name || "/attendance-app").replace(/^\//, "") || "attendance-app";
   const current = String(me.Config?.Image || "");
   let image = "";
@@ -446,9 +468,11 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
       await pullImage(ref);
       image = ref;
       lastErr = "";
+      await logServer("info", "拉取镜像成功", { ref });
       break;
     } catch (e) {
       lastErr = e instanceof Error ? e.message : String(e);
+      await logServer("warn", "拉取镜像失败", { ref, error: lastErr });
     }
   }
   if (!image)
@@ -459,6 +483,11 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
   delete hostConfig.Mounts;
   const env = [...(me.Config?.Env || [])];
   if (!env.some((e: string) => String(e).startsWith("GONGDI_IMAGE="))) env.push(`GONGDI_IMAGE=${image}`);
+  // 网络只按名字重新挂：把 inspect 出来的整份 EndpointsConfig（含 IPAddress / IPAMConfig /
+  // MacAddress / Aliases）原样喂回 /containers/create，在不少 Docker 版本上会直接报
+  // 「invalid endpoint settings」之类错误——这正是「手动 compose 能重建、应用内重建失败」的常见原因。
+  const endpoints: Record<string, Record<string, never>> = {};
+  for (const n of Object.keys(me.NetworkSettings?.Networks || {})) endpoints[n] = {};
   const create = {
     Image: image,
     Env: env,
@@ -468,10 +497,10 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
     Cmd: me.Config?.Cmd,
     Entrypoint: me.Config?.Entrypoint,
     HostConfig: hostConfig,
-    NetworkingConfig: { EndpointsConfig: me.NetworkSettings?.Networks || {} },
+    NetworkingConfig: { EndpointsConfig: endpoints },
   };
   await writeFile("/data/.gongdi-next.json", JSON.stringify({ oldId: me.Id, name, create }));
-  await writeFile("/data/.gongdi-updater.cjs", HELPER);
+  await writeFile("/data/.gongdi-updater.cjs", UPDATER_SCRIPT);
   try {
     await dockerReq("POST", "/containers/gongdi-updater/stop?t=2");
   } catch {}
@@ -495,6 +524,7 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
     } as any,
   );
   await dockerReq("POST", `/containers/${helper.Id}/start`);
+  await logServer("info", "已启动更新容器，稍后自动替换", { image, helper: helper.Id });
   return { ok: true, restarting: true };
 }
 
@@ -568,8 +598,11 @@ start "" "%~dp0启动.bat"
 del /q "%~f0"
 `;
   await writeFile(bat, script.replace(/\n/g, "\r\n"), "utf8");
+  await logServer("info", "开始 Windows 更新", { home, url: info.url });
   spawn("cmd.exe", ["/c", bat], { detached: true, stdio: "ignore", cwd: home, windowsHide: false }).unref();
-  setTimeout(() => process.exit(0), 800);
+  // 先让 HTTP 响应发回浏览器再退出：原来 800ms 就 process.exit，
+  // 响应常常还没落地 → 浏览器看到「网络中断」→ 误报「更新失败」，而更新其实已经开始。
+  setTimeout(() => process.exit(0), 4000);
   return { ok: true, restarting: true };
 }
 
@@ -577,4 +610,76 @@ export async function applyUpdate(): Promise<{ ok: boolean; error?: string; rest
   if (isPortable()) return applyWindowsUpdate();
   if (await hasDockerSock()) return applyDockerUpdate();
   return { ok: false, error: "飞牛请先运行一次「一键拉取」。Windows 请用解压版点更新。" };
+}
+
+export interface UpdateJobState {
+  running: boolean;
+  startedAt: number;
+  doneAt: number;
+  ok: boolean;
+  error: string;
+  step: string;
+}
+
+/**
+ * 同源校验：请求带 Origin/Referer 且与本站不同源时拒绝（防跨站触发更新）。
+ * 兼容反向代理：反代常把 Host 改写成内网地址，真正的对外域名在 X-Forwarded-Host 里，
+ * 只比 Host 会把「反代 + 域名访问」的合法更新请求误判成 403（来源不一致）。
+ */
+export function checkSameOrigin(headers: { get(name: string): string | null }): boolean {
+  const origin = headers.get("origin") || headers.get("referer");
+  if (!origin) return true; // 非浏览器上下文（脚本）时依赖登录态
+  let host: string;
+  try {
+    host = new URL(origin).host.toLowerCase();
+  } catch {
+    return false;
+  }
+  const candidates = [headers.get("host"), headers.get("x-forwarded-host")]
+    .filter((h): h is string => Boolean(h))
+    .flatMap((h) => h.split(","))
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  return candidates.includes(host);
+}
+
+let updateJobState: UpdateJobState = { running: false, startedAt: 0, doneAt: 0, ok: false, error: "", step: "" };
+
+export function updateJobStatus(): UpdateJobState {
+  return { ...updateJobState };
+}
+
+/**
+ * 后台执行更新，立刻返回。
+ *
+ * 为什么必须异步：拉镜像动辄 1~5 分钟，而这个 POST 在外面通常还要经过反代
+ * （nginx 默认 proxy_read_timeout 60s）。同步等待的结果就是反代 60 秒后掐断并回 HTML 504，
+ * 前端 `r.json()` 失败 → 显示兜底的「更新失败」，而服务端其实还在拉镜像——
+ * 「手动一键拉取能成、应用内更新不行」很大程度上就是这个原因。
+ *
+ * 用轮询 `GET /api/update?status=1` 看进度；重复点击不会起第二个更新
+ * （第二次只返回当前状态，避免同时冒出两个更新容器）。
+ */
+export function startUpdateJob(run: () => Promise<{ ok: boolean; error?: string; restarting?: boolean }> = applyUpdate): UpdateJobState {
+  if (updateJobState.running) return updateJobStatus();
+  updateJobState = { running: true, startedAt: Date.now(), doneAt: 0, ok: false, error: "", step: "正在更新（拉镜像/准备替换）" };
+  void logServer("info", "开始一键更新（后台任务）", {});
+  void run()
+    .then((r) => {
+      updateJobState = {
+        ...updateJobState,
+        running: false,
+        doneAt: Date.now(),
+        ok: Boolean(r.ok),
+        error: r.error || "",
+        step: r.ok ? "已受理，容器即将被替换" : "失败",
+      };
+      return logServer(r.ok ? "info" : "warn", r.ok ? "一键更新已受理" : "一键更新失败", { error: r.error || "" });
+    })
+    .catch((e: unknown) => {
+      const error = e instanceof Error && e.message ? e.message : "更新过程出错（详情见 data/logs）";
+      updateJobState = { ...updateJobState, running: false, doneAt: Date.now(), ok: false, error, step: "异常" };
+      return logServer("error", "一键更新异常", { error });
+    });
+  return updateJobStatus();
 }
