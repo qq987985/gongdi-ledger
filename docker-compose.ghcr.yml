@@ -9,7 +9,7 @@ services:
     ports:
       - "8501:8080"
     volumes:
-      - /vol1/1000/docker/attendance/data:/data
+      - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       DATA_DIR: /data
