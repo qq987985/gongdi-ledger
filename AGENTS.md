@@ -29,7 +29,7 @@
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。现在只有 1 个 todo（人员导出丢 `wageHistory`）。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.8.0 起覆盖 118 个用例（117 pass + 1 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.0 起覆盖 122 个用例（121 pass + 1 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
@@ -83,6 +83,16 @@
   安全性由纯函数 `pickRemovableImages()` 保证：只删本项目镜像、且不是当前镜像、且没有任何容器（含已停止）引用。
   注意仓库只发布 `latest` 与 `sha-<sha>` 两种标签（`docker.yml` 的 semver 类型只在 `v*` tag 上生效），
   所以**没法用版本号标签拉取**；要定位到具体构建只能用 sha 标签。
+
+## 1.7.9 镜像缓存的两道保险
+
+- **优先按提交拉**：`buildImageCandidates()` 把 `<仓库>:sha-<main 最新提交>`（`latestCommitShort()` 取 GitHub
+  `/commits/main` 的短 sha）排在最前，`latest` 兜底。加速站不缓存一次性标签，只能回源 → 绕开 `latest` 缓存。
+- **核对镜像内版本**：`imageVersionOf(ref)` 起一个 `Entrypoint: []` + `Cmd: ["cat","/app/VERSION.txt"]` + `Tty: true`
+  的临时容器（网络 none），读 `/containers/{id}/logs` 后用 `parseImageVersion()` 取版本号，然后 `DELETE` 掉容器。
+  版本不比本机新 → 换下一个源；全都不新 → 抛错且**不替换容器**。读不到版本号时退回镜像 ID 比对（`sameImageId`）。
+- 拉到的版本会写进 `updateJobState.imageVersion`，前端在「版本没变」时直接说明「本次拉到的镜像就是 X」。
+  现场教训：1.7.8 发布 1 分钟后在 1.7.7 里点更新，加速站给的还是 1.7.7 的镜像 → 容器换了、版本没变。
 
 ## 仍待处理（已核实、未修）
 

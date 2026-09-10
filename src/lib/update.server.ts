@@ -250,6 +250,36 @@ async function raceSources(urls: string[], headersFor: (url: string) => Record<s
   });
 }
 
+/**
+ * GitHub 上 main 分支当前提交的短 sha（7 位）——CI 会用 `sha-<短 sha>` 给镜像打第二个标签。
+ * 加速站不会缓存这种一次性标签，所以「按 sha 拉」能绕开 `latest` 的缓存。
+ * 拿不到就返回空串（调用方只会少一个候选，不影响更新）。
+ */
+let shaCache: { at: number; sha: string } = { at: 0, sha: "" };
+async function latestCommitShort(): Promise<string> {
+  if (shaCache.sha && Date.now() - shaCache.at < 10 * 60 * 1000) return shaCache.sha;
+  const urls = [
+    `https://api.github.com/repos/${REPO}/commits/main`,
+    `https://gh-proxy.com/https://api.github.com/repos/${REPO}/commits/main`,
+    `https://ghfast.top/https://api.github.com/repos/${REPO}/commits/main`,
+  ];
+  for (const u of urls) {
+    try {
+      const res = await fetchWithTimeout(u, u.includes("api.github.com") ? ghHeaders() : { "User-Agent": "gongdi-ledger" });
+      if (!res.ok) continue;
+      const j = (await res.json()) as { sha?: string };
+      const sha = String(j?.sha || "").replace(/[^0-9a-f]/gi, "").slice(0, 7);
+      if (sha) {
+        shaCache = { at: Date.now(), sha };
+        return sha;
+      }
+    } catch {
+      /* 换下一个源 */
+    }
+  }
+  return "";
+}
+
 async function fetchGithub(fresh = false): Promise<RemoteInfo> {
   if (!fresh && cache.data && cache.data.remote && Date.now() - cache.at < 2 * 60 * 1000) return cache.data;
   const out: Required<RemoteInfo> = { remote: "", url: "", name: "", size: 0, notes: "", page: "" };
@@ -312,6 +342,78 @@ export interface UpdateInfo {
   page?: string;
   error: string;
   hint: string;
+}
+
+/**
+ * 从 `docker logs` 的输出里取出镜像里的版本号。
+ *
+ * 为什么要读镜像里的 VERSION.txt：镜像加速站按标签缓存，`latest` 可能还是上一版，
+ * 「拉取成功」并不等于「拉到了新版本」。只有把镜像内容读出来才知道真相。
+ * 容器日志未开 TTY 时会带 8 字节帧头（不可打印字节），所以先滤掉再匹配。
+ */
+export function parseImageVersion(rawLog: string): string {
+  const text = String(rawLog || "").replace(/[^\x20-\x7e\r\n]/g, "\n");
+  const m = text.match(/(?:^|\n)\s*v?(\d+\.\d+\.\d+)\s*(?:\r?\n|$)/);
+  return m ? m[1] : "";
+}
+
+/** 把镜像内容里的版本读出来：用一个「只跑 cat」的临时容器，读完立刻删掉，不留痕迹 */
+async function imageVersionOf(ref: string): Promise<string> {
+  let id = "";
+  try {
+    const created = await dockerReq("POST", "/containers/create", {
+      body: {
+        Image: ref,
+        Entrypoint: [],
+        Cmd: ["cat", "/app/VERSION.txt"],
+        WorkingDir: "/app",
+        Tty: true,
+        HostConfig: { NetworkMode: "none", AutoRemove: false },
+      },
+    });
+    id = String(created?.Id || "");
+    if (!id) return "";
+    await dockerReq("POST", `/containers/${encodeURIComponent(id)}/start`);
+    const logs = await dockerReq("GET", `/containers/${encodeURIComponent(id)}/logs?stdout=1&stderr=1`);
+    const raw = typeof logs === "string" ? logs : String(logs?.raw || "");
+    return parseImageVersion(raw);
+  } catch {
+    return "";
+  } finally {
+    if (id)
+      try {
+        await dockerReq("DELETE", `/containers/${encodeURIComponent(id)}?force=1`);
+      } catch {}
+  }
+}
+
+/**
+ * 拉镜像的候选顺序。
+ *
+ * 放在最前面的是 `sha-<short>` 这种**一次性标签**：加速站不会缓存它，
+ * 只能回源拉取，所以基本一定是最新构建；`latest` 排在后面兜底。
+ * 仓库目前只发布 `latest` 与 `sha-<sha>` 两种标签（版本号标签没有），见 AGENTS.md。
+ */
+export function buildImageCandidates(opts: {
+  current?: string;
+  gongdiImage?: string;
+  defaultImage?: string;
+  shortSha?: string;
+}): string[] {
+  const repoOf = (ref?: string) => {
+    const s = String(ref || "").trim();
+    if (!s || !s.includes("/")) return "";
+    const i = s.lastIndexOf(":");
+    const repo = i > s.lastIndexOf("/") ? s.slice(0, i) : s;
+    return repo ? repo.replace(/^https?:\/\//, "").replace(/\/+$/, "") : "";
+  };
+  const mine = repoOf(opts.current) || repoOf(opts.gongdiImage) || DEFAULT_IMAGE.split(":")[0];
+  const short = String(opts.shortSha || "").replace(/[^0-9a-f]/gi, "").slice(0, 7);
+  const repos = uniqueImages([mine, "ghcr.1ms.run/qq987985/gongdi-ledger", "ghcr.io/qq987985/gongdi-ledger"]);
+  const out: string[] = [];
+  if (short) for (const r of repos) out.push(`${r}:sha-${short}`);
+  for (const r of repos) out.push(`${r}:latest`);
+  return uniqueImages([...out, opts.gongdiImage, opts.defaultImage]);
 }
 
 export async function checkUpdate(fresh = false): Promise<UpdateInfo> {
@@ -649,7 +751,7 @@ function docker(method,path,body){
 });
 `;
 
-async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; restarting?: boolean }> {
+async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; restarting?: boolean; imageVersion?: string }> {
   if (!(await hasDockerSock())) {
     await appendUpdateLog("[应用] 放弃自动更新：没有 /var/run/docker.sock（容器未挂载）");
     return { ok: false, error: "还不能自动更新。请到飞牛运行一次「一键拉取」，以后就能在软件里点更新。" };
@@ -660,18 +762,17 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
   const current = String(me.Config?.Image || "");
   await appendUpdateLog(`[应用] 开始更新（Docker）：当前镜像 ${current || "(未知)"}`);
   let image = "";
-  const candidates = uniqueImages([
-    process.env.GONGDI_IMAGE,
-    /ghcr|gongdi-ledger/i.test(current) && current.includes("/")
-      ? current.includes(":")
-        ? current.replace(/:[^:]+$/, ":latest")
-        : `${current}:latest`
-      : "",
-    DEFAULT_IMAGE,
-    "ghcr.1ms.run/qq987985/gongdi-ledger:latest",
-    "ghcr.io/qq987985/gongdi-ledger:latest",
-  ]);
+  const local = await localVersion();
+  const shortSha = await latestCommitShort();
+  const candidates = buildImageCandidates({
+    current,
+    gongdiImage: process.env.GONGDI_IMAGE,
+    defaultImage: DEFAULT_IMAGE,
+    shortSha,
+  });
+  if (shortSha) await appendUpdateLog(`[应用] 本次优先按提交 ${shortSha} 的标签拉取（绕开 latest 的缓存）`);
   let lastErr = "拉镜像失败";
+  let pickedVersion = "";
   const stale: string[] = [];
   const currentId = await imageIdOf(current || image);
   for (const ref of candidates) {
@@ -682,21 +783,30 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
       await logServer("warn", "拉取镜像失败", { ref, error: lastErr });
       continue;
     }
-    // 关键：镜像站（如 ghcr.1ms.run）是按标签缓存的，刚发版时 `latest` 可能还是上一个版本。
-    // 这时「拉取成功」但拉到的就是当前正在跑的那个镜像，替换容器等于白换一次——
-    // 现象就是「更新说成功、重启后版本没变」。这里按镜像 ID 比对，认出这种情况就换下一个源。
+    // 「拉取成功」不等于「拉到新版本」：加速站按标签缓存，刚发版时 `latest` 可能还是上一版，
+    // 换了容器等于白换（现场现象就是「更新说成功、重启后版本没变」）。
+    // 先把镜像里的 VERSION.txt 读出来比对（最准），读不到再退回镜像 ID 比对。
+    const ver = await imageVersionOf(ref);
     const id = await imageIdOf(ref);
-    if (sameImageId(id, currentId)) {
+    if (local && ver && !isNewerVersion(ver, local)) {
+      stale.push(`${ref}（镜像是 ${ver}）`);
+      lastErr = "";
+      await logServer("warn", "拉到的镜像不比本机新", { ref, imageVersion: ver, local });
+      await appendUpdateLog(`[应用] ${ref} 里的版本是 ${ver}，不比本机 ${local} 新，改试下一个源`);
+      continue;
+    }
+    if (!ver && sameImageId(id, currentId)) {
       stale.push(ref);
       lastErr = "";
       await logServer("warn", "拉到的镜像与当前运行的完全相同（镜像站缓存未刷新）", { ref, id });
-      await appendUpdateLog(`[应用] ${ref} 仍是当前版本（镜像站缓存未刷新），改试下一个源`);
+      await appendUpdateLog(`[应用] ${ref} 仍是当前版本（读不到镜像内版本号，按镜像 ID 判定），改试下一个源`);
       continue;
     }
     image = ref;
+    pickedVersion = ver;
     lastErr = "";
-    await logServer("info", "拉取镜像成功", { ref, id: id || "(未知)" });
-    await appendUpdateLog(`[应用] 已拉取镜像 ${ref}`);
+    await logServer("info", "拉取镜像成功", { ref, id: id || "(未知)", imageVersion: ver || "(未知)" });
+    await appendUpdateLog(`[应用] 已拉取镜像 ${ref}（镜像内版本 ${ver || "未知"}）`);
     break;
   }
   if (!image) {
@@ -754,10 +864,10 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
   await dockerReq("POST", `/containers/${helper.Id}/start`);
   await logServer("info", "已启动更新容器，稍后自动替换", { image, helper: helper.Id });
   await appendUpdateLog(`[应用] 已启动更新容器，约 10 秒后替换 ${name}（镜像 ${image}）`);
-  return { ok: true, restarting: true };
+  return { ok: true, restarting: true, imageVersion: pickedVersion };
 }
 
-async function applyWindowsUpdate(): Promise<{ ok: boolean; error?: string; restarting?: boolean }> {
+async function applyWindowsUpdate(): Promise<{ ok: boolean; error?: string; restarting?: boolean; imageVersion?: string }> {
   const home = portableHome();
   if (!home) return { ok: false, error: "找不到 Windows 安装目录" };
   const info = await checkUpdate();
@@ -836,7 +946,7 @@ del /q "%~f0"
   return { ok: true, restarting: true };
 }
 
-export async function applyUpdate(): Promise<{ ok: boolean; error?: string; restarting?: boolean }> {
+export async function applyUpdate(): Promise<{ ok: boolean; error?: string; restarting?: boolean; imageVersion?: string }> {
   if (isPortable()) return applyWindowsUpdate();
   if (await hasDockerSock()) return applyDockerUpdate();
   return { ok: false, error: "飞牛请先运行一次「一键拉取」。Windows 请用解压版点更新。" };
@@ -849,6 +959,8 @@ export interface UpdateJobState {
   ok: boolean;
   error: string;
   step: string;
+  /** 本次拉到的镜像里的版本号（用来解释「更新后版本没变」这类问题） */
+  imageVersion: string;
 }
 
 /**
@@ -873,7 +985,7 @@ export function checkSameOrigin(headers: { get(name: string): string | null }): 
   return candidates.includes(host);
 }
 
-let updateJobState: UpdateJobState = { running: false, startedAt: 0, doneAt: 0, ok: false, error: "", step: "" };
+let updateJobState: UpdateJobState = { running: false, startedAt: 0, doneAt: 0, ok: false, error: "", step: "", imageVersion: "" };
 
 export function updateJobStatus(): UpdateJobState {
   return { ...updateJobState };
@@ -890,9 +1002,11 @@ export function updateJobStatus(): UpdateJobState {
  * 用轮询 `GET /api/update?status=1` 看进度；重复点击不会起第二个更新
  * （第二次只返回当前状态，避免同时冒出两个更新容器）。
  */
-export function startUpdateJob(run: () => Promise<{ ok: boolean; error?: string; restarting?: boolean }> = applyUpdate): UpdateJobState {
+export function startUpdateJob(
+  run: () => Promise<{ ok: boolean; error?: string; restarting?: boolean; imageVersion?: string }> = applyUpdate,
+): UpdateJobState {
   if (updateJobState.running) return updateJobStatus();
-  updateJobState = { running: true, startedAt: Date.now(), doneAt: 0, ok: false, error: "", step: "正在更新（拉镜像/准备替换）" };
+  updateJobState = { running: true, startedAt: Date.now(), doneAt: 0, ok: false, error: "", step: "正在更新（拉镜像/准备替换）", imageVersion: "" };
   void logServer("info", "开始一键更新（后台任务）", {});
   void run()
     .then((r) => {
@@ -903,8 +1017,12 @@ export function startUpdateJob(run: () => Promise<{ ok: boolean; error?: string;
         ok: Boolean(r.ok),
         error: r.error || "",
         step: r.ok ? "已受理，容器即将被替换" : "失败",
+        imageVersion: r.imageVersion || updateJobState.imageVersion,
       };
-      return logServer(r.ok ? "info" : "warn", r.ok ? "一键更新已受理" : "一键更新失败", { error: r.error || "" }).then(() =>
+      return logServer(r.ok ? "info" : "warn", r.ok ? "一键更新已受理" : "一键更新失败", {
+        error: r.error || "",
+        imageVersion: r.imageVersion || "",
+      }).then(() =>
         appendUpdateLog(r.ok ? "[应用] 更新已受理，等待容器替换" : `[应用] 更新失败：${r.error || "未说明原因"}`),
       );
     })

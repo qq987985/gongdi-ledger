@@ -352,7 +352,7 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
     return { back: false, version: "" };
   }
   /** 更新已受理后的收尾：等服务回来、核对版本真的变了再刷新 */
-  async function finishUpdate(target: string) {
+  async function finishUpdate(target: string, pulled = "") {
     const p = await pollVersion(40);
     if (!p.back) {
       toast.error("服务 2 分钟内没有恢复。请到 NAS 执行 docker ps -a | grep attendance 查看容器状态");
@@ -360,29 +360,36 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
       return;
     }
     if (target && p.version && formatVersion(p.version) !== formatVersion(target)) {
-      toast.error(`服务已重启，但版本还是 ${formatVersion(p.version)}（期望 ${formatVersion(target)}）；请查看 data/logs/update.log`);
+      // 说清「本次拉到的镜像是哪个版本」：拉到旧镜像时容器确实换过了，但内容还是旧的，
+      // 只报「版本没变」会让人以为程序坏了。
+      toast.error(
+        pulled
+          ? `已重启，但版本还是 ${formatVersion(p.version)}（期望 ${formatVersion(target)}）：本次拉到的镜像就是 ${formatVersion(pulled)}，` +
+            `是镜像加速站还在发旧镜像。等 5–10 分钟再点一次「更新」即可（详情见「查看更新日志」）。`
+          : `已重启，但版本还是 ${formatVersion(p.version)}（期望 ${formatVersion(target)}）；点「查看更新日志」能看到本次拉到的镜像版本。`,
+      );
       setBusy(false);
       return;
     }
     location.reload();
   }
   /** 轮询后台更新任务进度；轮询本身失败 = 容器正在被替换，转入等待重启 */
-  async function pollJob(): Promise<{ settled: boolean; ok: boolean; error: string }> {
+  async function pollJob(): Promise<{ settled: boolean; ok: boolean; error: string; imageVersion: string }> {
     for (let i = 0; i < 150; i++) {
       await new Promise((r) => setTimeout(r, 2e3));
       try {
         const r = await fetch("/api/update?status=1", { cache: "no-store" });
         if (!r.ok) continue;
-        const j = (await r.json()) as { status?: { running?: boolean; ok?: boolean; error?: string } };
+        const j = (await r.json()) as { status?: { running?: boolean; ok?: boolean; error?: string; imageVersion?: string } };
         const s = j.status;
         if (!s) continue;
         if (s.running) continue;
-        return { settled: true, ok: Boolean(s.ok), error: String(s.error || "") };
+        return { settled: true, ok: Boolean(s.ok), error: String(s.error || ""), imageVersion: String(s.imageVersion || "") };
       } catch {
-        return { settled: false, ok: false, error: "" }; // 服务已下线，进入等重启阶段
+        return { settled: false, ok: false, error: "", imageVersion: "" }; // 服务已下线，进入等重启阶段
       }
     }
-    return { settled: false, ok: false, error: "" };
+    return { settled: false, ok: false, error: "", imageVersion: "" };
   }
   async function apply() {
     const docker = info?.mode === "docker";
@@ -405,7 +412,7 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
         setBusy(false);
         return;
       }
-      void finishUpdate(target);
+      void finishUpdate(target, job.imageVersion);
     } catch {
       // 请求中断不等于失败：容器/进程被替换时响应本来就会被切断。去问服务端真实结果。
       toast.message("更新请求中断，正在确认服务状态…");

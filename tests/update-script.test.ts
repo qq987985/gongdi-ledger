@@ -11,9 +11,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
+  buildImageCandidates,
   checkSameOrigin,
   dockerMessage,
   isPortable,
+  parseImageVersion,
   pickRemovableImages,
   sameImageId,
   startUpdateJob,
@@ -258,4 +260,42 @@ test("更新脚本：换新容器成功后顺手删掉上一个版本的镜像�
 test("更新脚本：下一个容器要带上老镜像 ID（否则不知道删哪份）", async () => {
   const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
   assert.match(src, /oldImage: String\(me\.Image \|\| ""\)/);
+});
+
+test("parseImageVersion：从 docker logs 里读出镜像里的版本号（含未开 TTY 的帧头垃圾）", () => {
+  assert.equal(parseImageVersion("1.7.9\n"), "1.7.9");
+  assert.equal(parseImageVersion("1.7.9"), "1.7.9");
+  assert.equal(parseImageVersion("\u0001\u0000\u0000\u0000\u0000\u0000\u0000\u00061.7.9\n"), "1.7.9", "未开 TTY 时日志前有 8 字节帧头");
+  assert.equal(parseImageVersion("v1.7.9\r\n"), "1.7.9");
+  assert.equal(parseImageVersion(""), "");
+  assert.equal(parseImageVersion("cat: /app/VERSION.txt: No such file or directory\n"), "");
+});
+
+/** 加速站不缓存 sha-<短sha>，所以「按提交拉」是绕开 latest 缓存最有效的一招 */
+test("buildImageCandidates：优先按提交 sha 拉，latest 兜底，最后才用配置里的镜像", () => {
+  const list = buildImageCandidates({
+    current: "ghcr.1ms.run/qq987985/gongdi-ledger:latest",
+    gongdiImage: "ghcr.1ms.run/qq987985/gongdi-ledger:latest",
+    defaultImage: "ghcr.1ms.run/qq987985/gongdi-ledger:latest",
+    shortSha: "9437636abc",
+  });
+  assert.equal(list[0], "ghcr.1ms.run/qq987985/gongdi-ledger:sha-9437636", "第一个候选必须是一次性 sha 标签");
+  assert.equal(list.includes("ghcr.io/qq987985/gongdi-ledger:sha-9437636"), true, "也要能直接回源 ghcr.io");
+  assert.equal(list.includes("ghcr.1ms.run/qq987985/gongdi-ledger:latest"), true, "latest 作为兜底");
+  assert.equal(new Set(list).size, list.length, "候选不能重复");
+  assert.equal(list.filter((x) => x.includes("sha-")).length >= 2, true);
+});
+
+test("buildImageCandidates：拿不到提交 sha 时只回 latest 系列，不能崩", () => {
+  const list = buildImageCandidates({ current: "ghcr.io/qq987985/gongdi-ledger:latest" });
+  assert.equal(list.every((x) => x.endsWith(":latest")), true);
+  assert.equal(list.includes("ghcr.io/qq987985/gongdi-ledger:latest"), true);
+});
+
+test("后台更新任务：状态里带出「镜像内版本」，用于解释更新后版本没变", async () => {
+  startUpdateJob(async () => ({ ok: true, imageVersion: "1.7.9" }));
+  await new Promise((r) => setTimeout(r, 20));
+  const st = updateJobStatus();
+  assert.equal(st.ok, true);
+  assert.equal(st.imageVersion, "1.7.9");
 });
