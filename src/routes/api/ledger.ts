@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ledgerRevision, persistOn, readLedger, writeLedger } from "~/lib/nas-fs.server";
+import { ledgerRevisionOf, persistOn, readLedger, writeLedger } from "~/lib/nas-fs.server";
 import { withTenant } from "~/lib/accounts.server";
 
 export const Route = createFileRoute("/api/ledger")({
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/api/ledger")({
           async () => {
             const data = await readLedger();
             const response = Response.json({ persist: true, ...data });
-            response.headers.set("X-Ledger-Revision", await ledgerRevision());
+            response.headers.set("X-Ledger-Revision", ledgerRevisionOf(data));
             return response;
           },
           "people.view",
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/api/ledger")({
             const ok = await writeLedger(body, expected === null ? undefined : expected);
             if (!ok) return Response.json({ error: "台账已被其他设备修改，请重新加载后再保存", conflict: true }, { status: 409 });
             const response = Response.json({ ok: true });
-            response.headers.set("X-Ledger-Revision", await ledgerRevision());
+            response.headers.set("X-Ledger-Revision", ledgerRevisionOf(body));
             return response;
           },
           "ledger.manage",

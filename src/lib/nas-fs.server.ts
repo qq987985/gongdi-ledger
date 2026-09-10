@@ -348,13 +348,13 @@ export async function readLedger(): Promise<Partial<LedgerState> & { empty?: boo
   }
 }
 
-function revisionOf(data: unknown): string {
+export function ledgerRevisionOf(data: unknown): string {
   return createHash("sha256").update(JSON.stringify(data)).digest("hex");
 }
 
 export async function ledgerRevision(): Promise<string> {
   const data = await readLedger();
-  return "empty" in data && data.empty ? "" : revisionOf(data);
+  return "empty" in data && data.empty ? "" : ledgerRevisionOf(data);
 }
 
 let ledgerWriteQueue: Promise<boolean> = Promise.resolve(true);
