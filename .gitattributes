@@ -1,0 +1,15 @@
+# app/ 是 `pnpm run build` 从 src/ 生成的产物，不是手写代码。
+#   - GitHub 语言统计里不再把它当成源码（否则仓库看起来是一大坨前端 JS）
+#   - PR/提交里的 diff 折叠掉它的内容（改 7 个源文件会带出 60+ 个 hash 改名的产物文件）
+#   - 「产物是否与源码同步」由 ci/check.workflow.yml 里的构建校验负责，
+#     本地提交前跑 `pnpm run build` 后 app/ 必须干净（git status）
+app/** linguist-generated=true
+app/** -diff
+
+# 产物/媒体类按二进制处理
+*.zip binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.xlsx binary

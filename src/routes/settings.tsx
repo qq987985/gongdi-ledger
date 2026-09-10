@@ -230,6 +230,35 @@ function SettingsPage() {
           </div>
         </section>
       </Can>
+      {/* 影像归入本台账：老版本的影像放在全局目录里，按台账分区后需要一次性归入 */}
+      <Can perm="photos.edit">
+        <section className="rounded-xl border border-line bg-surface p-5">
+          <h2 className="font-semibold">影像归入本台账</h2>
+          <p className="mt-1 text-xs text-muted">
+            现在的照片和合同扫描件按台账分开存放。早期版本存在公共目录里的影像，可以在这里按<b>本台账的人员姓名与合同/报销</b>一次性归入本台账。
+            只复制、不删除、不覆盖；原文件保持不动，随时可回退。归入后旧位置仍然能读到，可以先做一次再核对。
+          </p>
+          <Button
+            className="mt-3"
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={async () => {
+              if (!confirm("把历史公共目录里的影像按姓名/合同归入本台账？\n\n不会删除、不会覆盖已有文件。")) return;
+              try {
+                const r = await fetch("/api/photo-adopt", { method: "POST", credentials: "include" });
+                const j = await r.json();
+                if (!r.ok) throw new Error(j?.error || "归入失败");
+                toast.success(`已归入照片 ${j.photos || 0} 个、文档 ${j.docs || 0} 个${j.skipped ? `，跳过已存在 ${j.skipped} 个` : ""}`);
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "归入失败");
+              }
+            }}
+          >
+            开始归入
+          </Button>
+        </section>
+      </Can>
       </div>
       {/* 软件更新放最底部 */}
       <div className="flex flex-wrap items-center gap-2">

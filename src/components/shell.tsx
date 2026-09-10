@@ -673,6 +673,39 @@ function SetupScreen({ onOk }: { onOk: () => void }) {
   );
 }
 
+/**
+ * 账户库损坏时的兜底页（D 项）。
+ * 关键：绝不显示「创建管理员」——那会把损坏但可能可恢复的 accounts.json 覆盖成单账号。
+ */
+function BrokenAccountsScreen() {
+  const uiStyle = useApp((s) => s.uiStyle);
+  return (
+    <div className={cn("app-bg flex min-h-screen min-h-dvh items-center justify-center px-4", themeClass(uiStyle))}>
+      <div className="w-full max-w-lg rounded-3xl border border-line bg-surface p-8 shadow-panel">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-amber-500 text-xl text-white shadow-lg">
+            ⚠️
+          </span>
+          <div>
+            <h1 className="font-display text-xl font-semibold">账户数据读取失败</h1>
+            <p className="text-xs text-muted">{APP_NAME} · 已停止自动修复</p>
+          </div>
+        </div>
+        <p className="mt-4 text-sm text-muted">
+          服务器上的 <code className="rounded bg-accent-soft px-1">data/accounts/accounts.json</code> 读不出来（文件损坏或权限问题）。
+          为避免覆盖现有账号，系统已停止初始化与写入。
+        </p>
+        <p className="mt-3 text-sm text-muted">
+          请用 <b>data/backups</b> 或备份的 accounts 目录恢复该文件后刷新；<b>不要</b>重新初始化管理员，也不要删除 data。
+        </p>
+        <Button className="btn-lg mt-6 w-full" type="button" variant="outline" onClick={() => window.location.reload()}>
+          刷新重试
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function NoBookScreen({ onOut }: { onOut: () => void }) {
   const uiStyle = useApp((s) => s.uiStyle);
   return (
@@ -767,7 +800,7 @@ export function AppShell() {
   }, [uiStyle]);
   const [open, setOpen] = React.useState(false);
   const [unlocked, setUnlocked] = React.useState(() => !accessHash);
-  const [gate, setGate] = React.useState<"boot" | "setup" | "login" | "nobook" | "app">("boot");
+  const [gate, setGate] = React.useState<"boot" | "setup" | "login" | "nobook" | "broken" | "app">("boot");
   const [acct, setAcct] = React.useState("");
   const [who, setWho] = React.useState<{ name: string; username: string; role: string } | null>(null);
   const [, setPermTick] = React.useState(0);
@@ -779,6 +812,7 @@ export function AppShell() {
       setWho(s.user ? { name: String(s.user.name), username: String(s.user.username), role: String(s.user.role) } : null);
       setLivePerms(s.persist ? s.perms || [] : ["*"]);
       if (!s.persist) setGate("app");
+      else if (s.broken) setGate("broken");
       else if (s.needSetup) setGate("setup");
       else if (!s.user) setGate("login");
       else if (!s.books.length) setGate("nobook");
@@ -805,6 +839,7 @@ export function AppShell() {
     setOpen(false);
   }, [pathname]);
   if (gate === "boot") return <div className="flex min-h-screen items-center justify-center bg-bg text-sm text-muted">加载中…</div>;
+  if (gate === "broken") return <BrokenAccountsScreen />;
   if (gate === "setup") return <SetupScreen onOk={() => void refreshGate()} />;
   if (gate === "login") return <AcctLogin onOk={() => void refreshGate()} />;
   if (gate === "nobook") return <NoBookScreen onOut={() => void refreshGate()} />;

@@ -123,6 +123,8 @@ export interface BookInfo {
 export interface AuthStatus {
   persist: boolean;
   needSetup: boolean;
+  /** 账户库损坏（服务端 503）：前端要显示明确提示，绝不能引导初始化管理员 */
+  broken?: boolean;
   user: AuthUser | null;
   books: BookInfo[];
   bookId: string;
@@ -136,6 +138,7 @@ export async function authStatus(): Promise<AuthStatus> {
   return {
     persist: Boolean(j.persist),
     needSetup: Boolean(j.needSetup),
+    broken: Boolean(j.broken),
     user: j.user || null,
     books: j.books || [],
     bookId: j.bookId || "",

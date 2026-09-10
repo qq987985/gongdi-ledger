@@ -21,6 +21,24 @@
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。现在有 4 个 todo。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
+- 1.8.0 起覆盖 90 个用例：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+  读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性。
+
+## 1.8.0 的架构改动（A–F 已落地）
+
+- **A 影像按台账隔离**：写入 `<影像根>/<台账id>/<分类>/`（见 `开发规范.md` §11.1）；读取回落历史公共目录（只读）；
+  设置页「影像归入本台账」做一次性迁移；`PHOTO_LEGACY_FALLBACK=off` 可关闭回落。
+  **动影像路径前先读 §11.1**，写回公共目录会重新造成跨台账越权。
+- **B 持久化**：`readLedger()` 不再回写文件（补扫描件名只在内存视图）；`writeLedger` 返回
+  `"ok" | "conflict" | "unreadable"`（坏文件拒绝覆盖）；GET 头与 CAS 同源；`LedgerState.schemaVersion`；
+  `PUT /api/ledger` 用 zod 校验结构（`ledger-schema.server.ts`），`{}` 之类的写入被拒。
+- **客户端同步**：`pullNasLedger` 前会检查未保存改动（`dirty`），409 会给出「以本机覆盖 / 放弃本机」两个选择；
+  推送判据与服务的 `ledger.manage` 统一（不够权限时明确提示，不再假装成功）。
+- **D 可观测性**：`logServer()` 写 `data/logs/YYYY-MM-DD.log` + stdout；坏台账/坏账户库判为 `unreadable`
+  并拒绝写入（前端显示专门的兜底页，**不会**引导「初始化管理员」）；`accounts.json`/`audit.json` 写入串行化 + 随机临时名。
+- **C 权限**：`PermId` / `NeedId` 由 `PERM_GROUPS` 推导（写错编译不过）；`tests/perms.test.ts` 扫全库兜底；
+  敏感导出口径收紧；`/api/audit` 写入需要 `ledger.write`。
+- **E 交付**：`app/**` 标记为生成物（`.gitattributes`）；发版与合并解耦的做法写在 `ci/README.md`（需在 GitHub 网页改 workflow）。
 
 ## 台账同步的三条硬约束（1.7.1 起）
 
@@ -39,15 +57,18 @@
 
 ## 仍待处理（已核实、未修）
 
-- 照片/合同影像存的是全局目录（`PHOTO_DIR`，不含台账段），跨台账可互相读到、覆盖、删除；删除台账只删 `books/{id}`，影像残留。需要按台账分目录 + 一次性迁移。
-- `readLedger()` 里的自动修复会整本写盘，不在写队列、绕过 CAS，可能与并发 PUT 抢写。
-- `accounts.json` / `audit.json` 的临时文件名固定（`${target}.tmp`）且读改写无锁；解析失败被当成「没有账户」会显示「创建管理员」，可能覆盖残缺账户库。
-- `saveDoc` 仍是先删旧文件再 rename（崩溃窗口会丢文档），与 `审查修复说明-20260910.md` 的说法不符。
-- `photos.ts` 的 `setPhoto/deletePhoto` 不检查 `res.ok`，失败仍提示「已保存」。
-- 仅需 `export.use` 即可导出含身份证/银行卡的人员表（预设「合同财务」没有 `people.view`）。
-- `dates.ts` 的 `ymd()` 不校验「日」（`2026-02-31` 会入库并被 `daysBetween` 溢出放大）；`idcard.ts` 对 16/17 位静默通过。
-- `/api/audit` POST 无权限位；HTTP 层无请求体上限（鉴权前就解析 body）。
-- 说明文档落后：`使用说明.md`(1.2.22)、`说明.txt`(1.2.22)、`目录结构.txt`/`部署说明.txt`(1.2.20)、`程序文件说明.txt`（称仓库没有 .ts/.tsx）、`GITHUB上传说明.txt`（要求上传已删除的 `app/public/templates`）。
+- **实体级存储**（B 中期剩下的一半）：现在整本台账仍是一个 `ledger.json`，每次改动整本上传。
+  实测「中等工地」（100 人×3 年考勤+50 合同+300 报销）约 1.45 MB/次。要拆成按实体保存 + 索引，
+  属于专项（见架构报告 §2「中期」），不要在顺手改功能时夹带。
+- **容器以 root 运行 / docker.sock**：属部署取舍，改非 root 需要入口脚本先 chown 再降权；见 `ci/README.md` §3。
+- **说明文档落后**：`使用说明.md`(1.2.22)、`说明.txt`(1.2.22)、`目录结构.txt`/`部署说明.txt`(1.2.20)、
+  `程序文件说明.txt`（称仓库没有 .ts/.tsx）、`GITHUB上传说明.txt`（要求上传已删除的 `app/public/templates`）。
+- **权限预设缺口**：预设「合同财务」没有 `people.view`，而全量台账读取需要它 → 该预设实际上看不到数据。
+  修它要么给该预设 `people.view`（会连身份证/银行卡一起开放），要么做实体级权限；属产品决策。
+- **HTTP 层无请求体上限**：`scripts/app-server-index.mjs` 在鉴权前把整个 body 读进内存。
+- **`dates.ts` 不校验「日」**（`2026-02-31` 会入库并被 `daysBetween` 放大）；**身份证 16/17 位静默通过**。
+- **工资历史 `fromDate` 未补零**、**人员导出丢 `wageHistory`**：测试里以 `todo` 标记着。
+- **照片类型仍按文件名匹配**（张三-身份证-正面.jpg）：跨台账隔离已做，但同名不同人仍需人工核对。
 
 ## 已知部署风险
 

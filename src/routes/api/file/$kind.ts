@@ -14,8 +14,8 @@ import {
 } from "~/lib/excel";
 import { hasWork } from "~/lib/wage";
 import { writeCenteredXlsx } from "~/lib/xlsx-center";
-import { persistOn, readLedger } from "~/lib/nas-fs.server";
-import { withTenant } from "~/lib/accounts.server";
+import { ledgerUnreadable, persistOn, readLedger } from "~/lib/nas-fs.server";
+import { withTenant, type NeedSpec } from "~/lib/accounts.server";
 import { parseDateYmd, dateYear, nextYear } from "~/lib/dates";
 
 function ymKey(y: number, m: number): number {
@@ -157,6 +157,20 @@ async function xlsxFile(wb: any, filename: string) {
   });
 }
 
+/**
+ * 每个导出除了 export.use，还需要「看得到这些数据」的权限。
+ * 人员/整本/考勤/发放里含身份证、银行卡、工资，按 people.view 门控；
+ * 合同、报销各自按模块门控（最小权限）。
+ */
+const EXPORT_VIEW_PERM: Record<string, string> = {
+  "people-export": "people.view",
+  export: "people.view",
+  "attendance-export": "people.view",
+  "payment-export": "people.view",
+  "contract-export": "contracts.view",
+  "expense-export": "expenses.view",
+};
+
 export const Route = createFileRoute("/api/file/$kind")({
   server: {
     handlers: {
@@ -164,8 +178,9 @@ export const Route = createFileRoute("/api/file/$kind")({
         const url = new URL(request.url);
         const year = Number(url.searchParams.get("year") || String(new Date().getFullYear())) || new Date().getFullYear();
         const kind = params.kind;
-        // 模板下载需导入权限，导出需导出权限
-        const need = kind.endsWith("-template") ? "import.use" : "export.use";
+        // 模板下载需导入权限；导出需导出权限 + 对应模块的查看权限（防止只给 export.use 就能导出身份证/银行卡）
+        const viewPerm = EXPORT_VIEW_PERM[kind];
+        const need: NeedSpec = kind.endsWith("-template") ? "import.use" : viewPerm ? ["export.use", viewPerm] : "export.use";
         const handle = async (): Promise<Response> => {
           if (kind === "people-template") return xlsxFile(peopleTemplateWb(), "人员导入模板.xlsx");
           if (kind === "attendance-template") return xlsxFile(attendanceTemplateWb(year), `${year}年考勤导入模板.xlsx`);
@@ -183,6 +198,9 @@ export const Route = createFileRoute("/api/file/$kind")({
           ) {
             const range = parseExportRange(url, year);
             const data = persistOn() ? await readLedger() : { empty: true };
+            // 台账读不出来时不能导出空表——用户会以为数据没了，甚至拿空表覆盖回去
+            if (ledgerUnreadable(data))
+              return Response.json({ error: "服务器上的台账文件损坏，已拒绝导出。请从 data/backups 恢复。" }, { status: 503 });
             const rec = "empty" in data && data.empty ? {} : data;
             if (kind === "contract-export") {
               const { contracts, entries } = filterContractsExport(rec.contracts || [], rec.contractEntries || [], range);

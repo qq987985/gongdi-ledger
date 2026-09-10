@@ -6,10 +6,12 @@ import { derivedYears, nextYear, localToday } from "./dates";
 import { normalizeEntry, splitLegacyReceipts, type ContractEntry, type ContractRecord } from "./contracts";
 import { logOp } from "./audit";
 import type { AttendanceDoc, AttendanceRow, Expense, InsuranceMember, InsurancePolicy, LedgerState, Payment, Person } from "./types";
+import { LEDGER_SCHEMA_VERSION } from "./types";
 
 export function emptyState(): LedgerState {
   const year = 2026;
   return {
+    schemaVersion: LEDGER_SCHEMA_VERSION,
     year,
     years: [year],
     people: [],
@@ -427,7 +429,11 @@ export const useApp = create<AppStore>()(
         set({ payments });
         logOp("导入/替换发放", `${payments.length}条`, "发放");
       },
-      removePayment: (id) => set({ payments: get().payments.filter((p) => p.id !== id) }),
+      removePayment: (id) => {
+        const p = get().payments.find((x) => x.id === id);
+        set({ payments: get().payments.filter((x) => x.id !== id) });
+        logOp("删除发放", p ? `${p.owner} ${p.amount}` : id, "发放");
+      },
       removePayments: (ids) => {
         set({ payments: get().payments.filter((p) => !ids.includes(p.id)) });
         logOp("删除发放", `${ids.length}条`, "发放");
@@ -454,18 +460,27 @@ export const useApp = create<AppStore>()(
         });
         logOp("删除合同", `${ids.length}份`, "合同");
       },
-      addContractEntry: (e) => set({ contractEntries: [...get().contractEntries, normalizeEntry(e)] }),
-      patchContractEntry: (id, patch) =>
+      addContractEntry: (e) => {
+        const entry = normalizeEntry(e);
+        set({ contractEntries: [...get().contractEntries, entry] });
+        logOp("新增合同明细", `${entry.kind} ${entry.amount}`, "合同");
+      },
+      patchContractEntry: (id, patch) => {
         set({
           contractEntries: get().contractEntries.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-        }),
-      removeContractEntries: (ids) =>
-        set({ contractEntries: get().contractEntries.filter((e) => !ids.includes(e.id)) }),
+        });
+        logOp("修改合同明细", id, "合同");
+      },
+      removeContractEntries: (ids) => {
+        set({ contractEntries: get().contractEntries.filter((e) => !ids.includes(e.id)) });
+        logOp("删除合同明细", `${ids.length}条`, "合同");
+      },
       replaceContracts: (contracts, entries) => {
         // 与 removeContracts 口径一致：旧合同被替换时，其条目一并清理，避免孤儿数据
         const keepIds = new Set(contracts.map((c) => c.id));
         const nextEntries = (entries ?? get().contractEntries).filter((e) => keepIds.has(e.contractId));
         set({ contracts, contractEntries: nextEntries });
+        logOp("导入/替换合同", `${contracts.length}份 / ${nextEntries.length}条明细`, "合同");
       },
       upsertExpense: (row) => {
         const list = get().expenses || [];
@@ -511,7 +526,10 @@ export const useApp = create<AppStore>()(
         set({ expenses: (get().expenses || []).filter((e) => !ids.includes(e.id)) });
         logOp("删除报销", `${ids.length}笔`, "报销");
       },
-      replaceExpenses: (expenses) => set({ expenses }),
+      replaceExpenses: (expenses) => {
+        set({ expenses });
+        logOp("导入/替换报销", `${expenses.length}笔`, "报销");
+      },
       upsertPolicy: (p) => {
         const list = get().insurancePolicies || [];
         const next: InsurancePolicy = {
@@ -629,6 +647,7 @@ export const useApp = create<AppStore>()(
         }));
         return {
           ...s,
+          schemaVersion: LEDGER_SCHEMA_VERSION,
           people,
           attendance,
           contracts,
@@ -644,6 +663,7 @@ export const useApp = create<AppStore>()(
         };
       },
       partialize: (s) => ({
+        schemaVersion: LEDGER_SCHEMA_VERSION,
         year: s.year,
         years: s.years,
         people: s.people,

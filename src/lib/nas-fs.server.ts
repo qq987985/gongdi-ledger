@@ -1,5 +1,5 @@
 import { existsSync, statSync } from "node:fs";
-import { dirname, extname, join } from "node:path";
+import { dirname, extname, join, sep } from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -39,11 +39,24 @@ function isLegacyDefault(): boolean {
   return currentBookId() === "default" && existsSync(join(dataDir(), "ledger.json"));
 }
 
+/** 影像总根目录（默认 data/photos，可用 PHOTO_DIR 指定，例如挂到独立盘） */
 function photosRoot(): string {
   const shared = process.env.PHOTO_DIR?.trim();
   if (shared) return shared;
   const root = dataDir();
   return root ? join(root, "photos") : "";
+}
+
+/**
+ * 当前台账的影像目录：`<影像根>/<台账id>/`（A 项）。
+ *
+ * 为什么必须分段：影像原来全放在 `<影像根>/id`、`<影像根>/合同扫描件` 这类全局目录里，
+ * 台账之间**互相能读到、能覆盖、能删除**对方成员的身份证照/银行卡/合同扫描件——
+ * 数字数据按台账隔离，二进制资产却没有，租户边界等于漏了一半。
+ */
+function bookAssetsRoot(): string {
+  const base = photosRoot();
+  return base ? join(base, safeBookId(currentBookId())) : "";
 }
 
 function labelOf(kind: string): string {
@@ -52,6 +65,7 @@ function labelOf(kind: string): string {
   return kind === "bank" ? "银行卡" : "IC卡";
 }
 
+/** 历史遗留的按类型指定的目录（只读回落，不再作为写入目标） */
 function kindEnv(kind: string): string {
   const k = kind === "idBack" || kind === "idFront" ? "id" : kind;
   return (
@@ -59,12 +73,14 @@ function kindEnv(kind: string): string {
   );
 }
 
+function kindFolder(kind: string): string {
+  return kind === "idBack" || kind === "idFront" || kind === "id" ? "id" : kind;
+}
+
+/** 写入目标：当前台账的影像目录下按类型分文件夹 */
 function kindDir(kind: string): string {
-  const env = kindEnv(kind).trim();
-  if (env) return env;
-  const root = photosRoot();
-  const folder = kind === "idBack" || kind === "idFront" || kind === "id" ? "id" : kind;
-  return root ? join(root, folder) : "";
+  const root = bookAssetsRoot();
+  return root ? join(root, kindFolder(kind)) : "";
 }
 
 function safeName(name: string): string {
@@ -84,6 +100,23 @@ interface PhotoSearchDir {
   mixed: boolean;
 }
 
+/**
+ * 是否允许回落到「历史遗留的公共影像目录」读取（默认允许）。
+ *
+ * 为什么默认允许：不加回落的话，升级后所有老照片/合同扫描件会在界面里凭空消失。
+ * 代价：在把遗留影像归入各台账（设置 → 影像归入本台账）之前，公共目录里的文件仍可被各台账读到。
+ * 全部归入并把旧目录归档后，设 `PHOTO_LEGACY_FALLBACK=off` 即可彻底关闭回落。
+ */
+function legacyFallbackOn(): boolean {
+  return process.env.PHOTO_LEGACY_FALLBACK?.trim().toLowerCase() !== "off";
+}
+
+/**
+ * 照片查找目录（按优先级）。
+ * 第一位是「当前台账」自己的目录；后面全是**历史遗留 / 只读回落**目录：
+ * 换成本台账分目录以前，文件散在全局 photos/、PHOTO_ID_DIR 等地方，老数据仍要能看到。
+ * 只读回落目录永远不会被写入（写入只看 kindDir）。
+ */
 function photoSearchDirs(kind: string): PhotoSearchDir[] {
   const out: PhotoSearchDir[] = [];
   const seen = new Set<string>();
@@ -94,17 +127,18 @@ function photoSearchDirs(kind: string): PhotoSearchDir[] {
     out.push({ dir: d, mixed });
   };
   const cn = kind === "idBack" || kind === "id" || kind === "idFront" ? "身份证" : labelOf(kind);
-  const folder = kind === "idBack" || kind === "idFront" || kind === "id" ? "id" : kind;
+  const folder = kindFolder(kind);
   const book = bookRoot();
   const root = dataDir();
-  const shared = process.env.PHOTO_DIR?.trim() || (root ? join(root, "photos") : "");
-  add(kindDir(kind));
+  const shared = photosRoot();
+  add(join(bookAssetsRoot(), folder));
   if (book) {
     add(join(book, "photos", folder));
     add(join(book, "photos", cn));
     add(join(book, "photos", "id"));
     add(join(book, cn));
   }
+  if (!legacyFallbackOn()) return out;
   add(kindEnv(kind));
   add(join(shared, folder));
   add(join(shared, "id"));
@@ -170,12 +204,19 @@ const DOC_CN: Record<string, string> = {
   insurance: "保险合同",
 };
 
-function photosBase(): string {
-  const shared = process.env.PHOTO_DIR?.trim();
-  if (shared) return shared;
-  const root = dataDir();
-  return root ? join(root, "photos") : "";
-}
+const PHOTO_SUBS = [
+  "id",
+  "bank",
+  "ic",
+  "报量单",
+  "发票",
+  "收款回单",
+  "考勤影像",
+  "合同扫描件",
+  "报销凭证",
+  "报销打款",
+  "保险合同",
+];
 
 async function ensureDirs(): Promise<void> {
   const root = dataDir();
@@ -185,21 +226,12 @@ async function ensureDirs(): Promise<void> {
   await mkdir(join(root, "books"), { recursive: true });
   await mkdir(join(root, "backups"), { recursive: true });
   await mkdir(join(root, "templates"), { recursive: true });
-  const photos = photosBase() || join(root, "photos");
-  for (const sub of [
-    "id",
-    "bank",
-    "ic",
-    "报量单",
-    "发票",
-    "收款回单",
-    "考勤影像",
-    "合同扫描件",
-    "报销凭证",
-    "报销打款",
-    "保险合同",
-  ])
-    await mkdir(join(photos, sub), { recursive: true });
+  const photos = photosRoot() || join(root, "photos");
+  // 历史遗留的全局影像目录（只读回落用，保留以免老文件找不到）
+  for (const sub of PHOTO_SUBS) await mkdir(join(photos, sub), { recursive: true });
+  // 当前台账自己的影像目录（新文件写这里）
+  const bookAssets = bookAssetsRoot();
+  if (bookAssets) for (const sub of PHOTO_SUBS) await mkdir(join(bookAssets, sub), { recursive: true });
   const book = bookRoot();
   if (book) await mkdir(book, { recursive: true });
   await migrateIntoDataTree();
@@ -257,13 +289,23 @@ templates/    导入模板
   } catch {}
 }
 
+/**
+ * 把最古老的 `data/docs/<kind>` 结构归拢到公共影像目录。
+ *
+ * 注意：目标必须是**公共**目录（photosRoot/中文分类），不能是 docsDir——
+ * docsDir 现在是按台账分目录的，往那里搬会把整个公共影像池复制进当前台账，
+ * 既破坏隔离，又会在每次请求（ensureDirs）里重复拷贝。
+ */
 async function migrateOldDocs(): Promise<void> {
+  const base = photosRoot();
+  if (!base) return;
   for (const kind of ["report", "invoice", "receipt", "attendance", "contract", "expense", "payout"]) {
-    const dest = docsDir(kind);
-    if (!dest) continue;
-    await mkdir(dest, { recursive: true });
-    for (const dir of docSearchDirs(kind)) {
-      if (dir === dest || !existsSync(dir)) continue;
+    const dest = join(base, DOC_CN[kind]);
+    const root = dataDir();
+    const sources = [root ? join(root, "docs", kind) : "", root ? join(root, "docs", DOC_CN[kind]) : ""];
+    for (const dir of sources) {
+      if (!dir || dir === dest || !existsSync(dir)) continue;
+      await mkdir(dest, { recursive: true });
       for (const f of await listDirSafe(dir)) {
         if (f.startsWith(".")) continue;
         const to = join(dest, f);
@@ -331,22 +373,37 @@ function ledgerPath(): string {
   return join(bookRoot(), "ledger.json");
 }
 
-export async function readLedger(): Promise<Partial<LedgerState> & { empty?: boolean }> {
+/** 台账读取结果：empty = 还没有台账文件；unreadable = 文件在但读不出来（损坏/权限/IO） */
+export interface LedgerRead extends Partial<LedgerState> {
+  empty?: boolean;
+  unreadable?: boolean;
+}
+
+export function ledgerUnreadable(data: LedgerRead): boolean {
+  return Boolean(data.unreadable);
+}
+
+export async function readLedger(): Promise<LedgerRead> {
   if (!persistOn()) return { empty: true };
   await ensureDirs();
   const p = ledgerPath();
   if (!existsSync(p)) return { empty: true };
+  let raw: unknown;
   try {
-    const raw = JSON.parse(await readFile(p, "utf8"));
-    if (!raw || typeof raw !== "object") return { empty: true };
-    if (await reconcileContractScans(raw))
-      try {
-        await atomicWriteFile(p, JSON.stringify(raw, null, 2));
-      } catch {}
-    return raw;
-  } catch {
-    return { empty: true };
+    raw = JSON.parse(await readFile(p, "utf8"));
+  } catch (err) {
+    // 文件存在却解析不了：绝不能当成「空台账」，否则客户端会把本机（可能也是空的）状态写上去覆盖掉
+    await logServer("error", "台账文件读取失败", { path: p, error: String(err) });
+    return { unreadable: true };
   }
+  if (!raw || typeof raw !== "object") {
+    await logServer("error", "台账文件内容不是对象", { path: p });
+    return { unreadable: true };
+  }
+  // 合同扫描件补名：只补「读出来的视图」，不回写——读路径写盘会绕过写队列和 CAS，覆盖并发保存
+  // （历史上就出过读路径写回旧快照、把并发 PUT 的新数据盖掉的事）。补出来的值由客户端下次保存落盘。
+  await reconcileContractScans(raw as { contracts?: { id?: string; name?: string; scanFileName?: string }[] });
+  return raw as LedgerRead;
 }
 
 export function ledgerRevisionOf(data: unknown): string {
@@ -354,38 +411,49 @@ export function ledgerRevisionOf(data: unknown): string {
 }
 
 /**
- * 台账版本号：空台账（ledger.json 还不存在或读不出来）一律用 "" 作为哨兵。
+ * 台账版本号：空台账（ledger.json 还不存在）用 "" 作为哨兵。
  * GET 的 X-Ledger-Revision 响应头与 PUT 的 CAS 基准必须都走这里：
  * 两边口径不一致时空台账第一笔保存会被误判成「已被其他设备修改」，永远写不进去。
  */
-export function ledgerRevisionValue(data: Partial<LedgerState> & { empty?: boolean }): string {
+export function ledgerRevisionValue(data: LedgerRead): string {
   return "empty" in data && data.empty ? "" : ledgerRevisionOf(data);
 }
 
 export async function ledgerRevision(): Promise<string> {
-  return ledgerRevisionValue(await readLedger());
+  const data = await readLedger();
+  // 损坏时不返回任何可用版本号：任何 expectedRevision 都对不上，写入会被拒
+  return ledgerUnreadable(data) ? "unreadable" : ledgerRevisionValue(data);
 }
 
-let ledgerWriteQueue: Promise<boolean> = Promise.resolve(true);
+export type LedgerWriteResult = "ok" | "conflict" | "unreadable";
 
-async function writeLedgerNow(data: Partial<LedgerState>, expectedRevision?: string): Promise<boolean> {
-  if (!persistOn()) return true;
+let ledgerWriteQueue: Promise<LedgerWriteResult> = Promise.resolve("ok");
+
+async function writeLedgerNow(data: Partial<LedgerState>, expectedRevision?: string): Promise<LedgerWriteResult> {
+  if (!persistOn()) return "ok";
   await ensureDirs();
-  if (expectedRevision !== undefined && (await ledgerRevision()) !== expectedRevision) return false;
+  // 一次读取同时用于「坏文件保护」和「CAS 比对」，避免读写之间再插入一次读
+  const cur = await readLedger();
+  if (ledgerUnreadable(cur)) return "unreadable";
+  if (expectedRevision !== undefined && ledgerRevisionValue(cur) !== expectedRevision) return "conflict";
   // 原子写：先写临时文件再 rename，避免写一半崩溃导致文件损坏
   const p = ledgerPath();
-  const tmp = `${p}.tmp-${process.pid}-${Date.now()}`;
-  await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
-  await rename(tmp, p);
-  return true;
+  const tmp = `${p}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
+    await rename(tmp, p);
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => {});
+    await logServer("error", "台账写入失败", { path: p, error: String(err) });
+    throw err;
+  }
+  return "ok";
 }
 
 /** 将版本检查和替换放在同一串行队列，避免两个请求同时通过 CAS 检查。 */
-export function writeLedger(data: Partial<LedgerState>, expectedRevision?: string): Promise<boolean> {
-  ledgerWriteQueue = ledgerWriteQueue.then(
-    () => writeLedgerNow(data, expectedRevision),
-    () => writeLedgerNow(data, expectedRevision),
-  );
+export function writeLedger(data: Partial<LedgerState>, expectedRevision?: string): Promise<LedgerWriteResult> {
+  const run = () => writeLedgerNow(data, expectedRevision);
+  ledgerWriteQueue = ledgerWriteQueue.then(run, run);
   return ledgerWriteQueue;
 }
 
@@ -539,7 +607,8 @@ export async function savePhoto(name: string, kind: string, dataUrl: string): Pr
   const tmp = `${dest}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   try {
     await writeFile(tmp, Buffer.from(m[2], "base64"));
-    if (hit && join(hit.dir, hit.file) !== dest) await rm(join(hit.dir, hit.file), { force: true });
+    // 只清理本台账目录里的旧文件（换类型/改名留下的）；公共回落目录是只读的，不动
+    if (hit && join(hit.dir, hit.file) !== dest && isInsideBookAssets(hit.dir)) await rm(join(hit.dir, hit.file), { force: true });
     await rename(tmp, dest);
   } catch (err) {
     await rm(tmp, { force: true }).catch(() => {});
@@ -547,14 +616,63 @@ export async function savePhoto(name: string, kind: string, dataUrl: string): Pr
   }
 }
 
+/** 本台账自己的照片目录（写入与删除都只针对这些；公共回落目录不动） */
+function bookPhotoDirs(kind: string): string[] {
+  const out: string[] = [];
+  const book = bookRoot();
+  const folder = kindFolder(kind);
+  const cn = kind === "idBack" || kind === "id" || kind === "idFront" ? "身份证" : labelOf(kind);
+  const add = (d: string) => {
+    const v = (d || "").trim();
+    if (v && !out.includes(v)) out.push(v);
+  };
+  add(kindDir(kind));
+  if (book) {
+    add(join(book, "photos", folder));
+    add(join(book, "photos", cn));
+    add(join(book, "photos", "id"));
+    add(join(book, cn));
+  }
+  return out;
+}
+
+/** 本台账自己的文档目录 */
+function bookDocDirs(kind: string): string[] {
+  const out: string[] = [];
+  const book = bookRoot();
+  const add = (d: string) => {
+    const v = (d || "").trim();
+    if (v && !out.includes(v)) out.push(v);
+  };
+  add(docsDir(kind));
+  if (book) {
+    add(join(book, "docs", kind));
+    add(join(book, "docs", DOC_CN[kind]));
+  }
+  return out;
+}
+
 export async function removePhoto(name: string, kind: string): Promise<void> {
   if (!persistOn()) return;
   const n = safeName(name);
   if (!n) return;
-  for (const loc of photoSearchDirs(kind)) {
-    const files = await listDirSafe(loc.dir);
+  // 先删本台账自己的，并记下删掉了哪些文件名
+  const removed = new Set<string>();
+  for (const d of bookPhotoDirs(kind)) {
+    const files = await listDirSafe(d);
     for (const f of files)
-      if (photoFileMatches(f, n, kind, loc.mixed)) await rm(join(loc.dir, f), { force: true });
+      if (photoFileMatches(f, n, kind, true)) {
+        removed.add(f);
+        await rm(join(d, f), { force: true });
+      }
+  }
+  // 公共回落目录里「本台账归入过的同名副本」一起清掉，避免删了还显示；
+  // 只删同名的，别的台账的历史文件一律不动（原实现会把公共目录里所有同名文件删光）
+  if (!legacyFallbackOn() || !removed.size) return;
+  for (const loc of photoSearchDirs(kind)) {
+    if (isInsideBookAssets(loc.dir)) continue;
+    const files = await listDirSafe(loc.dir);
+    for (const f of files) if (removed.has(f) && photoFileMatches(f, n, kind, loc.mixed)) await rm(join(loc.dir, f), { force: true });
   }
 }
 
@@ -627,11 +745,13 @@ export async function saveBackup(buf: Buffer, filename: string): Promise<string>
   return dest;
 }
 
+/** 文档写入目标：当前台账影像目录下的中文分类（写入只看这里） */
 function docsDir(kind: string): string {
-  const photos = photosBase();
-  return photos ? join(photos, DOC_CN[kind]) : "";
+  const root = bookAssetsRoot();
+  return root ? join(root, DOC_CN[kind]) : "";
 }
 
+/** 文档查找目录：当前台账优先，其后全是历史遗留 / 只读回落 */
 function docSearchDirs(kind: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -643,13 +763,19 @@ function docSearchDirs(kind: string): string[] {
   };
   const root = dataDir();
   const book = bookRoot();
-  const photos = photosBase();
+  const photos = photosRoot();
   add(docsDir(kind));
+  if (book) {
+    add(join(book, "docs", kind));
+    add(join(book, "docs", DOC_CN[kind]));
+  }
+  if (!legacyFallbackOn()) return out;
+  // 老版本的全局目录：`photos/<英文kind>` 与 `photos/合同扫描件` 这种中文分类都要回落，
+  // 否则升级后已上传的合同扫描件会在界面里凭空消失
   add(photos ? join(photos, kind) : "");
+  add(photos ? join(photos, DOC_CN[kind]) : "");
   add(root ? join(root, "docs", kind) : "");
   add(root ? join(root, "docs", DOC_CN[kind]) : "");
-  add(book ? join(book, "docs", kind) : "");
-  add(book ? join(book, "docs", DOC_CN[kind]) : "");
   if (isLegacyDefault() && process.env.DOC_DIR?.trim()) add(join(process.env.DOC_DIR.trim(), kind));
   return out;
 }
@@ -691,8 +817,9 @@ function uniqueFileName(dir: string, orig: string, allow: string): string {
   return `${stem}-${i}${ext}`;
 }
 
+/** 扫描/删除只在本台账自己的目录里进行，绝不动公共回落目录（那是别人的历史数据） */
 async function sweepDocFiles(kind: string, sid: string): Promise<void> {
-  for (const d of docSearchDirs(kind)) {
+  for (const d of bookDocDirs(kind)) {
     const files = await listDirSafe(d);
     const prev = await readPointerName(d, sid);
     const shared = prev ? await otherPointersUse(d, sid, prev) : false;
@@ -752,17 +879,127 @@ export async function removeDocFile(id: string, kind: string): Promise<void> {
   await sweepDocFiles(kind, safeId(id));
 }
 
-export async function findDoc(id: string, kind: string): Promise<{ buf: Buffer; fileName: string } | null> {
+/** 找到文档所在的目录与文件名（供读取和「历史影像归入本台账」共用同一套匹配口径） */
+async function findDocLocation(id: string, kind: string): Promise<{ dir: string; file: string; fileName: string } | null> {
   if (!persistOn()) return null;
   const sid = safeId(id);
   for (const d of docSearchDirs(kind)) {
     const files = await listDirSafe(d);
     const hit = files.find((f) => f.startsWith(`${sid}--`));
-    if (hit) return { buf: await readFile(join(d, hit)), fileName: hit.slice(`${sid}--`.length) || hit };
+    if (hit) return { dir: d, file: hit, fileName: hit.slice(`${sid}--`.length) || hit };
     const orig = await readPointerName(d, sid);
-    if (orig && files.includes(orig)) return { buf: await readFile(join(d, orig)), fileName: orig };
+    if (orig && files.includes(orig)) return { dir: d, file: orig, fileName: orig };
   }
   return null;
+}
+
+export async function findDoc(id: string, kind: string): Promise<{ buf: Buffer; fileName: string } | null> {
+  const loc = await findDocLocation(id, kind);
+  if (!loc) return null;
+  return { buf: await readFile(join(loc.dir, loc.file)), fileName: loc.fileName };
+}
+
+function isInsideBookAssets(dir: string): boolean {
+  const bookDir = bookAssetsRoot();
+  return Boolean(bookDir) && (dir === bookDir || dir.startsWith(bookDir + sep));
+}
+
+export interface AdoptResult {
+  photos: number;
+  docs: number;
+  skipped: number;
+}
+
+/**
+ * A 项迁移动作：把历史遗留（全局）目录里的影像，按**本台账的人员姓名 / 影像 id**
+ * 复制进本台账自己的影像目录。
+ *
+ * 只复制、不删除、不覆盖；遗留目录原样保留，因此随时可以回退（读取本来就有回落）。
+ * 复用应用自身的匹配口径（findPhotoHit / findDocLocation），不另外写一套判断。
+ */
+export async function adoptLegacyAssets(): Promise<AdoptResult> {
+  const out: AdoptResult = { photos: 0, docs: 0, skipped: 0 };
+  if (!persistOn()) return out;
+  await ensureDirs();
+  const bookDir = bookAssetsRoot();
+  if (!bookDir) return out;
+  const led = await readLedger();
+  if (ledgerUnreadable(led)) return out;
+
+  const names = (Array.isArray(led.people) ? led.people : [])
+    .map((p) => safeName(String((p as { name?: string })?.name || "")))
+    .filter(Boolean);
+
+  const copyInto = async (fromDir: string, file: string, destDir: string): Promise<void> => {
+    const dest = join(destDir, file);
+    if (existsSync(dest)) {
+      out.skipped += 1;
+      return;
+    }
+    try {
+      await mkdir(destDir, { recursive: true });
+      await copyFile(join(fromDir, file), dest);
+      out.photos += 1;
+    } catch (err) {
+      await logServer("warn", "影像归入失败", { from: join(fromDir, file), error: String(err) });
+    }
+  };
+
+  for (const kind of ["id", "idBack", "bank", "ic"]) {
+    const destDir = join(bookDir, kindFolder(kind));
+    for (const name of names) {
+      const hit = await findPhotoHit(name, kind);
+      if (!hit || isInsideBookAssets(hit.dir)) continue;
+      await copyInto(hit.dir, hit.file, destDir);
+    }
+  }
+
+  const idsFor = (kind: string): string[] => {
+    const ids: string[] = [];
+    const push = (v: unknown) => {
+      const s = safeId(String(v || ""));
+      if (s) ids.push(s);
+    };
+    if (kind === "report" || kind === "invoice" || kind === "receipt" || kind === "contract")
+      for (const c of Array.isArray(led.contracts) ? led.contracts : []) push((c as { id?: string })?.id);
+    if (kind === "attendance")
+      for (const d of Array.isArray(led.attendanceDocs) ? led.attendanceDocs : []) push((d as { id?: string })?.id);
+    if (kind === "expense")
+      for (const e of Array.isArray(led.expenses) ? led.expenses : []) {
+        push((e as { id?: string })?.id);
+        push((e as { voucherId?: string })?.voucherId);
+      }
+    if (kind === "payout")
+      for (const e of Array.isArray(led.expenses) ? led.expenses : []) push((e as { payoutId?: string })?.payoutId);
+    if (kind === "insurance")
+      for (const p of Array.isArray(led.insurancePolicies) ? led.insurancePolicies : []) {
+        push((p as { id?: string })?.id);
+        for (const f of (p as { contracts?: { id?: string }[] })?.contracts || []) push(f?.id);
+      }
+    return [...new Set(ids)];
+  };
+
+  for (const kind of Object.keys(DOC_CN)) {
+    const destDir = join(bookDir, DOC_CN[kind]);
+    for (const sid of idsFor(kind)) {
+      const loc = await findDocLocation(sid, kind);
+      if (!loc || isInsideBookAssets(loc.dir)) continue;
+      const dest = join(destDir, loc.file);
+      if (existsSync(dest)) {
+        out.skipped += 1;
+        continue;
+      }
+      try {
+        await mkdir(destDir, { recursive: true });
+        await copyFile(join(loc.dir, loc.file), dest);
+        out.docs += 1;
+      } catch (err) {
+        await logServer("warn", "文档归入失败", { from: join(loc.dir, loc.file), error: String(err) });
+      }
+    }
+  }
+  await logServer("info", "历史影像归入本台账完成", { ...out });
+  return out;
 }
 
 function contractScanBase(name: string): string {
@@ -856,6 +1093,12 @@ export async function removeBookDir(id: string): Promise<void> {
   if (sid === "default") return;
   const dir = join(dataDir(), "books", sid);
   if (existsSync(dir)) await rm(dir, { recursive: true, force: true });
+  // 这本台账自己的影像目录也要删掉，否则「删了台账但证件照还在」
+  const assets = photosRoot();
+  if (assets) {
+    const assetsDir = join(assets, sid);
+    if (existsSync(assetsDir)) await rm(assetsDir, { recursive: true, force: true });
+  }
 }
 
 export async function readVersionText(): Promise<string> {

@@ -9,7 +9,16 @@ export interface PermGroup {
   items: PermItem[];
 }
 
-export const PERM_GROUPS: PermGroup[] = [
+/**
+ * 权限声明表 —— **唯一来源**。
+ *
+ * 约束（C1）：
+ * - 权限 id 只能在这里出现一次；页面用 `<Can perm="…">`、接口用 `withTenant(…, "…")` 时，
+ *   由下面的 `PermId` 联合类型在编译期校验，写错一个字母就编译不过（以前是裸字符串，写错只会静默不生效）。
+ * - `PERM_GROUPS`（设置页勾选）、`ALL_PERMS`、`NAV_PERM`、`PRESETS`、服务端 `need` 全部从这张表派生。
+ * - 灰度/历史数据里可能存着已废弃的 id：运行期判断（hasPerm）仍按字符串处理，不做强校验。
+ */
+const PERM_TABLE = [
   {
     key: "people",
     label: "人员",
@@ -118,13 +127,25 @@ export const PERM_GROUPS: PermGroup[] = [
   },
 ];
 
-export const ALL_PERMS: string[] = PERM_GROUPS.flatMap((g) => g.items.map((i) => i.id));
+/** 权限 id 联合类型：由声明表推导，页面/接口传错 id 会编译报错 */
+export type PermId = (typeof PERM_TABLE)[number]["items"][number]["id"];
+
+/** 服务端 withTenant 可以要求的权限：普通权限，或两个特殊位 */
+export type NeedId = PermId | "ledger.manage" | "ledger.write";
+
+export const PERM_GROUPS: PermGroup[] = PERM_TABLE.map((g) => ({
+  key: g.key,
+  label: g.label,
+  items: g.items.map((i) => ({ id: i.id, label: i.label })),
+}));
+
+export const ALL_PERMS: PermId[] = PERM_TABLE.flatMap((g) => g.items.map((i) => i.id));
 
 export interface PermPreset {
   id: string;
   label: string;
   hint: string;
-  perms: string[];
+  perms: NeedId[];
 }
 
 export const PRESETS: PermPreset[] = [
@@ -220,7 +241,7 @@ export function canManageLedger(perms: string[] | undefined | null): boolean {
   return list.some((p) => p === "people.edit" || p === "attendance.edit" || p.startsWith("settings."));
 }
 
-export const NAV_PERM: Record<string, string> = {
+export const NAV_PERM: Record<string, PermId | ""> = {
   "/": "",
   "/people": "people.view",
   "/attendance": "attendance.view",

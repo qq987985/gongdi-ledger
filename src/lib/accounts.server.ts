@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile, rename } from "node:fs/promises";
 import { randomBytes, scryptSync, createHash, timingSafeEqual } from "node:crypto";
 import {
   appendAudit,
@@ -11,7 +11,8 @@ import {
   runWithBook,
   writeBookMeta,
 } from "./nas-fs.server";
-import { ALL_PERMS, PRESETS, canWriteLedger, canManageLedger, hasPerm } from "./perms";
+import { ALL_PERMS, PRESETS, canWriteLedger, canManageLedger, hasPerm, type NeedId } from "./perms";
+import { logServer } from "./log.server";
 import { uid } from "./utils";
 
 
@@ -45,6 +46,8 @@ export interface AccountsFile {
 
 export interface Tenant {
   needSetup: boolean;
+  /** 账户库损坏：所有需要账号的操作都应拒绝，并且前端要显示明确提示（不能引导「初始化管理员」） */
+  broken?: boolean;
   user: UserRecord | null;
   bookId: string;
   book: BookRecord | null;
@@ -128,35 +131,70 @@ function rateOk(kind: string, username: string): void {
   authRate.delete(rateKey(kind, username));
 }
 
+/** accounts.json 存在但读不出来（损坏/权限/IO）。这时绝不能当成「还没有账户」，否则会走进初始化流程覆盖掉真库 */
+let accountsBroken = false;
+
+export function accountsUnreadable(): boolean {
+  return accountsBroken;
+}
+
+export const ACCOUNTS_BROKEN_MSG =
+  "服务器上的账户数据（data/accounts/accounts.json）读取失败，已停止自动修复与初始化，避免覆盖现有账号。请从备份恢复该文件。";
+
 async function readFileShape(): Promise<AccountsFile> {
   if (!persistOn()) return { users: [], books: [] };
+  accountsBroken = false;
   for (const p of accountsPathCandidates()) {
     if (!existsSync(p)) continue;
     try {
       const raw = JSON.parse(await readFile(p, "utf8"));
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("账户库内容不是对象");
       return { users: raw.users || [], books: (raw.books || []).map(normBook) };
-    } catch {}
+    } catch (err) {
+      accountsBroken = true;
+      await logServer("error", "账户库读取失败：已停止自动修复", { path: p, error: String(err) });
+      return { users: [], books: [] };
+    }
   }
   return { users: [], books: [] };
 }
 
-async function writeFileShape(data: AccountsFile): Promise<void> {
+let shapeQueue: Promise<void> = Promise.resolve();
+
+async function writeFileShapeNow(data: AccountsFile): Promise<void> {
   if (!persistOn()) return;
   const dir = join(dataDir(), "accounts");
   await mkdir(dir, { recursive: true });
-  // 原子写：先写临时文件再改名，避免断电/强杀留下截断的凭据库
+  // 原子写：先写临时文件再改名，避免断电/强杀留下截断的凭据库。
+  // 临时名必须带 pid + 随机后缀：固定 `${target}.tmp` 时并发写会互相搬走对方写了一半的文件。
   const target = accountsPath();
-  const tmp = `${target}.tmp`;
-  await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
-  await rename(tmp, target);
+  const tmp = `${target}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
+    await rename(tmp, target);
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => {});
+    await logServer("error", "账户库写入失败", { error: String(err) });
+    throw err;
+  }
   for (const b of data.books)
     try {
       await writeBookMeta({ id: b.id, name: b.name, ownerId: b.ownerId || "" });
     } catch {}
 }
 
+/** 账户库写入串行化：每个 auth 操作都会读改写一次，并发时否则会丢账号/丢 owner */
+function writeFileShape(data: AccountsFile): Promise<void> {
+  const run = () => writeFileShapeNow(data);
+  const next = shapeQueue.then(run, run);
+  shapeQueue = next.catch(() => {});
+  return next;
+}
+
 export async function ensureAccounts(): Promise<AccountsFile> {
   let data = await readFileShape();
+  // 坏库：直接返回，不补 tokenSalt、不从旧台账造管理员、不写盘
+  if (accountsBroken) return { users: [], books: [] };
   let salted = false;
   for (const u of data.users)
     if (!u.tokenSalt) {
@@ -259,7 +297,16 @@ export async function resolveTenant(request: Request): Promise<Tenant> {
   const mine = ok && user ? booksOf(user, data.books) : [];
   const book = mine.find((b) => b.id === bookId) || mine[0] || null;
   const perms = ok && user ? permsOf(user, book) : [];
-  return { needSetup: data.users.length === 0, user: ok ? user : null, bookId: book?.id || "", book, books: mine, perms, all: data };
+  return {
+    needSetup: !accountsBroken && data.users.length === 0,
+    broken: accountsBroken,
+    user: ok ? user : null,
+    bookId: book?.id || "",
+    book,
+    books: mine,
+    perms,
+    all: data,
+  };
 }
 
 function cookieHeaders(user: UserRecord, bookId: string, token: string): string[] {
@@ -316,6 +363,8 @@ export async function handleAuthPost(request: Request): Promise<Response> {
   };
   const op = body.op;
   const data = await ensureAccounts();
+  // 账户库损坏：一律拒绝。否则 setup 会看到 users=[] 并「初始化管理员」，把真库覆盖掉
+  if (accountsUnreadable()) return Response.json({ error: ACCOUNTS_BROKEN_MSG, broken: true }, { status: 503 });
   if (op === "setup") {
     if (data.users.length) return Response.json({ error: "已有账户" }, { status: 400 });
     const username = (body.username || "admin").trim().toLowerCase();
@@ -628,23 +677,40 @@ function publicMembers(book: BookRecord, users: UserRecord[]) {
     });
 }
 
+/** 单个权限、或需要同时满足的多个权限（如导出敏感表：export.use + people.view） */
+export type NeedSpec = NeedId | NeedId[];
+
+function checkNeed(perms: string[] | undefined, need: string): boolean {
+  if (need === "ledger.write") return canWriteLedger(perms);
+  if (need === "ledger.manage") return canManageLedger(perms);
+  return hasPerm(perms, need);
+}
+
 export async function withTenant(
   request: Request,
   fn: () => Response | Promise<Response>,
-  need?: string,
+  need?: NeedSpec,
 ): Promise<Response> {
   if (!persistOn()) return fn();
   const t = await resolveTenant(request);
+  if (t.broken) return Response.json({ error: ACCOUNTS_BROKEN_MSG, broken: true }, { status: 503 });
   if (t.needSetup) return Response.json({ error: "need setup", needSetup: true }, { status: 401 });
   if (!t.user) return Response.json({ error: "login" }, { status: 401 });
   if (!t.bookId)
     return Response.json({ error: "还没有台账，请让管理员把你加入", noBook: true }, { status: 403 });
-  if (need === "ledger.write" && !canWriteLedger(t.perms))
-    return Response.json({ error: "没有修改权限" }, { status: 403 });
-  if (need === "ledger.manage" && !canManageLedger(t.perms))
-    return Response.json({ error: "没有修改整本台账的权限" }, { status: 403 });
-  if (need && need !== "ledger.write" && need !== "ledger.manage" && !hasPerm(t.perms, need))
-    return Response.json({ error: "没有权限" }, { status: 403 });
+  const needs = need === undefined ? [] : Array.isArray(need) ? need : [need];
+  for (const n of needs) {
+    if (checkNeed(t.perms, n)) continue;
+    await logServer("warn", "权限拒绝", {
+      need: n,
+      route: new URL(request.url).pathname,
+      method: request.method,
+      user: t.user.username,
+      book: t.bookId,
+    });
+    const msg = n === "ledger.manage" ? "没有修改整本台账的权限" : n === "ledger.write" ? "没有修改权限" : "没有权限";
+    return Response.json({ error: msg, need: n }, { status: 403 });
+  }
   return runWithBook(t.bookId, fn);
 }
 

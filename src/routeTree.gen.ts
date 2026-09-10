@@ -30,6 +30,7 @@ import { Route as ApiDocRouteImport } from './routes/api/doc'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiLedgerRouteImport } from './routes/api/ledger'
 import { Route as ApiPhotoRouteImport } from './routes/api/photo'
+import { Route as ApiPhotoAdoptRouteImport } from './routes/api/photo-adopt'
 import { Route as ApiPhotoFileRouteImport } from './routes/api/photo-file'
 import { Route as ApiPhotoFlagsRouteImport } from './routes/api/photo-flags'
 import { Route as ApiPhotoScanRouteImport } from './routes/api/photo-scan'
@@ -143,6 +144,11 @@ const ApiPhotoRoute = ApiPhotoRouteImport.update({
   path: '/api/photo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPhotoAdoptRoute = ApiPhotoAdoptRouteImport.update({
+  id: '/api/photo-adopt',
+  path: '/api/photo-adopt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPhotoFileRoute = ApiPhotoFileRouteImport.update({
   id: '/api/photo-file',
   path: '/api/photo-file',
@@ -201,6 +207,7 @@ export interface FileRoutesByFullPath {
   '/api/health': typeof ApiHealthRoute
   '/api/ledger': typeof ApiLedgerRoute
   '/api/photo': typeof ApiPhotoRoute
+  '/api/photo-adopt': typeof ApiPhotoAdoptRoute
   '/api/photo-file': typeof ApiPhotoFileRoute
   '/api/photo-flags': typeof ApiPhotoFlagsRoute
   '/api/photo-scan': typeof ApiPhotoScanRoute
@@ -231,6 +238,7 @@ export interface FileRoutesByTo {
   '/api/health': typeof ApiHealthRoute
   '/api/ledger': typeof ApiLedgerRoute
   '/api/photo': typeof ApiPhotoRoute
+  '/api/photo-adopt': typeof ApiPhotoAdoptRoute
   '/api/photo-file': typeof ApiPhotoFileRoute
   '/api/photo-flags': typeof ApiPhotoFlagsRoute
   '/api/photo-scan': typeof ApiPhotoScanRoute
@@ -262,6 +270,7 @@ export interface FileRoutesById {
   '/api/health': typeof ApiHealthRoute
   '/api/ledger': typeof ApiLedgerRoute
   '/api/photo': typeof ApiPhotoRoute
+  '/api/photo-adopt': typeof ApiPhotoAdoptRoute
   '/api/photo-file': typeof ApiPhotoFileRoute
   '/api/photo-flags': typeof ApiPhotoFlagsRoute
   '/api/photo-scan': typeof ApiPhotoScanRoute
@@ -294,6 +303,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/ledger'
     | '/api/photo'
+    | '/api/photo-adopt'
     | '/api/photo-file'
     | '/api/photo-flags'
     | '/api/photo-scan'
@@ -324,6 +334,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/ledger'
     | '/api/photo'
+    | '/api/photo-adopt'
     | '/api/photo-file'
     | '/api/photo-flags'
     | '/api/photo-scan'
@@ -354,6 +365,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/ledger'
     | '/api/photo'
+    | '/api/photo-adopt'
     | '/api/photo-file'
     | '/api/photo-flags'
     | '/api/photo-scan'
@@ -385,6 +397,7 @@ export interface RootRouteChildren {
   ApiHealthRoute: typeof ApiHealthRoute
   ApiLedgerRoute: typeof ApiLedgerRoute
   ApiPhotoRoute: typeof ApiPhotoRoute
+  ApiPhotoAdoptRoute: typeof ApiPhotoAdoptRoute
   ApiPhotoFileRoute: typeof ApiPhotoFileRoute
   ApiPhotoFlagsRoute: typeof ApiPhotoFlagsRoute
   ApiPhotoScanRoute: typeof ApiPhotoScanRoute
@@ -543,6 +556,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPhotoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/photo-adopt': {
+      id: '/api/photo-adopt'
+      path: '/api/photo-adopt'
+      fullPath: '/api/photo-adopt'
+      preLoaderRoute: typeof ApiPhotoAdoptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/photo-file': {
       id: '/api/photo-file'
       path: '/api/photo-file'
@@ -617,6 +637,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiHealthRoute: ApiHealthRoute,
   ApiLedgerRoute: ApiLedgerRoute,
   ApiPhotoRoute: ApiPhotoRoute,
+  ApiPhotoAdoptRoute: ApiPhotoAdoptRoute,
   ApiPhotoFileRoute: ApiPhotoFileRoute,
   ApiPhotoFlagsRoute: ApiPhotoFlagsRoute,
   ApiPhotoScanRoute: ApiPhotoScanRoute,
