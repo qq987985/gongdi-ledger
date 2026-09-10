@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import type { AuditEntry, LedgerState } from "./types";
 
 const bookAls = new AsyncLocalStorage<string>();
@@ -314,6 +315,17 @@ async function listDirSafe(dir: string): Promise<string[]> {
   }
 }
 
+async function atomicWriteFile(path: string, data: string | Buffer): Promise<void> {
+  const tmp = `${path}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    await writeFile(tmp, data);
+    await rename(tmp, path);
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => {});
+    throw err;
+  }
+}
+
 function ledgerPath(): string {
   return join(bookRoot(), "ledger.json");
 }
@@ -328,7 +340,7 @@ export async function readLedger(): Promise<Partial<LedgerState> & { empty?: boo
     if (!raw || typeof raw !== "object") return { empty: true };
     if (await reconcileContractScans(raw))
       try {
-        await writeFile(p, JSON.stringify(raw, null, 2), "utf8");
+        await atomicWriteFile(p, JSON.stringify(raw, null, 2));
       } catch {}
     return raw;
   } catch {
@@ -336,14 +348,36 @@ export async function readLedger(): Promise<Partial<LedgerState> & { empty?: boo
   }
 }
 
-export async function writeLedger(data: Partial<LedgerState>): Promise<void> {
-  if (!persistOn()) return;
+function revisionOf(data: unknown): string {
+  return createHash("sha256").update(JSON.stringify(data)).digest("hex");
+}
+
+export async function ledgerRevision(): Promise<string> {
+  const data = await readLedger();
+  return "empty" in data && data.empty ? "" : revisionOf(data);
+}
+
+let ledgerWriteQueue: Promise<boolean> = Promise.resolve(true);
+
+async function writeLedgerNow(data: Partial<LedgerState>, expectedRevision?: string): Promise<boolean> {
+  if (!persistOn()) return true;
   await ensureDirs();
+  if (expectedRevision !== undefined && (await ledgerRevision()) !== expectedRevision) return false;
   // 原子写：先写临时文件再 rename，避免写一半崩溃导致文件损坏
   const p = ledgerPath();
   const tmp = `${p}.tmp-${process.pid}-${Date.now()}`;
   await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
   await rename(tmp, p);
+  return true;
+}
+
+/** 将版本检查和替换放在同一串行队列，避免两个请求同时通过 CAS 检查。 */
+export function writeLedger(data: Partial<LedgerState>, expectedRevision?: string): Promise<boolean> {
+  ledgerWriteQueue = ledgerWriteQueue.then(
+    () => writeLedgerNow(data, expectedRevision),
+    () => writeLedgerNow(data, expectedRevision),
+  );
+  return ledgerWriteQueue;
 }
 
 function auditPath(): string {
@@ -460,9 +494,16 @@ export async function savePhoto(name: string, kind: string, dataUrl: string): Pr
   const destName = `${n}-${labelOf(kind)}.${ext}`;
   const dest = join(dir, destName);
   const hit = await findPhotoHit(n, kind);
-  if (hit && join(hit.dir, hit.file) !== dest) await rm(join(hit.dir, hit.file), { force: true });
   await mkdir(dir, { recursive: true });
-  await writeFile(dest, Buffer.from(m[2], "base64"));
+  const tmp = `${dest}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    await writeFile(tmp, Buffer.from(m[2], "base64"));
+    if (hit && join(hit.dir, hit.file) !== dest) await rm(join(hit.dir, hit.file), { force: true });
+    await rename(tmp, dest);
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => {});
+    throw err;
+  }
 }
 
 export async function removePhoto(name: string, kind: string): Promise<void> {
@@ -640,11 +681,28 @@ export async function saveDoc(
   const prev = await readPointerName(dir, sid);
   const sharedPrev = prev ? await otherPointersUse(dir, sid, prev) : false;
   if (!opts.replace) orig = uniqueFileName(dir, orig, prev && !sharedPrev ? prev : "");
-  await sweepDocFiles(kind, sid);
+  const tmp = `${dir}/.${sid}.upload-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   if (kind === "contract" || kind === "expense" || kind === "payout") {
-    await writeFile(join(dir, orig), buf);
-    await writeFile(join(dir, `${sid}.name.txt`), orig, "utf8");
-  } else await writeFile(join(dir, `${sid}--${orig}`), buf);
+    const dest = join(dir, orig);
+    try {
+      await writeFile(tmp, buf);
+      await sweepDocFiles(kind, sid);
+      await rename(tmp, dest);
+      await atomicWriteFile(join(dir, `${sid}.name.txt`), orig);
+    } catch (err) {
+      await rm(tmp, { force: true }).catch(() => {});
+      throw err;
+    }
+  } else {
+    try {
+      await writeFile(tmp, buf);
+      await sweepDocFiles(kind, sid);
+      await rename(tmp, join(dir, `${sid}--${orig}`));
+    } catch (err) {
+      await rm(tmp, { force: true }).catch(() => {});
+      throw err;
+    }
+  }
   return orig;
 }
 

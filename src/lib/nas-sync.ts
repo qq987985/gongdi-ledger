@@ -6,6 +6,8 @@ import type { LedgerState } from "./types";
 
 let nas = false;
 let pushFailed = false;
+let pushQueue: Promise<void> = Promise.resolve();
+let ledgerRevision = "";
 
 export function nasEnabled(): boolean {
   return nas;
@@ -50,6 +52,7 @@ export async function pullNasLedger(): Promise<void> {
   if (!nas) return;
   const r = await timeoutFetch("/api/ledger", 4e3);
   if (!r.ok) return;
+  ledgerRevision = r.headers.get("x-ledger-revision") || "";
   const j = await r.json();
   if (j.empty) {
     await pushNasLedger();
@@ -74,7 +77,7 @@ export async function pullNasLedger(): Promise<void> {
   });
 }
 
-export async function pushNasLedger(): Promise<void> {
+async function pushNasLedgerNow(): Promise<void> {
   if (!nas) return;
   if (!canWriteLedger(livePerms())) return;
   const body = sliceState(useApp.getState());
@@ -82,11 +85,17 @@ export async function pushNasLedger(): Promise<void> {
     const r = await fetch("/api/ledger", {
       method: "PUT",
       credentials: "include",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "if-match": ledgerRevision },
       body: JSON.stringify(body),
     });
     if (r.ok) {
+      ledgerRevision = r.headers.get("x-ledger-revision") || ledgerRevision;
       pushFailed = false;
+      return;
+    }
+    if (r.status === 409) {
+      pushFailed = true;
+      toast.error("服务器上的台账已被其他设备修改，请重新加载后再保存");
       return;
     }
     if (!pushFailed) {
@@ -99,6 +108,15 @@ export async function pushNasLedger(): Promise<void> {
       toast.error("保存到服务器失败，请检查网络后重试");
     }
   }
+}
+
+/**
+ * 自动保存必须串行执行。否则慢请求可能在新请求之后完成，
+ * 用旧快照覆盖刚保存的新数据。
+ */
+export function pushNasLedger(): Promise<void> {
+  pushQueue = pushQueue.then(pushNasLedgerNow, pushNasLedgerNow);
+  return pushQueue;
 }
 
 export async function pushNasBackup(): Promise<string> {

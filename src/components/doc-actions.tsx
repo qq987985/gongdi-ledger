@@ -74,30 +74,37 @@ export async function setDoc(
   file: File,
   opts?: { replace?: boolean },
 ): Promise<string> {
-  await idbSet(id, kind, file, file.name);
-  if (!nasEnabled()) return file.name;
+  if (!nasEnabled()) {
+    await idbSet(id, kind, file, file.name);
+    return file.name;
+  }
   const body = new FormData();
   body.set("id", id);
   body.set("kind", kind);
   body.set("file", file, file.name);
   if (opts && opts.replace) body.set("replace", "1");
   const res = await fetch("/api/doc", { method: "PUT", credentials: "include", body });
+  if (!res.ok) throw new Error(`文件上传失败（${res.status}）`);
   let name = file.name;
   try {
     const j = await res.json();
     if (j?.fileName) name = j.fileName;
   } catch {}
-  if (name !== file.name) await idbSet(id, kind, file, name);
+  await idbSet(id, kind, file, name);
   return name;
 }
 
 export async function removeDoc(id: string, kind: string): Promise<void> {
-  await idbDel(id, kind);
-  if (!nasEnabled()) return;
-  await fetch(`/api/doc?id=${encodeURIComponent(id)}&kind=${kind}`, {
+  if (!nasEnabled()) {
+    await idbDel(id, kind);
+    return;
+  }
+  const res = await fetch(`/api/doc?id=${encodeURIComponent(id)}&kind=${kind}`, {
     method: "DELETE",
     credentials: "include",
   });
+  if (!res.ok) throw new Error(`文件删除失败（${res.status}）`);
+  await idbDel(id, kind);
 }
 
 export async function getDocBlob(id: string, kind: string, fileName?: string): Promise<DocBlob | null> {
