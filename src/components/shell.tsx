@@ -423,6 +423,34 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
       setBusy(false);
     }
   }
+  /** 上次更新的结果从哪来：GET /api/update 带的 status（服务端内存态，重启即清） */
+  const job = info?.status as
+    | { running?: boolean; startedAt?: number; doneAt?: number; ok?: boolean; error?: string; step?: string }
+    | undefined;
+  const stamp = (t?: number) => (t && t > 0 ? new Date(t).toLocaleString("zh-CN", { hour12: false }) : "");
+  const [jobLog, setJobLog] = React.useState<{ log?: string; errorText?: string; note?: string } | null>(null);
+  const [logBusy, setLogBusy] = React.useState(false);
+  /** 把更新日志读回界面：以前只能去 NAS 一层层点开 data/logs/update.log */
+  async function toggleLog() {
+    if (jobLog) {
+      setJobLog(null);
+      return;
+    }
+    setLogBusy(true);
+    try {
+      const r = await fetch("/api/update-log", { cache: "no-store", signal: AbortSignal.timeout(2e4) });
+      const d = (await r.json().catch(() => ({}))) as { log?: string; errorText?: string; note?: string; error?: string };
+      if (!r.ok || d.error) {
+        toast.error(d.error || `读取日志失败（HTTP ${r.status}）`);
+        return;
+      }
+      setJobLog(d);
+    } catch {
+      toast.error("读取日志失败（服务未响应）");
+    } finally {
+      setLogBusy(false);
+    }
+  }
   const desc =
     info?.mode === "windows"
       ? "从 GitHub 下载 Windows 包并替换程序。data 不覆盖。"
@@ -462,6 +490,53 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
           GitHub {formatVersion(info.remote)} · 本机 {formatVersion(info.local || "")}
         </p>
       ) : null}
+      {job && (job.startedAt || job.running) ? (
+        <div
+          className={cn(
+            "mt-3 rounded-lg border px-3 py-2 text-xs",
+            job.running ? "border-warn/40 bg-warn-bg" : job.ok ? "border-ok/40 bg-ok-bg" : "border-danger/40 bg-danger-bg",
+          )}
+        >
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-medium">上次更新</span>
+            <span className={cn("font-medium", job.running ? "text-warn" : job.ok ? "text-ok" : "text-danger")}>
+              {job.running ? "进行中…" : job.ok ? "成功" : "失败"}
+            </span>
+            {stamp(job.startedAt) ? (
+              <span className="text-subtle">
+                {stamp(job.startedAt)}
+                {job.doneAt && !job.running ? ` → ${stamp(job.doneAt)}` : ""}
+              </span>
+            ) : null}
+          </div>
+          {job.running && job.step ? <p className="mt-1 text-subtle">{job.step}</p> : null}
+          {!job.running && !job.ok && job.error ? <p className="mt-1 break-words text-muted">原因：{job.error}</p> : null}
+          {!job.running && !job.ok ? (
+            <p className="mt-1 text-subtle">
+              容器还在旧版本上跑着，台账数据没动。可再点一次「更新」，或到 NAS 运行 ./一键拉取.sh。
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="mt-2">
+        <button
+          type="button"
+          className="text-xs text-muted underline underline-offset-2 hover:text-danger disabled:opacity-60"
+          disabled={logBusy}
+          onClick={() => void toggleLog()}
+        >
+          {logBusy ? "读取中…" : jobLog ? "收起更新日志" : "查看更新日志"}
+        </button>
+        {jobLog ? (
+          jobLog.log || jobLog.errorText ? (
+            <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-line bg-surface p-2 text-[11px] leading-relaxed text-muted">
+              {[jobLog.errorText, jobLog.log].filter(Boolean).join("\n\n")}
+            </pre>
+          ) : (
+            <p className="mt-1 text-xs text-subtle">{jobLog.note || "没有日志内容"}</p>
+          )
+        ) : null}
+      </div>
     </div>
   );
 }

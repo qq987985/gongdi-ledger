@@ -35,6 +35,7 @@ import { Route as ApiPhotoFileRouteImport } from './routes/api/photo-file'
 import { Route as ApiPhotoFlagsRouteImport } from './routes/api/photo-flags'
 import { Route as ApiPhotoScanRouteImport } from './routes/api/photo-scan'
 import { Route as ApiUpdateRouteImport } from './routes/api/update'
+import { Route as ApiUpdateLogRouteImport } from './routes/api/update-log'
 import { Route as ApiVersionRouteImport } from './routes/api/version'
 import { Route as ApiYearRouteImport } from './routes/api/year'
 import { Route as ApiFileKindRouteImport } from './routes/api/file/$kind'
@@ -169,6 +170,11 @@ const ApiUpdateRoute = ApiUpdateRouteImport.update({
   path: '/api/update',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiUpdateLogRoute = ApiUpdateLogRouteImport.update({
+  id: '/api/update-log',
+  path: '/api/update-log',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiVersionRoute = ApiVersionRouteImport.update({
   id: '/api/version',
   path: '/api/version',
@@ -212,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/api/photo-flags': typeof ApiPhotoFlagsRoute
   '/api/photo-scan': typeof ApiPhotoScanRoute
   '/api/update': typeof ApiUpdateRoute
+  '/api/update-log': typeof ApiUpdateLogRoute
   '/api/version': typeof ApiVersionRoute
   '/api/year': typeof ApiYearRoute
   '/api/file/$kind': typeof ApiFileKindRoute
@@ -243,6 +250,7 @@ export interface FileRoutesByTo {
   '/api/photo-flags': typeof ApiPhotoFlagsRoute
   '/api/photo-scan': typeof ApiPhotoScanRoute
   '/api/update': typeof ApiUpdateRoute
+  '/api/update-log': typeof ApiUpdateLogRoute
   '/api/version': typeof ApiVersionRoute
   '/api/year': typeof ApiYearRoute
   '/api/file/$kind': typeof ApiFileKindRoute
@@ -275,6 +283,7 @@ export interface FileRoutesById {
   '/api/photo-flags': typeof ApiPhotoFlagsRoute
   '/api/photo-scan': typeof ApiPhotoScanRoute
   '/api/update': typeof ApiUpdateRoute
+  '/api/update-log': typeof ApiUpdateLogRoute
   '/api/version': typeof ApiVersionRoute
   '/api/year': typeof ApiYearRoute
   '/api/file/$kind': typeof ApiFileKindRoute
@@ -308,6 +317,7 @@ export interface FileRouteTypes {
     | '/api/photo-flags'
     | '/api/photo-scan'
     | '/api/update'
+    | '/api/update-log'
     | '/api/version'
     | '/api/year'
     | '/api/file/$kind'
@@ -339,6 +349,7 @@ export interface FileRouteTypes {
     | '/api/photo-flags'
     | '/api/photo-scan'
     | '/api/update'
+    | '/api/update-log'
     | '/api/version'
     | '/api/year'
     | '/api/file/$kind'
@@ -370,6 +381,7 @@ export interface FileRouteTypes {
     | '/api/photo-flags'
     | '/api/photo-scan'
     | '/api/update'
+    | '/api/update-log'
     | '/api/version'
     | '/api/year'
     | '/api/file/$kind'
@@ -402,6 +414,7 @@ export interface RootRouteChildren {
   ApiPhotoFlagsRoute: typeof ApiPhotoFlagsRoute
   ApiPhotoScanRoute: typeof ApiPhotoScanRoute
   ApiUpdateRoute: typeof ApiUpdateRoute
+  ApiUpdateLogRoute: typeof ApiUpdateLogRoute
   ApiVersionRoute: typeof ApiVersionRoute
   ApiYearRoute: typeof ApiYearRoute
   ApiFileKindRoute: typeof ApiFileKindRoute
@@ -591,6 +604,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiUpdateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/update-log': {
+      id: '/api/update-log'
+      path: '/api/update-log'
+      fullPath: '/api/update-log'
+      preLoaderRoute: typeof ApiUpdateLogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/version': {
       id: '/api/version'
       path: '/api/version'
@@ -642,6 +662,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPhotoFlagsRoute: ApiPhotoFlagsRoute,
   ApiPhotoScanRoute: ApiPhotoScanRoute,
   ApiUpdateRoute: ApiUpdateRoute,
+  ApiUpdateLogRoute: ApiUpdateLogRoute,
   ApiVersionRoute: ApiVersionRoute,
   ApiYearRoute: ApiYearRoute,
   ApiFileKindRoute: ApiFileKindRoute,

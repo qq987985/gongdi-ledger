@@ -1,7 +1,7 @@
-import { readVersionText } from "./nas-fs.server";
+import { dataDir, readVersionText } from "./nas-fs.server";
 import { logServer } from "./log.server";
 import { join } from "node:path";
-import { access, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { tmpdir } from "node:os";
 import http from "node:http";
@@ -9,6 +9,69 @@ import http from "node:http";
 const REPO = (process.env.UPDATE_REPO || "qq987985/gongdi-ledger").trim();
 const DEFAULT_IMAGE = (process.env.GONGDI_IMAGE || "ghcr.1ms.run/qq987985/gongdi-ledger:latest").trim();
 const SOCK = "/var/run/docker.sock";
+
+let updateLogQueue: Promise<void> = Promise.resolve();
+
+/**
+ * 追加一行到 `data/logs/update.log`（和更新容器写的是同一个文件）。
+ *
+ * 为什么单独记一份：更新失败后旧容器还活着，但一旦重启，内存里的更新状态就没了，
+ * 只有落盘能回答「上次更新到底怎么了」。界面上的「查看更新日志」读的就是这个文件。
+ * 自身失败绝不抛出：日志不能反过来把更新搞砸。
+ */
+export function appendUpdateLog(text: string): Promise<void> {
+  const root = dataDir();
+  if (!root) return Promise.resolve();
+  const line = `${new Date().toISOString()} ${text}\n`;
+  updateLogQueue = updateLogQueue.then(
+    async () => {
+      try {
+        await mkdir(join(root, "logs"), { recursive: true });
+        await appendFile(join(root, "logs", "update.log"), line, "utf8");
+      } catch {
+        /* 写不进去就放弃 */
+      }
+    },
+    () => {},
+  );
+  return updateLogQueue;
+}
+
+const LOG_TAIL_LINES = 120;
+const LOG_TAIL_BYTES = 64 * 1024;
+
+/** 取文件尾部若干行；文件不存在返回空串（正常情况），其它错误原样带出便于排查 */
+async function tailFile(path: string): Promise<string> {
+  try {
+    const raw = await readFile(path, "utf8");
+    let text = raw;
+    if (raw.length > LOG_TAIL_BYTES) {
+      const cut = raw.slice(-LOG_TAIL_BYTES);
+      const nl = cut.indexOf("\n");
+      text = nl >= 0 ? cut.slice(nl + 1) : cut; // 丢掉被截断的半行
+    }
+    const lines = text.trimEnd().split("\n");
+    return lines.slice(Math.max(0, lines.length - LOG_TAIL_LINES)).join("\n");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException)?.code === "ENOENT") return "";
+    return `[读取失败] ${e instanceof Error ? e.message : String(e)}`;
+  }
+}
+
+/**
+ * 读回更新现场：`data/logs/update.log`（应用 + 更新容器都写这个文件）与
+ * `data/.gongdi-update-error.txt`（更新容器失败时写的最后一份错误）。
+ * 供界面上的「查看更新日志」使用，只读、不抛。
+ */
+export async function readUpdateLog(): Promise<{ log: string; errorText: string; note: string }> {
+  const root = dataDir();
+  if (!root) return { log: "", errorText: "", note: "未开启 NAS 持久化，本机运行没有更新日志" };
+  const [log, errorText] = await Promise.all([
+    tailFile(join(root, "logs", "update.log")),
+    tailFile(join(root, ".gongdi-update-error.txt")),
+  ]);
+  return { log, errorText, note: log || errorText ? "" : "还没有更新记录（data/logs/update.log 不存在）" };
+}
 
 let cache: { at: number; data: RemoteInfo | null } = { at: 0, data: null };
 
@@ -470,12 +533,15 @@ function docker(method,path,body){
 `;
 
 async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; restarting?: boolean }> {
-  if (!(await hasDockerSock()))
+  if (!(await hasDockerSock())) {
+    await appendUpdateLog("[应用] 放弃自动更新：没有 /var/run/docker.sock（容器未挂载）");
     return { ok: false, error: "还不能自动更新。请到飞牛运行一次「一键拉取」，以后就能在软件里点更新。" };
+  }
   const me = await selfContainer();
   await logServer("info", "开始一键更新（Docker）", { currentImage: String(me.Config?.Image || "") });
   const name = String(me.Name || "/attendance-app").replace(/^\//, "") || "attendance-app";
   const current = String(me.Config?.Image || "");
+  await appendUpdateLog(`[应用] 开始更新（Docker）：当前镜像 ${current || "(未知)"}`);
   let image = "";
   const candidates = uniqueImages([
     process.env.GONGDI_IMAGE,
@@ -495,6 +561,7 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
       image = ref;
       lastErr = "";
       await logServer("info", "拉取镜像成功", { ref });
+      await appendUpdateLog(`[应用] 已拉取镜像 ${ref}`);
       break;
     } catch (e) {
       lastErr = e instanceof Error ? e.message : String(e);
@@ -549,6 +616,7 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
   });
   await dockerReq("POST", `/containers/${helper.Id}/start`);
   await logServer("info", "已启动更新容器，稍后自动替换", { image, helper: helper.Id });
+  await appendUpdateLog(`[应用] 已启动更新容器，约 10 秒后替换 ${name}（镜像 ${image}）`);
   return { ok: true, restarting: true };
 }
 
@@ -623,6 +691,7 @@ del /q "%~f0"
 `;
   await writeFile(bat, script.replace(/\n/g, "\r\n"), "utf8");
   await logServer("info", "开始 Windows 更新", { home, url: info.url });
+  await appendUpdateLog(`[应用] 开始更新（Windows）：下载 ${info.url}`);
   spawn("cmd.exe", ["/c", bat], { detached: true, stdio: "ignore", cwd: home, windowsHide: false }).unref();
   // 先让 HTTP 响应发回浏览器再退出：原来 800ms 就 process.exit，
   // 响应常常还没落地 → 浏览器看到「网络中断」→ 误报「更新失败」，而更新其实已经开始。
@@ -698,12 +767,14 @@ export function startUpdateJob(run: () => Promise<{ ok: boolean; error?: string;
         error: r.error || "",
         step: r.ok ? "已受理，容器即将被替换" : "失败",
       };
-      return logServer(r.ok ? "info" : "warn", r.ok ? "一键更新已受理" : "一键更新失败", { error: r.error || "" });
+      return logServer(r.ok ? "info" : "warn", r.ok ? "一键更新已受理" : "一键更新失败", { error: r.error || "" }).then(() =>
+        appendUpdateLog(r.ok ? "[应用] 更新已受理，等待容器替换" : `[应用] 更新失败：${r.error || "未说明原因"}`),
+      );
     })
     .catch((e: unknown) => {
       const error = e instanceof Error && e.message ? e.message : "更新过程出错（详情见 data/logs）";
       updateJobState = { ...updateJobState, running: false, doneAt: Date.now(), ok: false, error, step: "异常" };
-      return logServer("error", "一键更新异常", { error });
+      return logServer("error", "一键更新异常", { error }).then(() => appendUpdateLog(`[应用] 更新异常：${error}`));
     });
   return updateJobStatus();
 }
