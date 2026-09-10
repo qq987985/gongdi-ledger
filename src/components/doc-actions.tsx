@@ -3,6 +3,7 @@ import { Copy, Download, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { nasEnabled } from "~/lib/nas-sync";
 import { logOp } from "~/lib/audit";
+import { PreviewModal, previewKindOf, type PreviewTarget } from "~/components/preview";
 import { copyText } from "~/lib/utils";
 
 const DB_NAME = "gongdi-docs";
@@ -142,15 +143,6 @@ async function downloadDoc(id: string, kind: string, fileName?: string): Promise
   const hit = await getDocBlob(id, kind, fileName);
   if (!hit) return false;
   triggerDownload(hit.blob, hit.fileName || fileName || "file");
-  return true;
-}
-
-async function openDoc(id: string, kind: string, fileName?: string): Promise<boolean> {
-  const hit = await getDocBlob(id, kind, fileName);
-  if (!hit) return false;
-  const href = URL.createObjectURL(hit.blob);
-  window.open(href, "_blank", "noopener,noreferrer");
-  window.setTimeout(() => URL.revokeObjectURL(href), 6e4);
   return true;
 }
 
@@ -303,16 +295,39 @@ export function DocActions({
   onReplaced?: (saved: string) => void;
 }) {
   const ref = React.useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = React.useState<PreviewTarget | null>(null);
+  function closePreview() {
+    setPreview((p) => {
+      if (p) URL.revokeObjectURL(p.url);
+      return null;
+    });
+  }
+  /** 查看改为应用内弹窗：不再新开标签页（原来开完还得手动切回来再点下一次） */
+  async function view() {
+    const hit = await getDocBlob(id, kind, fileName);
+    if (!hit) {
+      toast.error("文件不在，可能还没上传成功");
+      return;
+    }
+    const url = URL.createObjectURL(hit.blob);
+    const name = hit.fileName || fileName || "文件";
+    setPreview({
+      url,
+      name,
+      kind: previewKindOf(name, hit.blob.type),
+      download: () => triggerDownload(hit.blob, name),
+    });
+  }
   return (
-    <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+    <>
+      <PreviewModal target={preview} onClose={closePreview} />
+      <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
       {fileName ? (
         <>
           <button
             type="button"
             className="rounded-sm border border-line px-1.5 py-0.5 text-[11px] hover:border-accent"
-            onClick={async () => {
-              if (!(await openDoc(id, kind, fileName))) toast.error("文件不在，可能还没上传成功");
-            }}
+            onClick={() => void view()}
           >
             <Eye className="mr-1 inline size-3" />
             查看
@@ -398,6 +413,7 @@ export function DocActions({
           删除
         </button>
       ) : null}
-    </div>
+      </div>
+    </>
   );
 }
