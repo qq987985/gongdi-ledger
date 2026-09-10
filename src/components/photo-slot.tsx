@@ -122,6 +122,9 @@ export function IdCardSlot({
       else setFront(saved);
       onChanged?.();
       toast.success(kind === "idBack" ? `反面已保存为「${name}-身份证-反面」` : `正面已保存为「${name}-身份证-正面」`);
+    } catch (e) {
+      // 上传失败必须说出来：以前不看返回值，失败也提示「已保存」，照片其实只在浏览器里
+      toast.error(e instanceof Error ? e.message : "照片保存失败，请检查网络后重试");
     } finally {
       setBusy(false);
     }
@@ -253,11 +256,15 @@ export function IdCardSlot({
                     className={cn(btnGhost, "text-danger hover:text-danger")}
                     onClick={async () => {
                       if (!confirm(`删除 ${name} 的${face === "back" ? "反面" : "正面"}？`)) return;
-                      await deletePhoto(name, face === "back" ? "idBack" : "id");
-                      if (face === "back") setBack(null);
-                      else setFront(null);
-                      onChanged?.();
-                      toast.success("已删除");
+                      try {
+                        await deletePhoto(name, face === "back" ? "idBack" : "id");
+                        if (face === "back") setBack(null);
+                        else setFront(null);
+                        onChanged?.();
+                        toast.success("已删除");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "删除失败，请重试");
+                      }
                     }}
                   >
                     删除
@@ -309,6 +316,8 @@ function SinglePhotoSlot({
       setUrl(saved);
       onChanged?.();
       toast.success(`${label}已保存`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "照片保存失败，请检查网络后重试");
     } finally {
       setBusy(false);
     }
@@ -396,10 +405,14 @@ function SinglePhotoSlot({
                 className={cn(btnGhost, "text-danger hover:text-danger")}
                 onClick={async () => {
                   if (!confirm(`删除 ${name} 的${label}？`)) return;
-                  await deletePhoto(name, kind);
-                  setUrl(null);
-                  onChanged?.();
-                  toast.success("已删除");
+                  try {
+                    await deletePhoto(name, kind);
+                    setUrl(null);
+                    onChanged?.();
+                    toast.success("已删除");
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "删除失败，请重试");
+                  }
                 }}
               >
                 删除

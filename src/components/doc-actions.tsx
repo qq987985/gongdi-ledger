@@ -2,6 +2,7 @@ import * as React from "react";
 import { Copy, Download, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { nasEnabled } from "~/lib/nas-sync";
+import { logOp } from "~/lib/audit";
 import { copyText } from "~/lib/utils";
 
 const DB_NAME = "gongdi-docs";
@@ -91,6 +92,8 @@ export async function setDoc(
     if (j?.fileName) name = j.fileName;
   } catch {}
   await idbSet(id, kind, file, name);
+  // 影像操作也要留痕（以前只记人员/考勤/发放这类台账改动，传/删合同扫描件查不到人）
+  void logOp(opts?.replace ? "更换影像" : "上传影像", `${DOC_KIND_LABEL[kind] || kind} ${name}`, "影像资料");
   return name;
 }
 
@@ -105,6 +108,7 @@ export async function removeDoc(id: string, kind: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`文件删除失败（${res.status}）`);
   await idbDel(id, kind);
+  void logOp("删除影像", `${DOC_KIND_LABEL[kind] || kind} ${id}`, "影像资料");
 }
 
 export async function getDocBlob(id: string, kind: string, fileName?: string): Promise<DocBlob | null> {

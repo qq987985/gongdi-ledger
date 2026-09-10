@@ -1,4 +1,5 @@
 import { nasEnabled } from "./nas-sync";
+import { logOp } from "./audit";
 
 const DB_NAME = "gongdi-photos";
 const STORE = "photos";
@@ -66,24 +67,38 @@ export async function getPhoto(name: string, kind: string): Promise<string | nul
   return idbGet(name, kind);
 }
 
+/** 照片类型的中文名，用于操作记录 */
+const PHOTO_KIND_LABEL: Record<string, string> = {
+  id: "身份证正面",
+  idFront: "身份证正面",
+  idBack: "身份证反面",
+  bank: "银行卡",
+  ic: "IC卡",
+};
+
 export async function setPhoto(name: string, kind: string, dataUrl: string): Promise<void> {
   await idbSet(name, kind, dataUrl);
-  if (nasEnabled())
-    await fetch("/api/photo", {
-      method: "PUT",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, kind, dataUrl }),
-    });
+  if (!nasEnabled()) return;
+  const r = await fetch("/api/photo", {
+    method: "PUT",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, kind, dataUrl }),
+  });
+  // 以前不看 res.ok：上传失败也会提示「已保存」，而且操作记录里什么都查不到
+  if (!r.ok) throw new Error(`照片上传失败（${r.status}）`);
+  void logOp("上传照片", `${name} ${PHOTO_KIND_LABEL[kind] || kind}`, "照片");
 }
 
 export async function deletePhoto(name: string, kind: string): Promise<void> {
   await idbDel(name, kind);
-  if (nasEnabled())
-    await fetch(`/api/photo?name=${encodeURIComponent(name)}&kind=${kind}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
+  if (!nasEnabled()) return;
+  const r = await fetch(`/api/photo?name=${encodeURIComponent(name)}&kind=${kind}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!r.ok) throw new Error(`照片删除失败（${r.status}）`);
+  void logOp("删除照片", `${name} ${PHOTO_KIND_LABEL[kind] || kind}`, "照片");
 }
 
 export interface PhotoFlags {

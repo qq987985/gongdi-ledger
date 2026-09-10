@@ -3,6 +3,7 @@ import { dirname, extname, join } from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { logServer } from "./log.server";
 import type { AuditEntry, LedgerState } from "./types";
 
 const bookAls = new AsyncLocalStorage<string>();
@@ -392,44 +393,76 @@ function auditPath(): string {
   return join(bookRoot(), "audit.json");
 }
 
+function parseAuditFile(raw: unknown): AuditEntry[] {
+  return ((Array.isArray(raw) ? raw : (raw as { entries?: AuditEntry[] })?.entries || []) as AuditEntry[]).filter(
+    (x) => x && x.id && x.action,
+  );
+}
+
+/** 老版本把操作记录放在 data/audit.json（没有按台账分）。这里作为只读兜底，避免「一条都看不到」 */
+function legacyAuditPaths(): string[] {
+  const root = dataDir();
+  if (!root) return [];
+  const out: string[] = [];
+  if (currentBookId() === "default") out.push(join(root, "audit.json"));
+  return out;
+}
+
 export async function readAudit(): Promise<AuditEntry[]> {
   if (!persistOn()) return [];
   await ensureDirs();
   const p = auditPath();
-  if (!existsSync(p)) return [];
-  try {
-    const raw = JSON.parse(await readFile(p, "utf8"));
-    return ((Array.isArray(raw) ? raw : raw.entries || []) as AuditEntry[]).filter(
-      (x) => x && x.id && x.action,
-    );
-  } catch {
-    return [];
+  if (existsSync(p)) {
+    try {
+      return parseAuditFile(JSON.parse(await readFile(p, "utf8")));
+    } catch (err) {
+      await logServer("error", "操作记录文件读取失败", { path: p, error: String(err) });
+      return [];
+    }
   }
+  // 没有本台账的记录文件时，回落到旧位置（只读）；下一次写入会把它们一起并入新文件
+  for (const legacy of legacyAuditPaths()) {
+    try {
+      if (!existsSync(legacy)) continue;
+      const rows = parseAuditFile(JSON.parse(await readFile(legacy, "utf8")));
+      if (rows.length) {
+        await logServer("info", "操作记录从旧位置读取", { legacy, count: rows.length });
+        return rows;
+      }
+    } catch {}
+  }
+  return [];
 }
 
 export async function writeAudit(entries: AuditEntry[]): Promise<void> {
   if (!persistOn()) return;
   await ensureDirs();
-  // 原子写，避免断电/强杀留下截断的审计文件
-  const target = auditPath();
-  const tmp = `${target}.tmp`;
-  await writeFile(tmp, JSON.stringify({ entries: entries.slice(0, 2e3) }, null, 2), "utf8");
-  await rename(tmp, target);
+  // 原子写（临时名带随机后缀）：原来固定用 `${target}.tmp`，两次并发写会互相搬走对方写了一半的文件，
+  // rename 抛 ENOENT → 这条记录就丢了；客户端又把失败静默吞掉，界面表现为「操作没被记录」。
+  await atomicWriteFile(auditPath(), JSON.stringify({ entries: entries.slice(0, 2e3) }, null, 2));
 }
 
-export async function appendAudit(row: Partial<AuditEntry>): Promise<AuditEntry> {
-  const list = await readAudit();
-  const entry: AuditEntry = {
-    id: row.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    at: row.at || new Date().toISOString(),
-    userId: row.userId || "",
-    userName: row.userName || "",
-    action: row.action || "",
-    detail: row.detail || "",
-    module: row.module || "",
+/** 审计写入串行化：appendAudit 是「读—改—写」，并发不排队必然丢记录 */
+let auditQueue: Promise<unknown> = Promise.resolve();
+
+export function appendAudit(row: Partial<AuditEntry>): Promise<AuditEntry> {
+  const task = async (): Promise<AuditEntry> => {
+    const list = await readAudit();
+    const entry: AuditEntry = {
+      id: row.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      at: row.at || new Date().toISOString(),
+      userId: row.userId || "",
+      userName: row.userName || "",
+      action: row.action || "",
+      detail: row.detail || "",
+      module: row.module || "",
+    };
+    await writeAudit([entry, ...list]);
+    return entry;
   };
-  await writeAudit([entry, ...list]);
-  return entry;
+  const next = auditQueue.then(task, task);
+  auditQueue = next.catch(() => {});
+  return next;
 }
 
 const MIME: Record<string, string> = {
