@@ -19,8 +19,9 @@ cp win/启动.bat win/停止.bat "$STAGE/win/"
 # 同时在 zip 根目录放一份，保证在线更新脚本（只在解压根目录找 bat）能更新启动器
 cp win/启动.bat win/停止.bat "$STAGE/"
 cp VERSION.txt "$STAGE/" 2>/dev/null || true
-cp 使用说明.md "$STAGE/" 2>/dev/null || true
-cp 目录结构.txt "$STAGE/" 2>/dev/null || true
+# 说明文档已归档到 docs/使用与部署/，但包里仍放在根目录（用户第一眼要看）
+cp docs/使用与部署/使用说明.md "$STAGE/" 2>/dev/null || true
+cp docs/使用与部署/目录结构.txt "$STAGE/" 2>/dev/null || true
 printf '%s\n' '工地台账 Windows 解压即用' '双击 win/启动.bat' 'http://127.0.0.1:8501' '数据在 data，不要删。' > "$STAGE/说明.txt"
 
 if [ -f /tmp/node-win/node.exe ]; then

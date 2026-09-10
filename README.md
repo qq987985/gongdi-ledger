@@ -498,18 +498,25 @@ qq987985/gongdi-ledger
 ├── docker-compose.build.yml         ← 本机构建
 ├── .dockerignore
 ├── .gitignore
-├── VERSION.txt
-├── README.md                        ← 本文件
-├── 使用说明.md
-├── 目录结构.txt
-├── 部署说明.txt
-├── GITHUB上传说明.txt
+├── VERSION.txt                      ← 版本号与更新记录（构建读第一行）
+├── README.md                        ← 本文件（总入口）
+├── 开发规范.md                       ← 强制约定，改代码前必看
+├── AGENTS.md                        ← 给 AI / 协作方的须知
+├── docs/                            ← 全部说明与报告归档，索引见 docs/README.md
+│   ├── 审查与报告/                   ← 历轮审查 / 复审 / 体检 / 架构审核（含处理状态）
+│   └── 使用与部署/                   ← 使用说明、目录结构、部署说明、上传说明
+├── ci/                              ← 质量闸门与发版说明（需在 GitHub 网页启用）
+├── tests/                           ← 回归测试（pnpm test）
 ├── 一键部署.sh
 ├── 一键拉取.sh
 ├── 初始化目录.sh
 ├── win/启动.bat  停止.bat  pack.sh
-└── app/                             ← 必须完整，含 app/public/templates 空白导入模板
+└── app/                             ← 构建产物（由 src/ 生成；必须与源码同步）
 ```
+
+> **文档都在 `docs/` 下**：审查/报告类在 `docs/审查与报告/`，使用/部署类在 `docs/使用与部署/`；
+> 每份是什么、有没有未闭环的项，看 `docs/README.md`。根目录只保留四个入口文档
+> （`README.md` / `VERSION.txt` / `开发规范.md` / `AGENTS.md`）。
 
 网页一次最多传 **100** 个文件。超了就先传整个 `app/` 并 Commit，再传其余；或用 GitHub Desktop。  
 `.github` 解压后经常看不见：仓库 → Actions → 新建工作流，把 `仓库内的 .github/workflows/docker.yml` 贴成 `.github/workflows/docker.yml`。
