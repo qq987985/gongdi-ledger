@@ -1,7 +1,21 @@
 import { hasWork } from "./wage";
 
+/** 该年该月有多少天（含闰年 2 月）。月越界返回 0。 */
+export function daysInMonth(y: number, m: number): number {
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) return 0;
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+/**
+ * 数字年月日 → `YYYY-MM-DD`；不是真实存在的日期一律判空。
+ *
+ * 为什么要校验当月天数：以前只查「日 ≤ 31」，`2026-02-31` 会被当成合法日期入库，
+ * 之后 `daysBetween` 走 `new Date()` 自动进位成 3/3，出勤天数被凭空放大。
+ */
 export function ymd(y: number, m: number, d: number): string {
-  if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return "";
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return "";
+  if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1) return "";
+  if (d > daysInMonth(y, m)) return "";
   return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
@@ -143,6 +157,9 @@ function parseDateTime(s: string, defaultTime: string): Date | null {
   if (!t) return null;
   const m = t.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{1,2}:\d{2}))?/);
   if (!m) return null;
+  // 日期部分必须是真实存在的一天：`new Date("2026-02-31T00:00")` 会静默进位成 3/3，
+  // 于是非法日期被 daysBetween 算成 62 天，出勤天数凭空放大。
+  if (!ymd(Number(m[1].slice(0, 4)), Number(m[1].slice(5, 7)), Number(m[1].slice(8, 10)))) return null;
   const d = new Date(`${m[1]}T${m[2] || defaultTime}:00`);
   return Number.isNaN(d.getTime()) ? null : d;
 }

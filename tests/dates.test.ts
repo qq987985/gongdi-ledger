@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { daysBetween, excelSerialYmd, localToday, parseDateYmd } from "../src/lib/dates";
+import { daysBetween, daysInMonth, excelSerialYmd, localToday, parseDateYmd, ymd } from "../src/lib/dates";
 
 test("daysBetween：只写日期时按含首尾的整天算", () => {
   assert.equal(daysBetween("2026-01-01", "2026-01-01"), 1, "当天算 1 天");
@@ -46,11 +46,22 @@ test("localToday：返回本地 YYYY-MM-DD（东八区 0-8 点不差一天）", 
   assert.match(localToday(), /^\d{4}-\d{2}-\d{2}$/);
 });
 
-test(
-  "日期只校验到「日 ≤ 31」，2026-02-31 会被原样接受",
-  { todo: "已知问题：ymd() 不校验当月天数，非法日期入库后会被 daysBetween 溢出放大" },
-  () => {
-    assert.equal(parseDateYmd("2026-02-31"), "");
-    assert.equal(daysBetween("2026-01-01", "2026-02-31"), 59);
-  },
-);
+test("日期校验：不存在的日期一律判空（不再被 daysBetween 进位放大）", () => {
+  assert.equal(parseDateYmd("2026-02-31"), "", "2 月没有 31 日");
+  assert.equal(parseDateYmd("2026-04-31"), "", "4 月没有 31 日");
+  assert.equal(parseDateYmd("2026-02-29"), "", "2026 不是闰年");
+  assert.equal(parseDateYmd("2024-02-29"), "2024-02-29", "2024 是闰年，2/29 合法");
+  assert.equal(parseDateYmd("2026-12-31"), "2026-12-31", "年末正常日期不受影响");
+  assert.equal(daysBetween("2026-01-01", "2026-02-31"), 0, "非法日期不再被当成 3/3 算成 59 天");
+});
+
+test("daysInMonth：闰年与大小月", () => {
+  assert.equal(daysInMonth(2024, 2), 29);
+  assert.equal(daysInMonth(2026, 2), 28);
+  assert.equal(daysInMonth(2026, 4), 30);
+  assert.equal(daysInMonth(2026, 12), 31);
+  assert.equal(daysInMonth(2026, 13), 0);
+  assert.equal(ymd(2026, 13, 1), "");
+  assert.equal(ymd(2026, 2, 29), "");
+  assert.equal(ymd(2024, 2, 29), "2024-02-29");
+});

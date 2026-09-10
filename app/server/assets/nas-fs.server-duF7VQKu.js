@@ -1,2 +1,0 @@
-import { C as savePhoto, D as writeLedger, E as writeBookMeta, S as saveDoc, T as writeAudit, _ as removeDocFile, a as findPhotoPath, b as safeBookId, c as ledgerUnreadable, d as photoFlags, f as readAudit, g as removeBookDir, h as readVersionText, i as findDoc, l as listBookIds, m as readLedger, n as appendAudit, o as ledgerRevisionOf, p as readBookMeta, r as dataDir, s as ledgerRevisionValue, t as adoptLegacyAssets, u as persistOn, v as removePhoto, w as scanPhotoFolder, x as saveBackup, y as runWithBook } from "./nas-fs.server-Ye-Ou_mg.js";
-export { removeBookDir };

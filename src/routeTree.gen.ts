@@ -28,6 +28,7 @@ import { Route as ApiAuthRouteImport } from './routes/api/auth'
 import { Route as ApiBackupRouteImport } from './routes/api/backup'
 import { Route as ApiDocRouteImport } from './routes/api/doc'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiImagesRouteImport } from './routes/api/images'
 import { Route as ApiLedgerRouteImport } from './routes/api/ledger'
 import { Route as ApiPhotoRouteImport } from './routes/api/photo'
 import { Route as ApiPhotoAdoptRouteImport } from './routes/api/photo-adopt'
@@ -135,6 +136,11 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
   path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiImagesRoute = ApiImagesRouteImport.update({
+  id: '/api/images',
+  path: '/api/images',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiLedgerRoute = ApiLedgerRouteImport.update({
   id: '/api/ledger',
   path: '/api/ledger',
@@ -211,6 +217,7 @@ export interface FileRoutesByFullPath {
   '/api/backup': typeof ApiBackupRoute
   '/api/doc': typeof ApiDocRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/images': typeof ApiImagesRoute
   '/api/ledger': typeof ApiLedgerRoute
   '/api/photo': typeof ApiPhotoRoute
   '/api/photo-adopt': typeof ApiPhotoAdoptRoute
@@ -243,6 +250,7 @@ export interface FileRoutesByTo {
   '/api/backup': typeof ApiBackupRoute
   '/api/doc': typeof ApiDocRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/images': typeof ApiImagesRoute
   '/api/ledger': typeof ApiLedgerRoute
   '/api/photo': typeof ApiPhotoRoute
   '/api/photo-adopt': typeof ApiPhotoAdoptRoute
@@ -276,6 +284,7 @@ export interface FileRoutesById {
   '/api/backup': typeof ApiBackupRoute
   '/api/doc': typeof ApiDocRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/images': typeof ApiImagesRoute
   '/api/ledger': typeof ApiLedgerRoute
   '/api/photo': typeof ApiPhotoRoute
   '/api/photo-adopt': typeof ApiPhotoAdoptRoute
@@ -310,6 +319,7 @@ export interface FileRouteTypes {
     | '/api/backup'
     | '/api/doc'
     | '/api/health'
+    | '/api/images'
     | '/api/ledger'
     | '/api/photo'
     | '/api/photo-adopt'
@@ -342,6 +352,7 @@ export interface FileRouteTypes {
     | '/api/backup'
     | '/api/doc'
     | '/api/health'
+    | '/api/images'
     | '/api/ledger'
     | '/api/photo'
     | '/api/photo-adopt'
@@ -374,6 +385,7 @@ export interface FileRouteTypes {
     | '/api/backup'
     | '/api/doc'
     | '/api/health'
+    | '/api/images'
     | '/api/ledger'
     | '/api/photo'
     | '/api/photo-adopt'
@@ -407,6 +419,7 @@ export interface RootRouteChildren {
   ApiBackupRoute: typeof ApiBackupRoute
   ApiDocRoute: typeof ApiDocRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiImagesRoute: typeof ApiImagesRoute
   ApiLedgerRoute: typeof ApiLedgerRoute
   ApiPhotoRoute: typeof ApiPhotoRoute
   ApiPhotoAdoptRoute: typeof ApiPhotoAdoptRoute
@@ -555,6 +568,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/images': {
+      id: '/api/images'
+      path: '/api/images'
+      fullPath: '/api/images'
+      preLoaderRoute: typeof ApiImagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/ledger': {
       id: '/api/ledger'
       path: '/api/ledger'
@@ -655,6 +675,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBackupRoute: ApiBackupRoute,
   ApiDocRoute: ApiDocRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiImagesRoute: ApiImagesRoute,
   ApiLedgerRoute: ApiLedgerRoute,
   ApiPhotoRoute: ApiPhotoRoute,
   ApiPhotoAdoptRoute: ApiPhotoAdoptRoute,

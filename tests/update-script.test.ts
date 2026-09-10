@@ -14,6 +14,8 @@ import {
   checkSameOrigin,
   dockerMessage,
   isPortable,
+  pickRemovableImages,
+  sameImageId,
   startUpdateJob,
   UPDATER_SCRIPT,
   updateJobStatus,
@@ -209,4 +211,51 @@ test('dockerMessage：把 Docker 的 {"message":"…"} 取成一句话，别再�
   assert.equal(dockerMessage('{"message":"  No such container  "}'), "No such container");
   assert.equal(dockerMessage("pull access denied for x"), "pull access denied for x");
   assert.equal(dockerMessage(""), "");
+});
+
+test("镜像比对：忽略 sha256: 前缀与大小写；空值一律算不同（不能误拦正常更新）", () => {
+  assert.equal(sameImageId("sha256:ABC123", "abc123"), true);
+  assert.equal(sameImageId("abc123", "sha256:abc123"), true);
+  assert.equal(sameImageId("sha256:abc", "sha256:def"), false);
+  assert.equal(sameImageId("", "sha256:abc"), false);
+  assert.equal(sameImageId("sha256:abc", undefined), false);
+  assert.equal(sameImageId(undefined, undefined), false);
+});
+
+/** 「更新成功但版本没变」的根因之一：镜像站缓存了旧的 latest，拉到的就是当前这个镜像 */
+test("pickRemovableImages：只挑本项目、没被任何容器引用、且不是当前镜像的那些", () => {
+  const images = [
+    { Id: "sha256:new", RepoTags: ["ghcr.1ms.run/qq987985/gongdi-ledger:latest"], Size: 300 },
+    { Id: "sha256:old1", RepoTags: ["ghcr.1ms.run/qq987985/gongdi-ledger:sha-8cb28e6"], Size: 290 },
+    { Id: "sha256:old2", RepoTags: null, Size: 280 },
+    { Id: "sha256:inuse", RepoTags: ["ghcr.io/qq987985/gongdi-ledger:sha-aaaaaaa"], Size: 285 },
+    { Id: "sha256:other", RepoTags: ["nginx:latest"], Size: 200 },
+    { Id: "sha256:other2", RepoTags: ["postgres:16"], Size: 400 },
+  ];
+  const got = pickRemovableImages(images, ["sha256:inuse"], "sha256:new");
+  assert.deepEqual(
+    got.map((x) => x.id),
+    ["sha256:old1"],
+    "无标签的旧镜像（<none>）不主动删；别人的镜像、正在用的镜像、当前镜像一律不动",
+  );
+  assert.equal(got[0].size, 290);
+});
+
+test("pickRemovableImages：没有可删的就返回空（不报错、不误删）", () => {
+  const only = [{ Id: "sha256:cur", RepoTags: ["ghcr.1ms.run/qq987985/gongdi-ledger:latest"], Size: 300 }];
+  assert.deepEqual(pickRemovableImages(only, [], "sha256:cur"), []);
+});
+
+test("更新脚本：换新容器成功后顺手删掉上一个版本的镜像（容器已删，镜像没人用）", () => {
+  const rename = UPDATER_SCRIPT.indexOf("/rename?name=");
+  const delImg = UPDATER_SCRIPT.indexOf('/images/"+encodeURIComponent(oldImage)');
+  assert.equal(delImg > rename, true, "删旧镜像必须在改名接管之后（新容器已经在跑）");
+  assert.match(UPDATER_SCRIPT, /oldImage!==newImage/, "必须是「旧镜像 ≠ 新镜像」才删，否则会把正在用的镜像删掉");
+  assert.match(UPDATER_SCRIPT, /已清理旧镜像/);
+  assert.match(UPDATER_SCRIPT, /清理旧镜像失败（不影响本次更新）/, "删镜像失败不能影响更新结果");
+});
+
+test("更新脚本：下一个容器要带上老镜像 ID（否则不知道删哪份）", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  assert.match(src, /oldImage: String\(me\.Image \|\| ""\)/);
 });

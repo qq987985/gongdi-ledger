@@ -124,7 +124,8 @@ function ghHeaders(extra: Record<string, string> = {}): Record<string, string> {
   return h;
 }
 
-async function hasDockerSock(): Promise<boolean> {
+/** 有没有挂载 docker.sock（有才能重建容器 / 清理镜像） */
+export async function hasDockerSock(): Promise<boolean> {
   try {
     await access(SOCK, fsConstants.R_OK);
     return true;
@@ -467,6 +468,109 @@ async function pullImage(ref: string): Promise<void> {
   throw new Error(`${ref} 拉取失败：${errors.join("；").slice(0, 400) || "未知原因"}`);
 }
 
+/**
+ * 两个镜像 ID 是不是同一个（忽略 `sha256:` 前缀与大小写）。
+ * 空值一律算「不同」，免得因为查不到 ID 就把正常的更新拦下来。
+ */
+export function sameImageId(a: string | undefined, b: string | undefined): boolean {
+  const norm = (x: string | undefined) => String(x || "").trim().toLowerCase().replace(/^sha256:/, "");
+  const x = norm(a);
+  const y = norm(b);
+  return Boolean(x && y && x === y);
+}
+
+/** 查某个镜像引用当前的镜像 ID；查不到返回空串（不抛） */
+async function imageIdOf(ref: string): Promise<string> {
+  if (!ref) return "";
+  try {
+    const j = await dockerReq("GET", `/images/${encodeURIComponent(ref)}/json`);
+    return String(j?.Id || "");
+  } catch {
+    return "";
+  }
+}
+
+export interface LocalImage {
+  id: string;
+  tags: string[];
+  size: number;
+}
+
+/**
+ * 从 `/images/json` 的结果里挑出「可以安全删掉的历史镜像」。
+ *
+ * 只认我们自己仓库的镜像（名字里带 gongdi-ledger），并且必须同时满足：
+ * - 不是当前正在运行的这个镜像
+ * - 没有被任何容器（含已停止的）引用 —— 别人的镜像、正在用的镜像一律不动
+ */
+export function pickRemovableImages(
+  images: { Id?: string; RepoTags?: (string | null)[] | null; Size?: number; Containers?: number }[],
+  usedImageIds: string[],
+  currentImageId: string,
+): LocalImage[] {
+  const used = new Set(usedImageIds.map((x) => String(x || "").toLowerCase().replace(/^sha256:/, "")).filter(Boolean));
+  const out: LocalImage[] = [];
+  for (const img of images || []) {
+    const id = String(img?.Id || "");
+    const tags = (img?.RepoTags || []).filter((t): t is string => Boolean(t) && t !== "<none>:<none>");
+    const mine = tags.some((t) => /gongdi-ledger/i.test(t));
+    if (!mine) continue;
+    const norm = id.toLowerCase().replace(/^sha256:/, "");
+    if (!norm) continue;
+    if (sameImageId(id, currentImageId)) continue;
+    if (used.has(norm)) continue;
+    out.push({ id, tags, size: Number(img?.Size || 0) });
+  }
+  return out;
+}
+
+/** 列出本地属于本项目的镜像（用于界面提示）与其中可清理的部分 */
+export async function listLocalImages(): Promise<{ images: LocalImage[]; removable: LocalImage[]; totalBytes: number }> {
+  const [raw, containers, me] = await Promise.all([
+    dockerReq("GET", "/images/json?all=1"),
+    dockerReq("GET", "/containers/json?all=1"),
+    selfContainer().catch(() => null),
+  ]);
+  const usedIds: string[] = (containers || []).map((c: any) => String(c?.ImageID || c?.Image || ""));
+  const currentId = String(me?.Image || "");
+  const all: LocalImage[] = (raw || [])
+    .filter((img: any) => (img?.RepoTags || []).some((t: string) => t && /gongdi-ledger/i.test(t)))
+    .map((img: any) => ({
+      id: String(img.Id || ""),
+      tags: (img.RepoTags || []).filter((t: string) => t && t !== "<none>:<none>"),
+      size: Number(img.Size || 0),
+    }));
+  const removable = pickRemovableImages(raw || [], usedIds, currentId);
+  return { images: all, removable, totalBytes: removable.reduce((s, x) => s + x.size, 0) };
+}
+
+/**
+ * 删掉不再使用的历史镜像，返回释放的字节数与失败原因。
+ * 安全性由 `pickRemovableImages` 保证：动不到当前镜像，也动不到任何容器在用的镜像。
+ */
+export async function pruneLocalImages(): Promise<{ removed: LocalImage[]; freed: number; errors: string[] }> {
+  const { removable } = await listLocalImages();
+  const removed: LocalImage[] = [];
+  const errors: string[] = [];
+  let freed = 0;
+  for (const img of removable) {
+    try {
+      await dockerReq("DELETE", `/images/${encodeURIComponent(img.id)}?force=1&noprune=1`);
+      removed.push(img);
+      freed += img.size;
+    } catch (e) {
+      errors.push(`${img.tags[0] || img.id.slice(7, 19)}：${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  await logServer("info", "清理旧镜像", { count: removed.length, freed, errors: errors.length });
+  await appendUpdateLog(
+    removed.length
+      ? `[应用] 已清理 ${removed.length} 个旧镜像，释放约 ${(freed / 1048576).toFixed(0)} MB`
+      : "[应用] 清理旧镜像：没有可清理的镜像",
+  );
+  return { removed, freed, errors };
+}
+
 function uniqueImages(list: unknown[]): string[] {
   const out: string[] = [];
   for (const x of list) {
@@ -519,6 +623,19 @@ function docker(method,path,body){
   // 4) 新容器已经在跑：移除老容器，再让新容器接管正式名字
   try{await docker("DELETE","/containers/"+job.oldId+"?force=true")}catch(e){}
   await docker("POST","/containers/"+created.Id+"/rename?name="+encodeURIComponent(job.name));
+  // 5) 顺手清掉上一个版本的镜像：老容器已经删了，这份镜像再没人用，
+  //    留着只会让 NAS 每更新一次就多占几百 MB。删错了也不会影响新容器（层是共享的、按引用计数）。
+  try{
+    const oldImage=job.oldImage||"";
+    const newImage=(await docker("GET","/images/"+encodeURIComponent(job.create.Image)+"/json")).Id||"";
+    if(oldImage&&(!newImage||oldImage!==newImage)){
+      const r=await docker("DELETE","/images/"+encodeURIComponent(oldImage)+"?force=1&noprune=1");
+      const mb=Math.round(((r&&r.Size)||0)/1048576);
+      try{fs.appendFileSync("/data/logs/update.log",new Date().toISOString()+" 已清理旧镜像 "+(oldImage+"").slice(0,19)+(mb?"（约 "+mb+" MB）":"")+"\n")}catch(e){}
+    }
+  }catch(e){
+    try{fs.appendFileSync("/data/logs/update.log",new Date().toISOString()+" 清理旧镜像失败（不影响本次更新）: "+String((e&&e.message)||e)+"\n")}catch(e){}
+  }
   try{fs.mkdirSync("/data/logs",{recursive:true})}catch(e){}
   try{fs.appendFileSync("/data/logs/update.log",new Date().toISOString()+" 更新成功，已启动 "+job.name+"\n")}catch(e){}
   try{fs.unlinkSync("/data/.gongdi-next.json")}catch(e){}
@@ -555,21 +672,41 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
     "ghcr.io/qq987985/gongdi-ledger:latest",
   ]);
   let lastErr = "拉镜像失败";
+  const stale: string[] = [];
+  const currentId = await imageIdOf(current || image);
   for (const ref of candidates) {
     try {
       await pullImage(ref);
-      image = ref;
-      lastErr = "";
-      await logServer("info", "拉取镜像成功", { ref });
-      await appendUpdateLog(`[应用] 已拉取镜像 ${ref}`);
-      break;
     } catch (e) {
       lastErr = e instanceof Error ? e.message : String(e);
       await logServer("warn", "拉取镜像失败", { ref, error: lastErr });
+      continue;
     }
+    // 关键：镜像站（如 ghcr.1ms.run）是按标签缓存的，刚发版时 `latest` 可能还是上一个版本。
+    // 这时「拉取成功」但拉到的就是当前正在跑的那个镜像，替换容器等于白换一次——
+    // 现象就是「更新说成功、重启后版本没变」。这里按镜像 ID 比对，认出这种情况就换下一个源。
+    const id = await imageIdOf(ref);
+    if (sameImageId(id, currentId)) {
+      stale.push(ref);
+      lastErr = "";
+      await logServer("warn", "拉到的镜像与当前运行的完全相同（镜像站缓存未刷新）", { ref, id });
+      await appendUpdateLog(`[应用] ${ref} 仍是当前版本（镜像站缓存未刷新），改试下一个源`);
+      continue;
+    }
+    image = ref;
+    lastErr = "";
+    await logServer("info", "拉取镜像成功", { ref, id: id || "(未知)" });
+    await appendUpdateLog(`[应用] 已拉取镜像 ${ref}`);
+    break;
   }
-  if (!image)
+  if (!image) {
+    if (stale.length)
+      throw new Error(
+        `镜像站返回的还是当前版本（${stale.join("、")}），没有可替换的新镜像。已停止更新，容器和台账都没有改动。` +
+          `通常是镜像加速站缓存还没刷新，等 5–10 分钟再点一次即可；急用可把 compose 里的镜像换成 ghcr.io/qq987985/gongdi-ledger:latest 后运行一次「一键拉取」。`,
+      );
     throw new Error(lastErr.slice(0, 500) || "拉镜像失败。请确认 Packages 是 Public，或到飞牛再运行一次「一键拉取」。");
+  }
   const binds = [...(me.HostConfig?.Binds || [])];
   if (!binds.some((b: string) => String(b).includes("docker.sock"))) binds.push(`${SOCK}:${SOCK}`);
   const hostConfig: Record<string, unknown> = { ...me.HostConfig, Binds: binds };
@@ -592,7 +729,7 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
     HostConfig: hostConfig,
     NetworkingConfig: { EndpointsConfig: endpoints },
   };
-  await writeFile("/data/.gongdi-next.json", JSON.stringify({ oldId: me.Id, name, create }));
+  await writeFile("/data/.gongdi-next.json", JSON.stringify({ oldId: me.Id, oldImage: String(me.Image || ""), name, create }));
   await writeFile("/data/.gongdi-updater.cjs", UPDATER_SCRIPT);
   try {
     await dockerReq("POST", "/containers/gongdi-updater/stop?t=2");

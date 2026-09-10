@@ -116,11 +116,22 @@ test("hasWork：只填补助也算有记录", () => {
   assert.equal(hasWork(null), false);
 });
 
-test(
-  "getWageAt：fromDate 未补零（如 2026-7-1）会因字符串比较失效",
-  { todo: "已知问题：历史 fromDate 未规范化，非 YYYY-MM-DD 格式静默回退当前工资" },
-  () => {
-    const p = person({ dailyWage: 100, wageHistory: [{ id: "w", fromDate: "2026-7-1", payType: "day", dailyWage: 200, monthWage: 0, otRule: "", mealAllowance: 0, remark: "" }] });
-    assert.equal(getWageAt(p, 2026, 7).dailyWage, 200);
-  },
-);
+test("getWageAt：fromDate 没补零（2026-7-1）也要当月生效，不再静默回退当前工资", () => {
+  const p = person({ dailyWage: 100, wageHistory: [{ id: "w", fromDate: "2026-7-1", payType: "day", dailyWage: 200, monthWage: 0, otRule: "", mealAllowance: 0, remark: "" }] });
+  assert.equal(getWageAt(p, 2026, 7).dailyWage, 200, "2026-7-1 生效的调薪，2026 年 7 月就该用新工资");
+  assert.equal(getWageAt(p, 2026, 6).dailyWage, 100, "生效前的月份仍用旧工资");
+});
+
+test("getWageAt：fromDate 能容忍 年/月/日、点号、空格等写法", () => {
+  const mk = (fromDate: string) =>
+    person({ dailyWage: 100, wageHistory: [{ id: "w", fromDate, payType: "day", dailyWage: 300, monthWage: 0, otRule: "", mealAllowance: 0, remark: "" }] });
+  for (const d of ["2026-07-01", "2026-7-1", "2026.7.1", "2026/07/01", "2026年7月1日", " 2026-07-01 "]) {
+    assert.equal(getWageAt(mk(d), 2026, 7).dailyWage, 300, `${d} 应能被识别为 2026-07-01 生效`);
+  }
+  assert.equal(getWageAt(mk("2026-02-31"), 2026, 7).dailyWage, 100, "不存在的日期按无效处理，回退当前工资");
+});
+
+test("getWageAt：乱写的 fromDate 不参与比较（保持旧的「回退当前工资」行为）", () => {
+  const p = person({ dailyWage: 100, wageHistory: [{ id: "w", fromDate: "长期", payType: "day", dailyWage: 999, monthWage: 0, otRule: "", mealAllowance: 0, remark: "" }] });
+  assert.equal(getWageAt(p, 2026, 7).dailyWage, 100);
+});

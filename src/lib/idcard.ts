@@ -8,7 +8,9 @@ export interface IdCardInfo {
 
 export function parseIdCard(idCard: string | undefined | null): IdCardInfo {
   const s = (idCard || "").trim().toUpperCase();
-  if (s.length < 15) return { gender: "", age: null, birthday: "" };
+  // 只认 15 位（老证）与 18 位；16/17 位是漏打/多打，按「未知」处理，
+  // 否则会走 15 位分支解析出一个错误生日与性别。
+  if (s.length !== 15 && s.length !== 18) return { gender: "", age: null, birthday: "" };
   try {
     let birth: Date;
     let gcode: number;
@@ -56,7 +58,11 @@ export function validateIdCard(idCard: string | undefined | null): string {
       return "身份证号中的出生日期无效";
     return "";
   }
-  if (s.length < 18) return ""; // 输入中，先不校验
+  if (s.length < 18) {
+    // 15 位已在上面处理。16/17 位只可能是漏打或多打，不再当成「还没输完」静默放行
+    // （以前会被放过存库，且 parseIdCard 按 15 位解析出一个错误生日）。
+    return `身份证号应为 15 位或 18 位（现在是 ${s.length} 位）`;
+  }
   if (s.length > 18) return "身份证号应为 18 位";
   if (!/^\d{17}[\dX]$/.test(s)) return "身份证号格式不对：前 17 位数字，末位数字或 X";
   const birth = new Date(`${s.slice(6, 10)}-${s.slice(10, 12)}-${s.slice(12, 14)}T00:00:00`);

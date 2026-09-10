@@ -27,10 +27,10 @@
 - `pnpm test` 用 **Node 内置测试器**直接跑 `tests/*.test.ts`（零依赖，不需要 vitest/jest —— 因为 `package.json` 里全是 `latest`，`pnpm add` 会顺带重解析无关依赖）。
 - 只在 `tests/*.test.ts` 里测纯函数；`tests/register.mjs` 负责给省略扩展名的相对导入补 `.ts`。Node 需 ≥ 22.18。
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
-- 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。现在有 4 个 todo。
+- 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。现在只有 1 个 todo（人员导出丢 `wageHistory`）。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.8.0 起覆盖 109 个用例（105 pass + 4 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
-  读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本与更新日志。
+- 1.8.0 起覆盖 118 个用例（117 pass + 1 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+  读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
 
@@ -73,6 +73,17 @@
 - 教训固化：`dockerReq` 第三参数必须是 `{ body: … }` 或 `{ stream: … }`（1.7.6 前直传容器配置被当成空请求体，
   飞牛点更新必失败）。`tests/update-script.test.ts` 扫源码守卫这条约定。
 
+## 1.7.8 更新链路的两个坑
+
+- **拉到的镜像必须与当前不同**：镜像加速站（`ghcr.1ms.run`）按标签缓存，刚发版时 `latest` 还是上一版，
+  「拉取成功 + 换容器」后版本不变（现场：08:31 两次更新都"成功"，版本仍是 1.7.6）。
+  `applyDockerUpdate` 现在拉完就用 `imageIdOf()` 比对 `me.Image`，相同则换下一个源；全都相同就报错并**不替换容器**。
+- **旧镜像要清**：更新成功后由更新脚本删掉上一个版本的镜像（`oldImage!==newImage` 才删，失败只记日志）；
+  另给管理员一个手动入口 `GET/POST /api/images`（界面上「清理旧镜像」），
+  安全性由纯函数 `pickRemovableImages()` 保证：只删本项目镜像、且不是当前镜像、且没有任何容器（含已停止）引用。
+  注意仓库只发布 `latest` 与 `sha-<sha>` 两种标签（`docker.yml` 的 semver 类型只在 `v*` tag 上生效），
+  所以**没法用版本号标签拉取**；要定位到具体构建只能用 sha 标签。
+
 ## 仍待处理（已核实、未修）
 
 - **实体级存储**（B 中期剩下的一半）：现在整本台账仍是一个 `ledger.json`，每次改动整本上传。
@@ -85,8 +96,9 @@
 - **权限预设缺口**：预设「合同财务」没有 `people.view`，而全量台账读取需要它 → 该预设实际上看不到数据。
   修它要么给该预设 `people.view`（会连身份证/银行卡一起开放），要么做实体级权限；属产品决策。
 - **HTTP 层无请求体上限**：`scripts/app-server-index.mjs` 在鉴权前把整个 body 读进内存。
-- **`dates.ts` 不校验「日」**（`2026-02-31` 会入库并被 `daysBetween` 放大）；**身份证 16/17 位静默通过**。
-- **工资历史 `fromDate` 未补零**、**人员导出丢 `wageHistory`**：测试里以 `todo` 标记着。
+- **`dates.ts` 的日校验、`idcard.ts` 的 16/17 位、工资历史 `fromDate` 补零**：均已于 1.7.8 修复
+  （原来的 `todo` 用例已转成正式用例）。
+- **人员导出丢 `wageHistory`**：测试里以 `todo` 标记着（Excel 往返改造，单独排期）。
 - **照片类型仍按文件名匹配**（张三-身份证-正面.jpg）：跨台账隔离已做，但同名不同人仍需人工核对。
 
 ## 已知部署风险

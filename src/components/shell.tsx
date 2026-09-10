@@ -451,6 +451,49 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
       setLogBusy(false);
     }
   }
+  /** 清理 NAS 上遗留的旧镜像（一份几百 MB）：更新流程本身也会自动删上一个版本，这里给个手动入口 */
+  const [pruneBusy, setPruneBusy] = React.useState(false);
+  async function prune() {
+    setPruneBusy(true);
+    try {
+      const r = await fetch("/api/images", { cache: "no-store", signal: AbortSignal.timeout(2e4) });
+      const d = (await r.json().catch(() => ({}))) as {
+        available?: boolean;
+        removable?: { tags?: string[] }[];
+        totalBytes?: number;
+        note?: string;
+        error?: string;
+      };
+      if (!r.ok || d.error) {
+        toast.error(d.error || `读取镜像失败（HTTP ${r.status}）`);
+        return;
+      }
+      if (d.available === false) {
+        toast.error(d.note || "本机没有挂载 docker.sock，无法清理");
+        return;
+      }
+      const n = d.removable?.length || 0;
+      if (!n) {
+        toast.success("没有可清理的旧镜像（当前版本和正在用的镜像不会被删）");
+        return;
+      }
+      const mb = Math.round((d.totalBytes || 0) / 1048576);
+      if (!confirm(`将删除 ${n} 个不再使用的旧镜像，约释放 ${mb} MB。\n当前运行的镜像与其它容器的镜像不会被删除。继续？`)) return;
+      const p = await fetch("/api/images", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      const j = (await p.json().catch(() => ({}))) as { count?: number; freed?: number; errors?: string[]; error?: string };
+      if (!p.ok || j.error) {
+        toast.error(j.error || `清理失败（HTTP ${p.status}）`);
+        return;
+      }
+      const freedMb = Math.round((j.freed || 0) / 1048576);
+      toast.success(`已清理 ${j.count || 0} 个旧镜像，释放约 ${freedMb} MB`);
+      if (j.errors?.length) toast.error(`有 ${j.errors.length} 个没删掉：${j.errors[0]}`);
+    } catch {
+      toast.error("清理失败（服务未响应）");
+    } finally {
+      setPruneBusy(false);
+    }
+  }
   const desc =
     info?.mode === "windows"
       ? "从 GitHub 下载 Windows 包并替换程序。data 不覆盖。"
@@ -518,7 +561,7 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
           ) : null}
         </div>
       ) : null}
-      <div className="mt-2">
+      <div className="mt-2 flex flex-wrap items-center gap-3">
         <button
           type="button"
           className="text-xs text-muted underline underline-offset-2 hover:text-danger disabled:opacity-60"
@@ -527,16 +570,24 @@ export function WinUpdate({ compact }: { compact?: boolean }) {
         >
           {logBusy ? "读取中…" : jobLog ? "收起更新日志" : "查看更新日志"}
         </button>
-        {jobLog ? (
-          jobLog.log || jobLog.errorText ? (
-            <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-line bg-surface p-2 text-[11px] leading-relaxed text-muted">
-              {[jobLog.errorText, jobLog.log].filter(Boolean).join("\n\n")}
-            </pre>
-          ) : (
-            <p className="mt-1 text-xs text-subtle">{jobLog.note || "没有日志内容"}</p>
-          )
-        ) : null}
+        <button
+          type="button"
+          className="text-xs text-muted underline underline-offset-2 hover:text-danger disabled:opacity-60"
+          disabled={pruneBusy}
+          onClick={() => void prune()}
+        >
+          {pruneBusy ? "清理中…" : "清理旧镜像"}
+        </button>
       </div>
+      {jobLog ? (
+        jobLog.log || jobLog.errorText ? (
+          <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-sm border border-line bg-surface p-2 text-[11px] leading-relaxed text-muted">
+            {[jobLog.errorText, jobLog.log].filter(Boolean).join("\n\n")}
+          </pre>
+        ) : (
+          <p className="mt-1 text-xs text-subtle">{jobLog.note || "没有日志内容"}</p>
+        )
+      ) : null}
     </div>
   );
 }

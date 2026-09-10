@@ -52,6 +52,27 @@ export interface MonthPayResult {
   monthly: boolean;
 }
 
+/**
+ * 把调薪生效日补成 `YYYY-MM-DD`，供字符串比较用。
+ *
+ * 历史数据里有 `2026-7-1` 这种没补零的写法，直接比较会得到
+ * `"2026-7-1" > "2026-07-31"` —— 那条调薪当月读不到，工资静默回退成当前工资。
+ * 解析不了的原样返回（保持旧行为：比较结果自然不匹配 → 回退当前工资）。
+ *
+ * 这里没有用 `dates.ts` 的 `parseDateYmd`：`dates.ts` 已经 import 了本文件（`hasWork`），
+ * 反向 import 会形成循环依赖。
+ */
+function padFromDate(v: string | undefined): string {
+  const m = (v || "").trim().match(/^(\d{4})[-/.年](\d{1,2})[-/.月]?(\d{1,2})日?$/);
+  if (!m) return (v || "").trim();
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const inMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > inMonth) return "";
+  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 /** 根据年月获取人员当时的工资配置 */
 export function getWageAt(person: Person | null | undefined, year: number, month: number): WageSource {
   if (!person) return {};
@@ -65,12 +86,13 @@ export function getWageAt(person: Person | null | undefined, year: number, month
   if (history.length > 0) {
     // 按生效日期排序（从早到晚）
     const sorted = [...history]
-      .filter((h) => (h.fromDate || "").trim() !== "")
-      .sort((a, b) => a.fromDate.localeCompare(b.fromDate));
+      .map((h) => ({ h, from: padFromDate(h.fromDate) }))
+      .filter((x) => x.from !== "")
+      .sort((a, b) => a.from.localeCompare(b.from));
     // 找最后一条生效日期 <= 查询日期的记录
     let matched: WageHistory | undefined;
-    for (const h of sorted) {
-      if (h.fromDate <= queryDate) {
+    for (const { h, from } of sorted) {
+      if (from <= queryDate) {
         matched = h;
       } else {
         break;

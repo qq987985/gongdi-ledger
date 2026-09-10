@@ -60,10 +60,14 @@ test("overAgeLabel：男 ≥55、女 ≥45 为超龄", () => {
   assert.equal(overAgeLabel(null, "男"), "");
 });
 
-test(
-  "validateIdCard：16~17 位目前静默通过（应为错误）",
-  { todo: "已知问题：非 15/18 位的长度被当作「输入中」放行，且 parseIdCard 会按 15 位解析出错误生日" },
-  () => {
-    assert.match(validateIdCard("1101011990010112"), /应为/);
-  },
-);
+test("validateIdCard：16~17 位报错（不再当成「还没输完」静默放行）", () => {
+  const err = validateIdCard("1101011990010112");
+  assert.match(err, /15 位或 18 位/);
+  assert.match(err, /16 位/, "提示里带上实际位数，边打边看也知道差多少");
+  assert.match(validateIdCard("11010119900307617"), /17 位/);
+});
+
+test("parseIdCard：16/17 位不再按 15 位解析出错误生日", () => {
+  assert.deepEqual(parseIdCard("1101011990010112"), { gender: "", age: null, birthday: "" });
+  assert.deepEqual(parseIdCard("11010119900307617"), { gender: "", age: null, birthday: "" });
+});
