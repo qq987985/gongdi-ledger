@@ -25,11 +25,15 @@
 ## 回归测试与质量闸门（2026-09-10 起）
 
 - `pnpm test` 用 **Node 内置测试器**直接跑 `tests/*.test.ts`（零依赖，不需要 vitest/jest —— 因为 `package.json` 里全是 `latest`，`pnpm add` 会顺带重解析无关依赖）。
+- **改 Excel 相关代码（`src/lib/excel.ts` / `src/components/excel-import.tsx`）时，除了 `pnpm test` 还要跑
+  `pnpm run test:roundtrip`** —— 那是 70 个"导出→导入"对拍用例（`tests/roundtrip/`），
+  专门盯历史上反复出问题的地方：报量被换成含税金额、开票翻倍、跨年考勤落到第一年、调薪历史被清空、
+  在保人员被写成"在保"、带格式数值被清零等。
 - 只在 `tests/*.test.ts` 里测纯函数；`tests/register.mjs` 负责给省略扩展名的相对导入补 `.ts`。Node 需 ≥ 22.18。
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。**现在 0 个 todo（已知缺陷已清零）**。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.8.0 起覆盖 130 个用例（130 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.0 起覆盖 136 个用例（136 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
@@ -109,6 +113,19 @@
   「更新容器：已退出（exit N）」+ 它的日志。
 - 镜像侧的两道保险（`buildImageCandidates()` 按 sha 拉、`imageVersionOf()` 读镜像内 VERSION.txt、
   `sameImageId()` 比对）保留：对付加速站缓存旧 `latest` 有用，但**不是**上面那个病根。
+
+## 1.7.13 全量走查修掉的 26 项（要点）
+
+- **接口/权限**（我改的）：导出 kind 客户端与服务端名字不一致（ledger-export → export，服务端加别名）；
+  `createUser` 忽略 `perms`；`members.manage` 自我提权；`/api/audit` POST 覆盖损坏历史；
+  `/api/year` NaN 写坏台账；7 个接口非 JSON body → 500；超长文件名 → 500；伪造 Content-Length 挂住连接；
+  未捕获异常不落 `data/logs`。
+- **Excel 往返**（16 项）：年份识别、重复导入去重、派生表排除、带格式数值解析、合计行过滤、合同列名/扫描件/税率/日期、
+  保险合同文件与备注、按 姓名+年+月 跳过冲突、只有备注的考勤行、报销 0 值语义、合同明细两趟解析。
+- **约定守卫**（`tests/api-guards.test.ts`）：导出 kind 必须服务端认识；`createUser` 必须读 perms；
+  成员接口必须挡自我提权/越权授予；所有读 body 的地方必须有 try/catch；启动器必须有请求体上限与崩溃日志。
+- **教训**：像"两边名字不一致""少一句兜底"这类问题，单元测试测不到、构建也不报错 —— 只有
+  ①端到端走查 ②写进约定守卫 两条路。以后新增接口/导出项时，顺手补一条守卫。
 
 ## 1.7.12 更新容器（gongdi-updater）的生命周期
 

@@ -65,11 +65,19 @@ export const Route = createFileRoute("/api/doc")({
         // 读 body 前先检查大小：合同/报量等文件单文件 50MB
         const len = Number(request.headers.get("content-length") || 0);
         if (len > 50 * 1024 * 1024) return Response.json({ error: "文件太大，最大 50MB" }, { status: 413 });
-        const form = await request.formData();
+        let form: FormData;
+        try {
+          form = await request.formData();
+        } catch {
+          return Response.json({ error: "请用 multipart/form-data 上传文件" }, { status: 400 });
+        }
         const id = String(form.get("id") || "");
         const kind = kindOf(String(form.get("kind") || ""));
         const file = form.get("file");
         if (!id || !kind || !(file instanceof File)) return Response.json({ ok: false }, { status: 400 });
+        // 文件名过长会在 rename 时 ENAMETOOLONG（500）
+        if (Buffer.byteLength(file.name, "utf8") > 180)
+          return Response.json({ error: "文件名太长（最多 180 字节），请改短一点再上传" }, { status: 400 });
         if (file.size > 50 * 1024 * 1024) return Response.json({ error: "文件太大，最大 50MB" }, { status: 413 });
         const buf = Buffer.from(await file.arrayBuffer());
         const replace = String(form.get("replace") || "") === "1";

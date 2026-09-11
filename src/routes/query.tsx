@@ -605,8 +605,13 @@ function QueryPage() {
                 </ul>
               </section>
             </>
-          ) : (
+          ) : people.length === 0 ? (
             <p className="text-sm text-muted">还没有人员。先在「人员」里添加。</p>
+          ) : (
+            <p className="text-sm text-muted">
+              上面的输入框里选一个人，这里就显示他的工资、考勤、发放和影像；只想打印工资条的话，
+              点「选择人员」勾选人名后直接点「打印」。
+            </p>
           )}
         </div>
         <PayslipSheets slips={effectiveSlips} rangeLabel={rangeLabelText} printMode={printMode} />

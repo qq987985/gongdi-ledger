@@ -4,6 +4,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { FilePick } from "~/components/file-pick";
 import {
+  mergeExpenses,
+  mergePayments,
   parseAttendanceSheet,
   parseContractWorkbook,
   parseExpenseSheet,
@@ -11,10 +13,11 @@ import {
   parseInsuranceMembersSheet,
   parsePaymentSheet,
   parsePeopleSheet,
+  planAttendanceImport,
 } from "~/lib/excel";
 import { uid } from "~/lib/utils";
 import { useApp } from "~/lib/store";
-import type { AttendanceRow, InsuranceMember, Person } from "~/lib/types";
+import type { AttendanceRow, Expense, InsuranceMember, Payment, Person } from "~/lib/types";
 
 type ImportMode = "add" | "replace";
 
@@ -170,14 +173,14 @@ export function AttendanceImport() {
     // 行内带年份（如"2025年3月考勤"）时按行内年导入；单年文件预选该年
     const targetYear = years.length === 1 ? years[0] : store.year;
     const targetMonth = store.year === new Date().getFullYear() ? new Date().getMonth() + 1 : 1;
+    const keepMonths = months.length > 1;
 
-    // 检测冲突
+    // 检测冲突：按 姓名+年+月，不能只按姓名（同一人的其它月份也得导入）
     const conflicts: { name: string; existing: AttendanceRow; incoming: AttendanceRow }[] = [];
-    for (const r of rows) {
-      const y = r.year || targetYear;
-      const m = months.length > 1 ? r.month || targetMonth : targetMonth;
-      const ex = store.attendance.find((a) => a.year === y && a.month === m && a.name === r.name);
-      if (ex) conflicts.push({ name: r.name, existing: ex, incoming: r });
+    for (const p of planAttendanceImport(rows, store.attendance, targetYear, targetMonth, keepMonths)) {
+      if (!p.conflict) continue;
+      const ex = store.attendance.find((a) => a.year === p.year && a.month === p.month && a.name === p.row.name);
+      if (ex) conflicts.push({ name: p.row.name, existing: ex, incoming: p.row });
     }
 
     setPreview({
@@ -185,13 +188,13 @@ export function AttendanceImport() {
       rows,
       targetYear,
       targetMonth,
-      keepMonths: months.length > 1,
+      keepMonths,
       conflicts,
     });
   }
   function apply() {
     if (!preview) return;
-    const { rows, targetYear, targetMonth, keepMonths, conflicts } = preview;
+    const { rows, targetYear, targetMonth, keepMonths } = preview;
     if (!targetYear || targetYear < 2e3) {
       toast.error("请选择导入到哪一年");
       return;
@@ -201,16 +204,17 @@ export function AttendanceImport() {
       return;
     }
 
-    // 替换模式下同名同月用导入值覆盖；增加模式跳过冲突行（保留原有）
-    const skipNames = mode === "replace" ? new Set<string>() : new Set(conflicts.map((c) => c.name));
-    const mapped = rows
-      .filter((r) => !skipNames.has(r.name))
-      .map((r) => ({
-        ...r,
+    // 替换模式下同名同月用导入值覆盖；增加模式按 姓名+年+月 跳过冲突行（保留原有），
+    // 不能只按姓名跳过 —— 那样同一人的其它月份会跟着整人丢掉
+    const plan = planAttendanceImport(rows, store.attendance, targetYear, targetMonth, keepMonths);
+    const mapped = plan
+      .filter((p) => mode === "replace" || !p.conflict)
+      .map((p) => ({
+        ...p.row,
         id: uid(),
-        year: r.year || targetYear,
-        month: keepMonths ? r.month || targetMonth : targetMonth,
-        team: r.team || store.people.find((p) => p.name === r.name)?.team || "",
+        year: p.year,
+        month: p.month,
+        team: p.row.team || store.people.find((x) => x.name === p.row.name)?.team || "",
       }));
 
     // 行内年份可能跨年，全部展开后再写入
@@ -273,7 +277,7 @@ export function AttendanceImport() {
           {preview.conflicts.length > 0 ? (
             <div className="mt-3 rounded-md border border-warn bg-warn-bg p-3 text-sm">
               <p className="font-medium">以下人员在该月已有考勤记录，导入时会{mode === "replace" ? "被替换" : "冲突跳过"}：</p>
-              <p className="mt-1 text-muted">{preview.conflicts.map((c) => c.name).join("、")}</p>
+              <p className="mt-1 text-muted">{preview.conflicts.map((c) => `${c.name}（${c.existing.year}-${c.existing.month}）`).join("、")}</p>
             </div>
           ) : null}
           <div className="mt-4 flex gap-2">
@@ -290,7 +294,7 @@ export function AttendanceImport() {
 export function PaymentImport() {
   const store = useApp();
   const [mode, setMode] = React.useState<ImportMode>("add");
-  const [preview, setPreview] = React.useState<{ rows: any[]; fileName: string } | null>(null);
+  const [preview, setPreview] = React.useState<{ rows: Payment[]; fileName: string; skipped: number } | null>(null);
   async function onFile(file: File) {
     if (!file) return;
     const rows = parsePaymentSheet(await file.arrayBuffer());
@@ -298,7 +302,8 @@ export function PaymentImport() {
       toast.error("没有读到发放记录");
       return;
     }
-    setPreview({ rows, fileName: file.name });
+    const { skipped } = mergePayments(store.payments, rows);
+    setPreview({ rows, fileName: file.name, skipped });
   }
   function apply() {
     if (!preview) return;
@@ -306,8 +311,9 @@ export function PaymentImport() {
       store.replacePayments(preview.rows);
       toast.success(`已替换为 ${preview.rows.length} 条发放记录`);
     } else {
-      store.replacePayments([...store.payments, ...preview.rows]);
-      toast.success(`已追加 ${preview.rows.length} 条发放记录`);
+      const { merged, added, skipped } = mergePayments(store.payments, preview.rows);
+      store.replacePayments(merged);
+      toast.success(`已追加 ${added} 条发放记录${skipped ? `，跳过 ${skipped} 条重复` : ""}`);
     }
     setPreview(null);
   }
@@ -317,7 +323,10 @@ export function PaymentImport() {
       {preview ? (
         <section className="basis-full mt-3 rounded-xl border border-accent bg-surface p-4">
           <h2 className="font-semibold">发放导入确认</h2>
-          <p className="mt-1 text-sm text-muted">{preview.fileName} · {preview.rows.length} 条</p>
+          <p className="mt-1 text-sm text-muted">
+            {preview.fileName} · {preview.rows.length} 条
+            {preview.skipped ? ` · 跳过 ${preview.skipped} 条重复` : ""}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <label className="inline-flex items-center gap-1.5 text-sm">
               <input type="radio" name="pay-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
@@ -433,7 +442,7 @@ export function ContractImport() {
 export function ExpenseImport() {
   const store = useApp();
   const [mode, setMode] = React.useState<ImportMode>("add");
-  const [preview, setPreview] = React.useState<{ rows: any[]; fileName: string } | null>(null);
+  const [preview, setPreview] = React.useState<{ rows: Expense[]; fileName: string; skipped: number } | null>(null);
   async function onFile(file: File) {
     if (!file) return;
     const rows = parseExpenseSheet(await file.arrayBuffer(), store.year);
@@ -441,7 +450,8 @@ export function ExpenseImport() {
       toast.error("没有读到报销。需要「项目名称」列。");
       return;
     }
-    setPreview({ rows, fileName: file.name });
+    const { skipped } = mergeExpenses(store.expenses || [], rows);
+    setPreview({ rows, fileName: file.name, skipped });
   }
   function apply() {
     if (!preview) return;
@@ -449,8 +459,9 @@ export function ExpenseImport() {
       store.replaceExpenses(preview.rows);
       toast.success(`已替换为 ${preview.rows.length} 条报销`);
     } else {
-      store.replaceExpenses([...(store.expenses || []), ...preview.rows]);
-      toast.success(`已追加 ${preview.rows.length} 条报销`);
+      const { merged, added, skipped } = mergeExpenses(store.expenses || [], preview.rows);
+      store.replaceExpenses(merged);
+      toast.success(`已追加 ${added} 条报销${skipped ? `，跳过 ${skipped} 条重复` : ""}`);
     }
     setPreview(null);
   }
@@ -460,7 +471,10 @@ export function ExpenseImport() {
       {preview ? (
         <section className="basis-full mt-3 rounded-xl border border-accent bg-surface p-4">
           <h2 className="font-semibold">报销导入确认</h2>
-          <p className="mt-1 text-sm text-muted">{preview.fileName} · {preview.rows.length} 条</p>
+          <p className="mt-1 text-sm text-muted">
+            {preview.fileName} · {preview.rows.length} 条
+            {preview.skipped ? ` · 跳过 ${preview.skipped} 条重复` : ""}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <label className="inline-flex items-center gap-1.5 text-sm">
               <input type="radio" name="exp-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
@@ -482,7 +496,7 @@ export function ExpenseImport() {
   );
 }
 
-/* ───────────── 整本导入（保持原有逻辑） ───────────── */
+/* ───────────── 整本导入（按内容键去重后合并写入） ───────────── */
 export function FullBookImport() {
   const store = useApp();
   return (
@@ -504,13 +518,16 @@ export function FullBookImport() {
           toast.error("没有读到人员、考勤、发放、报销或保险");
           return;
         }
+        // 发放/报销按内容键去重：同一份整本重复导入不再翻倍
+        const payMerge = mergePayments(store.payments, parsed.payments || []);
+        const expMerge = mergeExpenses(store.expenses || [], parsed.expenses || []);
         // 整本导入直接合并写入，风险最大：先列出清单确认
         if (
           !confirm(
             `导入「${file.name}」？\n\n` +
-              `人员 ${parsed.people.length} 人 · 考勤 ${parsed.attendance.length} 条 · 发放 ${parsed.payments.length} 条 · ` +
-              `报销 ${(parsed.expenses || []).length} 条 · 保单 ${(parsed.policies || []).length} 份 · 保险人员 ${(parsed.members || []).length} 人。\n\n` +
-              "同名人员、同保单号保单与重复考勤（姓名+年月）会被跳过；现有数据追加保留。",
+              `人员 ${parsed.people.length} 人 · 考勤 ${parsed.attendance.length} 条 · 发放 ${parsed.payments.length} 条（跳过 ${payMerge.skipped} 条重复）· ` +
+              `报销 ${(parsed.expenses || []).length} 条（跳过 ${expMerge.skipped} 条重复）· 保单 ${(parsed.policies || []).length} 份 · 保险人员 ${(parsed.members || []).length} 人。\n\n` +
+              "同名人员、同保单号保单、重复考勤（姓名+年月）与重复发放/报销会被跳过；现有数据追加保留。",
           )
         )
           return;
@@ -523,8 +540,8 @@ export function FullBookImport() {
             added += 1;
           }
         if (added) store.replacePeople(merged);
-        if (parsed.payments.length) store.replacePayments([...store.payments, ...parsed.payments]);
-        if (parsed.expenses && parsed.expenses.length) store.replaceExpenses([...(store.expenses || []), ...parsed.expenses]);
+        if (parsed.payments.length) store.replacePayments(payMerge.merged);
+        if (parsed.expenses && parsed.expenses.length) store.replaceExpenses(expMerge.merged);
         if (parsed.attendance.length) {
           store.addYear(parsed.year || store.year);
           const names = new Set(parsed.attendance.map((a) => a.name + a.year + a.month));
@@ -565,7 +582,7 @@ export function FullBookImport() {
           }
         }
         toast.success(
-          `整本导入完成：人员新增 ${added}，考勤 ${parsed.attendance.length} 条，发放 ${parsed.payments.length} 条，报销 ${(parsed.expenses || []).length} 条，保单 ${polAdded} 份，保险人员 ${memAdded} 人`,
+          `整本导入完成：人员新增 ${added}，考勤 ${parsed.attendance.length} 条，发放新增 ${payMerge.added} 条（跳过 ${payMerge.skipped} 条重复），报销新增 ${expMerge.added} 条（跳过 ${expMerge.skipped} 条重复），保单 ${polAdded} 份，保险人员 ${memAdded} 人`,
         );
       }}
     />

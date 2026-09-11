@@ -5,6 +5,7 @@
  */
 import { createServer } from "node:http";
 import { readFile, stat, mkdir } from "node:fs/promises";
+import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import handler from "./server.js";
@@ -120,10 +121,62 @@ async function nodeFetch(req) {
   return fetch(req);
 }
 
+/** 请求体上限：默认 64MB（DATA_DIR 里的备份上传走 50MB 上限，这里留余量） */
+/**
+ * 请求体上限：默认 52MB。
+ *
+ * 应用自己的上限是 50MB（备份/文件上传），这里留 2MB 给 multipart 边界等开销。
+ * 关键在于：**声明**超过上限的请求会在读 body 之前就被拒（413）——
+ * 否则一个伪造 `Content-Length: 60MB` 却只发 2 字节的请求会把连接挂到超时。
+ */
+const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 52 * 1024 * 1024);
+
+/** 唯一的日志出口：stdout + data/logs/YYYY-MM-DD.log（NAS 上直接能看） */
+function logLine(level, event, detail = {}) {
+  let line;
+  try {
+    line = JSON.stringify({ at: new Date().toISOString(), level, event, ...detail });
+  } catch {
+    line = JSON.stringify({ at: new Date().toISOString(), level, event, detail: "[无法序列化]" });
+  }
+  try {
+    if (level === "error") console.error(line);
+    else console.warn(line);
+  } catch {}
+  try {
+    const dir = join(dataDir, "logs");
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(join(dir, `${new Date().toISOString().slice(0, 10)}.log`), `${line}\n`, "utf8");
+  } catch {}
+}
+
+// 未捕获异常原来只进 stdout：NAS 上按日期翻 data/logs 是空的，事后查不到任何 500
+process.on("uncaughtException", (err) => logLine("error", "未捕获异常", { error: String((err && err.stack) || err) }));
+process.on("unhandledRejection", (reason) =>
+  logLine("error", "未处理的 Promise 拒绝", { error: String((reason && reason.stack) || reason) }),
+);
+
+/** 读请求体；超过上限立刻拒绝（伪造的超大 content-length 也不会再把连接挂住） */
 function requestBody(req) {
   return new Promise((resolve, reject) => {
+    const declared = Number(req.headers["content-length"] || 0);
+    if (declared > MAX_BODY_BYTES) {
+      // 这里**不能** req.destroy()：那会把还没发出去的 413 响应一起掐掉（客户端只看到"无响应"）
+      const e = new Error("请求体太大");
+      e.tooLarge = true;
+      return reject(e);
+    }
     const chunks = [];
-    req.on("data", (c) => chunks.push(c));
+    let size = 0;
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > MAX_BODY_BYTES) {
+        const e = new Error("请求体太大");
+        e.tooLarge = true;
+        return reject(e);
+      }
+      chunks.push(c);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
@@ -137,7 +190,25 @@ const server = createServer(async (req, res) => {
       if (Array.isArray(v)) v.forEach((x) => headers.append(k, x));
       else if (v !== undefined) headers.set(k, v);
     }
-    const body = req.method !== "GET" && req.method !== "HEAD" ? await requestBody(req) : null;
+    let body = null;
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      try {
+        body = await requestBody(req);
+      } catch (e) {
+        const tooLarge = Boolean(e && e.tooLarge);
+        logLine("warn", "请求体被拒", { url: req.url, tooLarge, error: String((e && e.message) || e) });
+        res.statusCode = tooLarge ? 413 : 400;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ error: tooLarge ? "请求体太大（上限 52MB）" : "读取请求体失败" }));
+        // 响应发完之后再断开：客户端可能还在灌数据，但先把 413 送出去
+        res.on("finish", () => {
+          try {
+            req.destroy();
+          } catch {}
+        });
+        return;
+      }
+    }
     const request = new Request(url, {
       method: req.method,
       headers,

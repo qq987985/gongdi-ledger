@@ -162,6 +162,10 @@ async function xlsxFile(wb: any, filename: string) {
  * 人员/整本/考勤/发放里含身份证、银行卡、工资，按 people.view 门控；
  * 合同、报销各自按模块门控（最小权限）。
  */
+/** 客户端历史上把导出页的「总台账」叫 ledger-export，而服务端只实现了 export：
+ *  这里统一成别名，老页面缓存 / 老客户端也不会再 404。 */
+const KIND_ALIAS: Record<string, string> = { "ledger-export": "export" };
+
 const EXPORT_VIEW_PERM: Record<string, string> = {
   "people-export": "people.view",
   export: "people.view",
@@ -177,7 +181,8 @@ export const Route = createFileRoute("/api/file/$kind")({
       GET: async ({ params, request }) => {
         const url = new URL(request.url);
         const year = Number(url.searchParams.get("year") || String(new Date().getFullYear())) || new Date().getFullYear();
-        const kind = params.kind;
+        // 客户端历史上把「总台账」这个 kind 叫 ledger-export，这里归一化，避免 404
+        const kind = KIND_ALIAS[String(params.kind || "")] || params.kind;
         // 模板下载需导入权限；导出需导出权限 + 对应模块的查看权限（防止只给 export.use 就能导出身份证/银行卡）
         const viewPerm = EXPORT_VIEW_PERM[kind];
         const need: NeedSpec = kind.endsWith("-template") ? "import.use" : viewPerm ? ["export.use", viewPerm] : "export.use";

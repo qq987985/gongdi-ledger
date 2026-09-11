@@ -1,5 +1,16 @@
 import { hasWork } from "./wage";
 
+/**
+ * 年份是否合法（2000–2100 的整数，与「新增年份」入口的口径一致）。
+ *
+ * 为什么要单独抽出来：以前各处的守卫写法是 `y < 2000 || y > 2100`，
+ * 而 `NaN` 与任何数比较都是 false → `Number("abc")` 的 NaN 一路写进台账，
+ * JSON 序列化成 null（台账 `year` 变 null、`years` 里冒出 null）。
+ */
+export function isValidYear(y: unknown): y is number {
+  return typeof y === "number" && Number.isInteger(y) && y >= 2000 && y <= 2100;
+}
+
 /** 该年该月有多少天（含闰年 2 月）。月越界返回 0。 */
 export function daysInMonth(y: number, m: number): number {
   if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) return 0;

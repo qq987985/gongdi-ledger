@@ -27,7 +27,13 @@ export const Route = createFileRoute("/api/ledger")({
       },
       PUT: async ({ request }) => {
         if (!persistOn()) return Response.json({ persist: false }, { status: 400 });
-        const body = await request.json();
+        // 非 JSON / 空 body 以前会直接抛到框架层变成 500；这里是"客户端发错了"，应该 400
+        let body: Record<string, unknown> & Partial<import("~/lib/types").LedgerState>;
+        try {
+          body = (await request.json()) as Record<string, unknown> & Partial<import("~/lib/types").LedgerState>;
+        } catch {
+          return Response.json({ error: "请求体不是合法 JSON", invalid: true }, { status: 400 });
+        }
         // 结构校验：服务端过去只查权限、不看内容，一个客户端 bug 就能把整本台账写成 {}
         const bad = validateLedgerPayload(body);
         if (bad) {

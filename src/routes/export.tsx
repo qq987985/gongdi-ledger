@@ -20,7 +20,7 @@ function exportHref(kind: string, scope: string, year: number, fromY: number, fr
 }
 
 const EXPORT_ITEMS = [
-  { kind: "ledger-export", title: "总台账", desc: "人员、各月考勤、发放、报销合在一本。" },
+  { kind: "export", title: "总台账", desc: "人员、各月考勤、发放、报销合在一本。" },
   { kind: "attendance-export", title: "考勤表", desc: "按月列出出勤、加班、补助、扣款、餐补。" },
   { kind: "payment-export", title: "发放记录", desc: "实际收款人、金额、日期、发放方、收款人。" },
   { kind: "expense-export", title: "报销单", desc: "项目、金额、支付方式、报销人、打款账户。" },

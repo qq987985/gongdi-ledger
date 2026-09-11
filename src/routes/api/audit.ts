@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { appendAudit, persistOn, readAudit, writeAudit } from "~/lib/nas-fs.server";
+import { appendAudit, auditUnreadable, persistOn, readAudit, writeAudit } from "~/lib/nas-fs.server";
 import { logServer } from "~/lib/log.server";
 import { resolveTenant, withTenant } from "~/lib/accounts.server";
 
@@ -12,7 +12,12 @@ export const Route = createFileRoute("/api/audit")({
       },
       POST: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
-        const body = (await request.json()) as { action?: string; detail?: string; module?: string };
+        let body: { action?: string; detail?: string; module?: string };
+        try {
+          body = (await request.json()) as { action?: string; detail?: string; module?: string };
+        } catch {
+          return Response.json({ error: "请求体不是合法 JSON" }, { status: 400 });
+        }
         if (!body.action?.trim()) return Response.json({ error: "缺少操作" }, { status: 400 });
         const t = await resolveTenant(request);
         // 操作记录记的是「改动」，所以只有能改东西的成员才允许写（只读账号不能伪造/灌水记录）。
@@ -20,6 +25,13 @@ export const Route = createFileRoute("/api/audit")({
         return withTenant(
           request,
           async () => {
+            // 文件在但读不出来（损坏/权限）：绝不能拿空列表覆盖历史（PUT/DELETE 早有这个保护，POST 原来漏了）
+            await readAudit();
+            if (auditUnreadable())
+              return Response.json(
+                { error: "操作记录文件读取失败，已拒绝写入以免覆盖历史。请从 data/backups 恢复该文件。", corrupt: true },
+                { status: 503 },
+              );
             try {
               const entry = await appendAudit({
                 userId: t.user?.id || "",
@@ -42,7 +54,12 @@ export const Route = createFileRoute("/api/audit")({
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
         if ((await resolveTenant(request)).user?.role !== "admin")
           return Response.json({ error: "只有管理员能改操作记录" }, { status: 403 });
-        const body = (await request.json()) as { id?: string; action?: string; detail?: string; module?: string };
+        let body: { id?: string; action?: string; detail?: string; module?: string };
+        try {
+          body = (await request.json()) as { id?: string; action?: string; detail?: string; module?: string };
+        } catch {
+          return Response.json({ error: "请求体不是合法 JSON" }, { status: 400 });
+        }
         if (!body.id) return Response.json({ error: "缺少 id" }, { status: 400 });
         return withTenant(request, async () => {
           const list = await readAudit();

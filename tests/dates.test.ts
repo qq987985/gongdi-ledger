@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { daysBetween, daysInMonth, excelSerialYmd, localToday, parseDateYmd, ymd } from "../src/lib/dates";
+import { daysBetween, daysInMonth, excelSerialYmd, isValidYear, localToday, parseDateYmd, ymd } from "../src/lib/dates";
 
 test("daysBetween：只写日期时按含首尾的整天算", () => {
   assert.equal(daysBetween("2026-01-01", "2026-01-01"), 1, "当天算 1 天");
@@ -64,4 +64,14 @@ test("daysInMonth：闰年与大小月", () => {
   assert.equal(ymd(2026, 13, 1), "");
   assert.equal(ymd(2026, 2, 29), "");
   assert.equal(ymd(2024, 2, 29), "2024-02-29");
+});
+
+test("isValidYear：NaN / 非整数 / 越界都要挡住（NaN 曾绕过范围比较写坏台账）", () => {
+  assert.equal(isValidYear(2026), true);
+  assert.equal(isValidYear(2000), true);
+  assert.equal(isValidYear(2100), true);
+  for (const bad of [NaN, undefined, null, "2026", 2026.5, 0, 1999, 2101, Infinity, -1]) {
+    assert.equal(isValidYear(bad), false, `${String(bad)} 不该通过`);
+  }
+  assert.equal(Number("abc") < 2000 || Number("abc") > 2100, false, "旧写法确实挡不住 NaN");
 });

@@ -476,14 +476,31 @@ function legacyAuditPaths(): string[] {
   return out;
 }
 
+/**
+ * 操作记录文件「存在但读不出来」的标志。
+ *
+ * 为什么要单独标出来：`readAudit()` 读坏文件时返回 `[]`，而 `appendAudit` 是「读—改—写」，
+ * 拿到 `[]` 就会把整份历史覆盖成刚写的这一条（实测 97 条 → 1 条）。
+ * 写之前必须能区分「本来就没有记录」和「读不出来」。
+ */
+let auditBroken = false;
+
+/** 上一次 readAudit() 是否遇到了坏文件（只在写入路径上用，防止覆盖历史） */
+export function auditUnreadable(): boolean {
+  return auditBroken;
+}
+
 export async function readAudit(): Promise<AuditEntry[]> {
   if (!persistOn()) return [];
   await ensureDirs();
   const p = auditPath();
   if (existsSync(p)) {
     try {
-      return parseAuditFile(JSON.parse(await readFile(p, "utf8")));
+      const rows = parseAuditFile(JSON.parse(await readFile(p, "utf8")));
+      auditBroken = false;
+      return rows;
     } catch (err) {
+      auditBroken = true;
       await logServer("error", "操作记录文件读取失败", { path: p, error: String(err) });
       return [];
     }
@@ -516,6 +533,19 @@ let auditQueue: Promise<unknown> = Promise.resolve();
 export function appendAudit(row: Partial<AuditEntry>): Promise<AuditEntry> {
   const task = async (): Promise<AuditEntry> => {
     const list = await readAudit();
+    if (auditBroken) {
+      // 读不出来就只记日志、不写盘：宁可少一条记录，也不能把整份历史覆盖掉
+      await logServer("error", "操作记录写入被拒：文件读不出来", { path: auditPath() });
+      return {
+        id: row.id || "",
+        at: row.at || new Date().toISOString(),
+        userId: row.userId || "",
+        userName: row.userName || "",
+        action: row.action || "",
+        detail: row.detail || "",
+        module: row.module || "",
+      };
+    }
     const entry: AuditEntry = {
       id: row.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       at: row.at || new Date().toISOString(),

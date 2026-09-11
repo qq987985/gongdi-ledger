@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ledgerRevisionValue, ledgerUnreadable, persistOn, readLedger, writeLedger } from "~/lib/nas-fs.server";
+import { isValidYear } from "~/lib/dates";
 import { withTenant } from "~/lib/accounts.server";
 import { logServer } from "~/lib/log.server";
 
@@ -11,7 +12,9 @@ async function addYearAndRedirect(request: Request, year: number) {
   } catch {
     back = "/";
   }
-  if (year < 2e3 || year > 2100) return Response.redirect(new URL(back, request.url), 303);
+  // NaN 必须当场挡掉：`NaN < 2000` 和 `NaN > 2100` 都是 false，原来会一路写进台账，
+  // JSON 序列化成 null（year 变 null、years 里冒出 null）
+  if (!isValidYear(year)) return Response.redirect(new URL(back, request.url), 303);
   if (!persistOn()) {
     const url = new URL(back, request.url);
     url.searchParams.set("addYear", String(year));
@@ -38,7 +41,12 @@ export const Route = createFileRoute("/api/year")({
     handlers: {
       GET: async () => Response.json({ error: "请在月度考勤里新增年份" }, { status: 405 }),
       POST: async ({ request }) => {
-        const form = await request.formData();
+        let form: FormData;
+        try {
+          form = await request.formData();
+        } catch {
+          return Response.json({ error: "请求体不是表单数据" }, { status: 400 });
+        }
         const year = Number(form.get("year") || form.get("add") || 0);
         // 需登录 + settings.year 权限，并写入当前台账
         return withTenant(request, () => addYearAndRedirect(request, year), "settings.year");

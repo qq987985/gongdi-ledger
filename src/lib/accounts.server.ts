@@ -346,7 +346,13 @@ async function logAuth(
 }
 
 export async function handleAuthPost(request: Request): Promise<Response> {
-  const raw = await request.json();
+  // 非 JSON / 空 body 以前会抛到框架层变成 500（未登录也能打出 500）——那只是客户端发错了，400
+  let raw: Record<string, unknown>;
+  try {
+    raw = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return Response.json({ error: "请求体不是合法 JSON" }, { status: 400 });
+  }
   const body = {
     op: String(raw.op || ""),
     id: String(raw.id || ""),
@@ -571,9 +577,15 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     data.users.push(user);
     const book = body.joinCurrent !== "0" ? data.books.find((b) => b.id === (body.id || tenant.bookId)) : null;
     if (book && user.id !== book.ownerId) {
+      // 显式传了 perms 就按 perms（以前完全忽略它，一律套 preset，导致"只想给考勤权限"实际给了整套只读）
+      const explicit = String(body.perms || "")
+        .split(/[,\s]+/)
+        .map((x) => x.trim())
+        .filter((x) => x === "*" || ALL_PERMS.includes(x));
       const preset = PRESETS.find((x) => x.id === (body.preset || "read"));
+      const perms = explicit.length ? explicit : preset ? [...preset.perms] : ["people.view"];
       book.members = (book.members || []).filter((m) => m.userId !== user.id);
-      book.members.push({ userId: user.id, perms: preset ? [...preset.perms] : ["people.view"] });
+      book.members.push({ userId: user.id, perms });
     }
     await writeFileShape(data);
     await logAuth(
@@ -633,6 +645,20 @@ export async function handleAuthPost(request: Request): Promise<Response> {
     if (!target) return Response.json({ error: "没有这个用户" }, { status: 404 });
     if (target.id === book.ownerId) return Response.json({ error: "创建人权限不能改" }, { status: 400 });
     const perms = parsePerms();
+    // 只有"创建人/管理员"能自由分配权限。普通 members.manage 成员：
+    //   ① 不能给自己改权限（否则 addMember 自己 + "*" 就提权成管理员级）；
+    //   ② 不能授予自己没有的权限。
+    const actingIsOwner = me.role === "admin" || book.ownerId === me.id;
+    if (!actingIsOwner) {
+      if (target.id === me.id) return Response.json({ error: "不能修改自己的权限" }, { status: 403 });
+      const mine = new Set<string>(permsOf(me, book));
+      if (!mine.has("*")) {
+        const want = perms.includes("*") ? ALL_PERMS : perms;
+        const over = want.filter((p) => !mine.has(p));
+        if (over.length)
+          return Response.json({ error: `不能授予自己没有的权限：${over.slice(0, 4).join("、")}` }, { status: 403 });
+      }
+    }
     book.members = (book.members || []).filter((m) => m.userId !== target.id);
     book.members.push({ userId: target.id, perms });
     await writeFileShape(data);

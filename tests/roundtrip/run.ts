@@ -1,0 +1,21 @@
+import { report } from "./harness";
+import { runPeople } from "./cases-people";
+import { runAttendance } from "./cases-attendance";
+import { runPayments } from "./cases-payments";
+import { runContracts } from "./cases-contracts";
+import { runExpenses } from "./cases-expenses";
+import { runInsurance } from "./cases-insurance";
+import { runFullBook } from "./cases-fullbook";
+import { runEdge } from "./cases-edge";
+import { runMore } from "./cases-more";
+
+runPeople();
+runAttendance();
+runPayments();
+runContracts();
+runExpenses();
+runInsurance();
+runFullBook();
+runEdge();
+runMore();
+report();

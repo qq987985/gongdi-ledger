@@ -31,7 +31,76 @@ export const SKIP_SHEETS = new Set([
   "填写说明",
 ]);
 
+/**
+ * 软件自己导出的派生表 / 纯展示表：带不带年份前缀都要排除在数据解析之外。
+ * 「工天加班」「汇总」是整本导出算出来的结果，不是考勤；「资金对照」「影像资料」
+ * 是合同导出算出来的结果，不是合同/明细。以前只按 sheet 名精确匹配，多年度导出
+ * 的「2025年汇总」「2025年工天加班」就漏进来了，被当成月=0 的幽灵考勤。
+ */
+export function isDerivedSheet(name: string): boolean {
+  const n = String(name || "").trim().replace(/^\d{4}\s*年\s*/, "");
+  if (SKIP_SHEETS.has(n)) return true;
+  return /^(汇总|工天加班|资金对照|影像资料)/.test(n);
+}
+
+/** 「合计/总计/小计/累计/总数」这类汇总行，不能当成一条真实记录 */
+const TOTAL_ROW_RE = /^(合计|总计|小计|累计|总数|total|sum)$/i;
+export function isTotalRow(name: unknown): boolean {
+  return TOTAL_ROW_RE.test(String(name ?? "").replace(/\s/g, ""));
+}
+
+/**
+ * 手填数值的容错解析：千分位逗号、货币符号、全角数字/括号、常见单位后缀
+ * （元/天/个/次/人/月…）、(300) 括号负数都能读；读不出来返回 0。
+ * 注意：必须保留 0 —— 报销金额 0 不能被 `|| 0` 之外的兜底重算掉。
+ */
+export function parseNumber(v: unknown): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (v == null) return 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+  // 全角 → 半角：数字、逗号、圆括号、正负号等
+  s = s.replace(/[\uff01-\uff5e]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  let neg = false;
+  const paren = s.match(/^\((.*)\)$/);
+  if (paren) {
+    neg = true;
+    s = paren[1];
+  }
+  s = s
+    .replace(/[,\s]/g, "")
+    .replace(/[¥￥$]/g, "")
+    .replace(/(元|天|个|次|人|月|年|日|项|台|套|小时|时|%|％)$/, "");
+  if (!s) return 0;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return 0;
+  return neg ? -n : n;
+}
+
 type Row = Record<string, string>;
+
+/** 该列是否存在于表头（用于区分「老模板整列缺失」和「填了 0/留空」） */
+function hasCol(row: Row, keys: string[]): boolean {
+  return keys.some((k) => k in row);
+}
+
+interface NumCell {
+  has: boolean;
+  n: number;
+}
+
+/** 取值 + 列是否存在；金额 0 与空单元格都返回 n=0，靠 has 区分 */
+function numCell(row: Row, keys: string[]): NumCell {
+  return { has: hasCol(row, keys), n: parseNumber(pick(row, keys)) };
+}
+
+/** 导出数值单元格：0 要写成 0（区别于空），否则往返时 0 会被当成缺失而被重算 */
+function numOut(n: unknown): number | "" {
+  if (typeof n === "number" && Number.isFinite(n)) return n;
+  if (n == null || n === "") return "";
+  const v = parseNumber(n);
+  return Number.isFinite(v) ? v : "";
+}
 
 export function cellStr(v: unknown, header = ""): string {
   if (v == null || v === "") return "";
@@ -78,12 +147,12 @@ export function pick(row: Row, keys: string[]): string {
 }
 
 export function numPick(row: Row, keys: string[]): number {
-  return Number(pick(row, keys)) || 0;
+  return parseNumber(pick(row, keys));
 }
 
 export function attFromRow(row: Row, year: number, month: number): AttendanceRow | null {
   const name = pick(row, ["姓名"]);
-  if (!name || name === "合计") return null;
+  if (!name || isTotalRow(name)) return null;
   return {
     id: uid(),
     year,
@@ -111,6 +180,12 @@ export function detectWorkbookYear(wb: XLSX.WorkBook, fallback: number): number 
   }
   for (const name of wb.SheetNames) {
     const aoa = utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "", raw: false }) as unknown[][];
+    // 单年度导出时 sheet 名不带年份，但首行标题带（「2025年3月考勤」「2025年度工资汇总表」）。
+    // 只看每张表开头的标题行，避免把身份证有效期之类的日期当成工作簿年份。
+    for (const row of aoa.slice(0, 3)) {
+      const m = String(row[0] ?? "").match(/(20\d{2})\s*年/);
+      if (m) return Number(m[1]);
+    }
     for (const row of aoa)
       for (let i = 0; i < row.length; i++) {
         const cell = String(row[i] ?? "");
@@ -147,10 +222,10 @@ function parseWageHistoryCell(raw: string): WageHistory[] {
       id: String(e.id || uid()),
       fromDate,
       payType: String(e.payType || "") === "month" ? "month" : "day",
-      dailyWage: Number(e.dailyWage) || 0,
-      monthWage: Number(e.monthWage) || 0,
+      dailyWage: parseNumber(e.dailyWage),
+      monthWage: parseNumber(e.monthWage),
       otRule: String(e.otRule || ""),
-      mealAllowance: Number(e.mealAllowance) || 0,
+      mealAllowance: parseNumber(e.mealAllowance),
       remark: String(e.remark || ""),
     });
   }
@@ -177,7 +252,7 @@ function wageHistoryCell(list: WageHistory[] | undefined): string {
 
 export function rowToPerson(row: Row): Person | null {
   const name = pick(row, ["姓名", "name"]);
-  if (!name || name === "合计" || name.includes("使用说明") || name === "人员信息表") return null;
+  if (!name || isTotalRow(name) || name.includes("使用说明") || name === "人员信息表") return null;
   const idCard = pick(row, ["身份证号", "身份证", "idCard"]);
   const parsed = parseIdCard(idCard);
   return {
@@ -190,11 +265,11 @@ export function rowToPerson(row: Row): Person | null {
     age: parsed.age,
     birthday: parsed.birthday,
     phone: pick(row, ["联系电话", "手机号", "电话"]),
-    dailyWage: Number(pick(row, ["日工资", "dailyWage"])) || 0,
-    monthWage: Number(pick(row, ["月工资", "monthWage"])) || 0,
+    dailyWage: parseNumber(pick(row, ["日工资", "dailyWage"])),
+    monthWage: parseNumber(pick(row, ["月工资", "monthWage"])),
     payType: /月/.test(pick(row, ["计薪方式", "计薪", "payType"])) ? "month" : "day",
     otRule: pick(row, ["加班规则", "计算加班规则", "otRule"]),
-    mealAllowance: Number(pick(row, ["餐补/天", "餐补", "mealAllowance"])) || 0,
+    mealAllowance: parseNumber(pick(row, ["餐补/天", "餐补", "mealAllowance"])),
     wageHistory: parseWageHistoryCell(pick(row, ["工资历史", "调薪历史", "wageHistory"])),
     bank: pick(row, ["开户行", "bank"]),
     cardNo: pick(row, ["银行卡号", "卡号", "cardNo"]),
@@ -220,7 +295,7 @@ export function parseAttendanceSheet(buf: ArrayBuffer | Uint8Array, year: number
   const y = detectWorkbookYear(wb, year);
   const out: AttendanceRow[] = [];
   for (const name of wb.SheetNames) {
-    if (SKIP_SHEETS.has(name)) continue;
+    if (isDerivedSheet(name)) continue;
     const monthMatch = name.match(/(\d+)\s*月/);
     const rows = sheetRecords(wb.Sheets[name]);
     for (const row of rows) {
@@ -237,16 +312,56 @@ export function normalizeDate(s: string): string {
   return parseDateYmd(s) || (s || "").trim();
 }
 
+/** 结束日期里的非日期标记（在保/是/无…）：空 = 在保，不能原样读回来把状态改成「已结束」 */
+const NON_DATE_MARK = /^(在保|是|有|无|否|长期|无期限|--?|—|\/|n\/a|na|none)$/i;
+export function normalizeEndDate(s: string): string {
+  const t = (s || "").trim();
+  if (!t || NON_DATE_MARK.test(t)) return "";
+  return normalizeDate(t);
+}
+
+/** 「有无合同」列：缺列/留空时默认有合同（向后兼容），填 无/否/没有 才是无合同 */
+function contractHasPaper(raw: string): boolean {
+  const t = (raw || "").trim();
+  if (!t) return true;
+  return !(/^(无|否|没有|没|no|n|0)$/i.test(t) || /无合同|没有合同/.test(t));
+}
+
+/** 保险合同文件名不合法（带路径/空）时忽略，避免把「../x」这种值当文件名存进来 */
+export function isSafeFileName(name: string): boolean {
+  const n = (name || "").trim();
+  if (!n || n.length > 200) return false;
+  if (/[\\/]/.test(n) || n === "." || n === "..") return false;
+  // eslint-disable-next-line no-control-regex
+  return !/[\u0000-\u001f]/.test(n);
+}
+
+/** 保险保单的「合同文件」列：多个文件名用 、/；/, 连接 */
+export function parseContractFiles(raw: string): { id: string; fileName: string }[] {
+  return String(raw || "")
+    .split(/[、;；,，\n]/)
+    .map((x) => x.trim())
+    .filter(isSafeFileName)
+    .map((fileName) => ({ id: uid(), fileName }));
+}
+
+export function contractFilesCell(list: { fileName: string }[] | undefined): string {
+  return (list || [])
+    .map((c) => (c?.fileName || "").trim())
+    .filter(isSafeFileName)
+    .join("、");
+}
+
 export function rowToPayment(row: Row): Payment | null {
   const owner = pick(row, ["实际收款人", "实际入账人", "入账人"]) || pick(row, ["姓名"]);
-  if (!owner || owner === "合计") return null;
+  if (!owner || isTotalRow(owner)) return null;
   const receiver = pick(row, ["收款人"]) || owner;
   return {
     id: uid(),
     owner,
     receiver,
     date: normalizeDate(pick(row, ["发放日期", "日期"])),
-    amount: Number(pick(row, ["发放金额(元)", "发放金额", "金额"])) || 0,
+    amount: parseNumber(pick(row, ["发放金额(元)", "发放金额", "金额"])),
     source: pick(row, ["发放方", "来源"]),
     remark: pick(row, ["备注"]),
   };
@@ -277,7 +392,7 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
   const people = sheetRecords(wb.Sheets[peopleName]).map(rowToPerson).filter((x): x is Person => Boolean(x));
   const attendance: AttendanceRow[] = [];
   for (const name of wb.SheetNames) {
-    if (SKIP_SHEETS.has(name) && !/\d+\s*月/.test(name)) continue;
+    if (isDerivedSheet(name) && !/\d+\s*月/.test(name)) continue;
     const monthMatch = name.match(/(\d+)\s*月/);
     if (!monthMatch) continue;
     const month = Number(monthMatch[1]);
@@ -319,13 +434,13 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
           name: pick(row, ["名称"]),
           buyer: pick(row, ["购买公司"]),
           company: pick(row, ["保险公司"]),
-          premiumPerPerson: Number(pick(row, ["每人保费"])) || 0,
-          headcount: Number(pick(row, ["人数"])) || 0,
-          coverage: Number(pick(row, ["保额/人"])) || 0,
+          premiumPerPerson: parseNumber(pick(row, ["每人保费"])),
+          headcount: parseNumber(pick(row, ["人数"])),
+          coverage: parseNumber(pick(row, ["保额/人"])),
           periodStart: normalizeDate(pick(row, ["保险期开始"])),
           periodEnd: normalizeDate(pick(row, ["保险期结束"])),
           linkedPolicyId: "",
-          contracts: [],
+          contracts: parseContractFiles(pick(row, ["合同文件", "保险合同", "保单文件"])),
           remark: pick(row, ["备注"]),
         });
       }
@@ -339,14 +454,14 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
       if (memName) {
         for (const row of sheetRecords(wb.Sheets[memName])) {
           const name = pick(row, ["姓名"]);
-          if (!name || name === "合计") continue;
+          if (!name || isTotalRow(name)) continue;
           members.push({
             id: uid(),
             policyId: byNo.get(pick(row, ["保单号"])) || "",
             name,
             leader: pick(row, ["队长", "组长"]),
             startDate: normalizeDate(pick(row, ["开始日期"])),
-            endDate: normalizeDate(pick(row, ["结束日期"])),
+            endDate: normalizeEndDate(pick(row, ["结束日期"])),
             remark: pick(row, ["备注"]),
           });
         }
@@ -366,6 +481,77 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
     policies,
     members,
   };
+}
+
+/* ───────────── 导入合并：按内容去重，重复导入不翻倍 ───────────── */
+
+/** 发放去重键：实际收款人 + 日期 + 金额 + 收款人 */
+export function paymentKey(p: { owner: string; date?: string; amount: number; receiver?: string }): string {
+  return [p.owner, p.date || "", p.amount || 0, p.receiver || ""].join("\u0001");
+}
+
+/** 报销去重键：项目 + 日期 + 金额 + 报销人 */
+export function expenseKey(e: { name: string; date?: string; period?: string; amount: number; claimant?: string }): string {
+  return [e.name, e.date || e.period || "", e.amount || 0, e.claimant || ""].join("\u0001");
+}
+
+export interface MergeResult<T> {
+  merged: T[];
+  added: number;
+  skipped: number;
+}
+
+/** 保留 existing；incoming 里键已存在（含文件内重复）的跳过 */
+export function mergeUnique<T>(existing: T[], incoming: T[], keyOf: (x: T) => string): MergeResult<T> {
+  const seen = new Set(existing.map(keyOf));
+  const merged = [...existing];
+  let skipped = 0;
+  for (const x of incoming) {
+    const k = keyOf(x);
+    if (seen.has(k)) {
+      skipped += 1;
+      continue;
+    }
+    seen.add(k);
+    merged.push(x);
+  }
+  return { merged, added: merged.length - existing.length, skipped };
+}
+
+export function mergePayments(existing: Payment[], incoming: Payment[]): MergeResult<Payment> {
+  return mergeUnique(existing, incoming, paymentKey);
+}
+
+export function mergeExpenses(existing: Expense[], incoming: Expense[]): MergeResult<Expense> {
+  return mergeUnique(existing, incoming, expenseKey);
+}
+
+/* ───────────── 考勤导入：按 姓名+年+月 精确跳过冲突行 ───────────── */
+
+export interface AttendanceImportPlanRow<T> {
+  row: T;
+  year: number;
+  month: number;
+  conflict: boolean;
+}
+
+/**
+ * 把导入行解析到目标年月，并标出哪些行与现有考勤冲突。
+ * 冲突判定按「姓名 + 年 + 月」——只按姓名跳过会把同一人的其它月份一起丢掉。
+ */
+export function planAttendanceImport<T extends { year?: number; month?: number; name: string }>(
+  rows: T[],
+  existing: { year: number; month: number; name: string }[],
+  targetYear: number,
+  targetMonth: number,
+  keepMonths: boolean,
+): AttendanceImportPlanRow<T>[] {
+  return rows.map((row) => {
+    const year = row.year || targetYear;
+    const month = keepMonths ? row.month || targetMonth : targetMonth;
+    const conflict = existing.some((a) => a.year === year && a.month === month && a.name === row.name);
+    return { row, year, month, conflict };
+  });
 }
 
 export const DEMO_PEOPLE: unknown[][] = [
@@ -488,11 +674,15 @@ export function paymentTemplateWb(): XLSX.WorkBook {
 
 export function rowToExpense(row: Row, fallbackYear?: number): Expense | null {
   const name = pick(row, ["项目名称", "名称", "name"]);
-  if (!name || name === "合计") return null;
-  const amount = numPick(row, ["金额", "amount"]) || 0;
-  const year = Number(pick(row, ["年份"])) || fallbackYear || new Date().getFullYear();
-  const qty = numPick(row, ["数量", "qty"]) || 1;
-  const price = numPick(row, ["单价", "price"]) || amount;
+  if (!name || isTotalRow(name)) return null;
+  // 单元格有值（哪怕 0）就按值用；只有整列缺失（老模板）才回落到 数量×单价 / 1
+  const amt = numCell(row, ["金额", "amount"]);
+  const qtyCell = numCell(row, ["数量", "qty"]);
+  const priceCell = numCell(row, ["单价", "price"]);
+  const amount = amt.n;
+  const year = parseNumber(pick(row, ["年份"])) || fallbackYear || new Date().getFullYear();
+  const qty = qtyCell.has ? qtyCell.n : 1;
+  const price = priceCell.has ? priceCell.n : amount;
   return {
     id: uid(),
     year,
@@ -502,7 +692,7 @@ export function rowToExpense(row: Row, fallbackYear?: number): Expense | null {
     unit: pick(row, ["单位"]) || "项",
     qty,
     price,
-    amount: amount || qty * price,
+    amount: amt.has ? amount : qty * price,
     remark: pick(row, ["备注"]),
     payMethod: pick(row, ["支付方式"]) || "现金",
     status: /已报销/.test(pick(row, ["状态"])) ? "已报销" : "未报销",
@@ -584,14 +774,14 @@ export function parseInsuranceMembersSheet(buf: ArrayBuffer | Uint8Array): Insur
   return sheetRecords(wb.Sheets[preferred])
     .map((row) => {
       const name = pick(row, ["姓名", "name"]);
-      if (!name || name === "合计") return null;
+      if (!name || isTotalRow(name)) return null;
       return {
         id: uid(),
         policyId: "",
         name,
         leader: pick(row, ["队长", "组长"]),
         startDate: normalizeDate(pick(row, ["开始日期", "开始时间", "日期"])),
-        endDate: normalizeDate(pick(row, ["结束日期", "结束时间"])),
+        endDate: normalizeEndDate(pick(row, ["结束日期", "结束时间"])),
         remark: pick(row, ["备注"]),
       } as InsuranceMember;
     })
@@ -644,7 +834,7 @@ function expenseSheetAoa(expenses: Expense[]): unknown[][] {
     .forEach((e, i) => {
       expAoa.push([
         i + 1, e.year || "", e.name || "", e.date || "", e.period || "", e.unit || "",
-        e.qty || "", e.price || "", e.amount || "", e.payMethod || "", e.payoutMethod || "",
+        numOut(e.qty), numOut(e.price), numOut(e.amount), e.payMethod || "", e.payoutMethod || "",
         e.status || "", e.claimant || "", e.forWhom || "", e.payBank || "",
         e.payCardNo || e.payAccount || "", e.payoutDate || "", e.remark || "",
         e.voucherFileName || "", e.payoutFileName || "",
@@ -690,6 +880,14 @@ function dpart(dt: string): string {
   return (dt || "").slice(0, 10);
 }
 
+/**
+ * 整本导出用：有工天/加班/补助/扣款算有内容，只有备注（如「工伤休息」）也算，
+ * 否则这一行导出即丢。故意不动 wage.ts 的 hasWork —— 工资计算口径不能受影响。
+ */
+function hasAttContent(a: AttendanceRow): boolean {
+  return hasWork(a) || Boolean((a.remark || "").trim());
+}
+
 export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
   const { year, people, attendance, payments, expenses = [], insurancePolicies = [], insuranceMembers = [], months: monthArg, skipPeople = false, skipPay = false, skipExp = false } = args;
   const wb = utils.book_new();
@@ -702,7 +900,7 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
   if (!skipPeople) utils.book_append_sheet(wb, sheetFromAoa(peopleSheetAoa(people)), "人员信息");
   for (const { year: y, month: m } of monthList) {
     const monthRows = attendance.filter(
-      (a) => a.year === y && a.month === m && a.name.trim() && hasWork(a),
+      (a) => a.year === y && a.month === m && a.name.trim() && hasAttContent(a),
     );
     const aoa: unknown[][] = [
       [`${y}年${m}月考勤`],
@@ -727,7 +925,7 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
   if (insurancePolicies.length) {
     const paoa: unknown[][] = [
       ["保险保单"],
-      ["保单号", "名称", "购买公司", "保险公司", "每人保费", "人数", "保额/人", "保险期开始", "保险期结束", "保险期天数", "总保费", "组合保单号", "备注"],
+      ["保单号", "名称", "购买公司", "保险公司", "每人保费", "人数", "保额/人", "保险期开始", "保险期结束", "保险期天数", "总保费", "组合保单号", "合同文件", "备注"],
     ];
     for (const p of insurancePolicies) {
       const linked = insurancePolicies.find((x) => x.id === p.linkedPolicyId);
@@ -735,17 +933,19 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
         p.policyNo, p.name, p.buyer, p.company, p.premiumPerPerson || "",
         p.headcount || "", p.coverage || "", dpart(p.periodStart), dpart(p.periodEnd),
         daysBetween(p.periodStart, p.periodEnd) || "", (p.premiumPerPerson || 0) * (p.headcount || 0) || "",
-        linked?.policyNo || "", p.remark,
+        linked?.policyNo || "", contractFilesCell(p.contracts), p.remark,
       ]);
     }
     utils.book_append_sheet(wb, sheetFromAoa(paoa), "保险保单");
     const iaoa: unknown[][] = [
       ["保险人员"],
-      ["保单号", "姓名", "队长", "开始日期", "结束日期", "状态"],
+      ["保单号", "姓名", "队长", "开始日期", "结束日期", "状态", "备注"],
     ];
     for (const m of insuranceMembers) {
       const pol = insurancePolicies.find((p) => p.id === m.policyId);
-      iaoa.push([pol?.policyNo || "", m.name, m.leader, dpart(m.startDate), dpart(m.endDate) || "在保", m.endDate ? "已结束" : "在保"]);
+      // 日期列只写日期：空 = 在保（状态列写「在保」）；不能把「在保」写进日期列，
+      // 否则导入回读成字符串，二次导出状态就变成「已结束」。
+      iaoa.push([pol?.policyNo || "", m.name, m.leader, dpart(m.startDate), dpart(m.endDate), m.endDate ? "已结束" : "在保", m.remark || ""]);
     }
     utils.book_append_sheet(wb, sheetFromAoa(iaoa), "保险人员");
   }
@@ -825,13 +1025,8 @@ function parseTaxMode(s: string): "incl" | "excl" {
 }
 
 function parsePct(s: string): number {
-  const t = (s || "").replace(/%/g, "").trim();
-  const n = Number(t);
-  return Number.isFinite(n) ? n : 0;
+  return parseNumber((s || "").replace(/%/g, "").trim());
 }
-
-/** 合同导出文件里由软件生成、不参与导入的派生表 */
-const CONTRACT_SKIP_SHEETS = new Set(["资金对照", "影像资料"]);
 
 export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
   contracts: ContractRecord[];
@@ -841,64 +1036,27 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
   const contracts: ContractRecord[] = [];
   const entries: Parameters<typeof splitLegacyReceipts>[0] = [];
   const byKey = new Map<string, ContractRecord>();
-  function keyOf(c: ContractRecord) {
-    return `${c.year}|${c.code}|${c.name}`;
-  }
-  for (const name of wb.SheetNames) {
-    // 导出文件里的派生表：资金对照是公式结果、影像资料只是文件名清单，都按数据表解析会重复生成合同/明细
-    if (name.includes("填写说明") || CONTRACT_SKIP_SHEETS.has(name)) continue;
-    const rows = sheetRecords(wb.Sheets[name]);
-    const isEntrySheet = /报量|开票|收款/.test(name) && !name.includes("合同");
-    for (const row of rows) {
-      if (isEntrySheet || pick(row, ["流水类型", "类型", "kind"])) {
-        const kindRaw =
-          pick(row, ["流水类型", "类型", "kind"]) ||
-          (name.includes("开票") ? "开票" : name.includes("收款") ? "收款" : "报量");
-        const kind = kindRaw.includes("开票") ? "invoice" : kindRaw.includes("收款") ? "receipt" : "report";
-        const project = pick(row, ["项目名称", "项目"]);
-        if (!project) continue;
-        const year = Number(pick(row, ["年份"])) || 0;
-        const code = pick(row, ["项目号"]);
-        const c =
-          [...byKey.values()].find(
-            (x) => x.name === project && (!year || x.year === year) && (!code || x.code === code),
-          ) || contracts.find((x) => x.name === project);
-        if (!c) continue;
-        entries.push(
-          normalizeEntry({
-            contractId: c.id,
-            kind,
-            date: pick(row, ["日期", "发放日期"]) || `${c.year}-01-01`,
-            amount: numPick(row, [
-              "录入金额", // 明细表（月报量明细/合同管理表导出）用的是这一列；漏了会退到「含税金额」，导出再导入金额被放大
-              "金额",
-              "含税金额",
-              "收款总金额",
-              "月报量金额",
-              "开票金额",
-              "收款账金额",
-              "收款金额",
-            ]),
-            amountExcl: numPick(row, ["不含税金额", "开票不含税"]),
-            taxRate: parsePct(pick(row, ["开票税率", "税率"])) || (kind === "invoice" ? c.taxRate : 0),
-            workerPay: numPick(row, ["代付农民工", "总包代付农民工", "农民工代付"]),
-            payTo: /代付|农民工/.test(pick(row, ["收款去向", "去向"]))
-              ? "worker"
-              : kind === "receipt"
-                ? "sub"
-                : "",
-            no: pick(row, ["发票号", "期次", "单号", "回单号"]),
-            fileName: pick(row, ["影像文件", "文件名"]),
-            remark: pick(row, ["备注"]),
-          } as EntryInput),
-        );
-        continue;
-      }
+  const keyOf = (c: ContractRecord) => `${c.year}|${c.code}|${c.name}`;
+  const isEntrySheet = (n: string) => /报量|开票|收款/.test(n) && !n.includes("合同");
+  // 导出文件里的派生表：资金对照是公式结果、影像资料只是文件名清单，都按数据表解析会重复生成合同/明细
+  const sheets = wb.SheetNames.filter((n) => !n.includes("填写说明") && !isDerivedSheet(n));
+  const lookup = (project: string, year: number, code: string) =>
+    [...byKey.values()].find((x) => x.name === project && (!year || x.year === year) && (!code || x.code === code)) ||
+    contracts.find((x) => x.name === project);
+
+  // 第一趟：先把所有合同收齐 —— 明细 sheet 可能排在「合同管理表」前面，单趟遍历会整批丢明细
+  for (const name of sheets) {
+    if (isEntrySheet(name)) continue;
+    for (const row of sheetRecords(wb.Sheets[name])) {
+      if (pick(row, ["流水类型", "类型", "kind"])) continue; // 混排表里带类型的是明细行
       const project = pick(row, ["项目名称"]);
-      if (!project || project === "合计") continue;
-      const year = Number(pick(row, ["年份"])) || new Date().getFullYear();
+      if (!project || isTotalRow(project)) continue;
+      const year = parseNumber(pick(row, ["年份"])) || new Date().getFullYear();
       const code = pick(row, ["项目号"]);
       const depositRaw = pick(row, ["保证金", "是否有保证金", "是否有押金", "押金"]);
+      const paperCol = ["有无合同", "合同原件", "有无合同原件"].some((k) => k in row);
+      const reasonCol = ["无合同原因", "没有合同原因"].some((k) => k in row);
+      const reason = reasonCol ? pick(row, ["无合同原因", "没有合同原因"]) : "";
       const c: ContractRecord = {
         id: uid(),
         year,
@@ -913,48 +1071,99 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
         warrantyStart: pick(row, ["质保期开始时间", "质保期开始"]),
         warrantyEnd: pick(row, ["质保期结束时间", "质保期结束"]),
         hasDeposit: yesNo(depositRaw),
-        depositAmount: numPick(row, ["保证金金额", "押金金额"]) || (Number(depositRaw) > 1 ? Number(depositRaw) : 0),
+        depositAmount: numPick(row, ["保证金金额", "押金金额"]) || (parseNumber(depositRaw) > 1 ? parseNumber(depositRaw) : 0),
         manager: pick(row, ["项目部经营人员", "经营人员", "项目部\n经营人员"]),
         status: normalizeContractStatus(pick(row, ["项目进度", "进度"])),
         prelimAmount: numPick(row, ["初审金额"]),
         settleReceivable: numPick(row, ["结算应收金额"]),
-        remark: (() => {
-          const note = pick(row, ["备注"]);
-          const reason = pick(row, ["无合同原因", "没有合同原因"]);
-          return reason ? (note ? `${note}；无合同：${reason}` : `无合同：${reason}`) : note;
-        })(),
-        hasPaper: !/无合同|没有合同/.test(pick(row, ["有无合同", "合同原件"])),
-        noContractReason: "",
-        scanFileName: "",
+        // 专用列优先；老文件把无合同原因写在备注里，那就保持备注原样
+        remark: pick(row, ["备注"]),
+        hasPaper: paperCol ? contractHasPaper(pick(row, ["有无合同", "合同原件", "有无合同原件"])) : true,
+        noContractReason: reason,
+        scanFileName: pick(row, ["合同扫描件", "扫描件", "合同电子版"]),
       };
-      if (c.hasDeposit && !c.depositAmount && Number(depositRaw) > 1) c.depositAmount = Number(depositRaw);
+      if (c.hasDeposit && !c.depositAmount && parseNumber(depositRaw) > 1) c.depositAmount = parseNumber(depositRaw);
       contracts.push(c);
       byKey.set(keyOf(c), c);
-      const report = numPick(row, ["月报量金额", "月报量"]);
+    }
+  }
+
+  // 第二趟：解析明细 sheet，并从「合同管理表」的合计列补出「导入合计」（仅在明细表缺失时）
+  const hasDetail = (kw: string) => wb.SheetNames.some((n) => !n.includes("合同") && n.includes(kw));
+  for (const name of sheets) {
+    const entrySheet = isEntrySheet(name);
+    for (const row of sheetRecords(wb.Sheets[name])) {
+      const kindRaw = pick(row, ["流水类型", "类型", "kind"]);
+      if (entrySheet || kindRaw) {
+        const kindLabel = kindRaw || (name.includes("开票") ? "开票" : name.includes("收款") ? "收款" : "报量");
+        const kind = kindLabel.includes("开票") ? "invoice" : kindLabel.includes("收款") ? "receipt" : "report";
+        const project = pick(row, ["项目名称", "项目"]);
+        if (!project || isTotalRow(project)) continue;
+        const year = parseNumber(pick(row, ["年份"])) || 0;
+        const c = lookup(project, year, pick(row, ["项目号"]));
+        if (!c) continue;
+        const taxCol = ["开票税率", "税率"].some((k) => k in row);
+        entries.push(
+          normalizeEntry({
+            contractId: c.id,
+            kind,
+            date: pick(row, ["日期", "发放日期"]),
+            amount: numPick(row, [
+              "录入金额", // 明细表（月报量明细/合同管理表导出）用的是这一列；漏了会退到「含税金额」，导出再导入金额被放大
+              "金额",
+              "含税金额",
+              "收款总金额",
+              "月报量金额",
+              "报量金额",
+              "开票金额",
+              "收款账金额",
+              "收款金额",
+            ]),
+            amountExcl: numPick(row, ["不含税金额", "开票不含税"]),
+            // 列存在就按单元格值用（0 = 未记税率）；只有整列缺失的老文件才回落到合同税率
+            taxRate: taxCol ? parsePct(pick(row, ["开票税率", "税率"])) : kind === "invoice" ? c.taxRate : 0,
+            workerPay: numPick(row, ["代付农民工", "总包代付农民工", "农民工代付"]),
+            payTo: /代付|农民工/.test(pick(row, ["收款去向", "去向"]))
+              ? "worker"
+              : kind === "receipt"
+                ? "sub"
+                : "",
+            no: pick(row, ["发票号", "期次", "单号", "回单号"]),
+            fileName: pick(row, ["影像文件", "文件名"]),
+            remark: pick(row, ["备注"]),
+          } as EntryInput),
+        );
+        continue;
+      }
+      const project = pick(row, ["项目名称"]);
+      if (!project || isTotalRow(project)) continue;
+      const year = parseNumber(pick(row, ["年份"])) || 0;
+      const c = lookup(project, year, pick(row, ["项目号"]));
+      if (!c) continue;
+      const report = numPick(row, ["月报量金额", "月报量", "报量金额"]);
       const invoice = numPick(row, ["开票金额"]);
-      const receipt = numPick(row, ["收款账金额", "收款金额"]);
+      const receipt = numPick(row, ["收款账金额", "收款金额", "已付（代付+到分包）", "已付(代付+到分包)"]);
       // 明细 sheet 已经带了逐笔数据时，不能再从合同管理表的合计列再造一笔，
       // 否则同一份导出文件再导入，开票/报量/收款会翻倍。
-      const hasDetail = (kw: string) => wb.SheetNames.some((n) => !n.includes("合同") && n.includes(kw));
       if (report && !hasDetail("报量"))
         entries.push(
           normalizeEntry({
-            contractId: c.id, kind: "report", date: `${year}-01-31`, amount: report,
+            contractId: c.id, kind: "report", date: `${c.year}-01-31`, amount: report,
             no: "导入合计", remark: "从表合计拆出，可再拆明细",
           } as EntryInput),
         );
       if (invoice && !hasDetail("开票"))
         entries.push(
           normalizeEntry({
-            contractId: c.id, kind: "invoice", date: `${year}-01-31`, amount: invoice,
+            contractId: c.id, kind: "invoice", date: `${c.year}-01-31`, amount: invoice,
             taxRate: c.taxRate, no: "导入合计", remark: "从表合计拆出，可再拆明细",
           } as EntryInput),
         );
       if (receipt && !hasDetail("收款"))
         entries.push(
           normalizeEntry({
-            contractId: c.id, kind: "receipt", date: `${year}-01-31`, amount: receipt,
-            workerPay: numPick(row, ["代付农民工", "总包代付农民工"]),
+            // 合计列是「代付+到分包」的总数，只能还原成一笔，不能再按代付拆开
+            contractId: c.id, kind: "receipt", date: `${c.year}-01-31`, amount: receipt, payTo: "sub",
             no: "导入合计", remark: "从表合计拆出，可再拆明细",
           } as EntryInput),
         );
@@ -970,12 +1179,13 @@ export function contractTemplateWb(): XLSX.WorkBook {
     titledSheet("合同导入模板", [
       [
         "序号", "年份", "项目号", "项目名称", "总包", "分包", "合同金额/结算金额", "税率",
-        "报量含税", "合同付款比例", "质保期开始时间", "质保期结束时间", "是否有保证金",
+        "报量含税", "报量金额", "合同付款比例", "开票金额", "已付（代付+到分包）",
+        "质保期开始时间", "质保期结束时间", "是否有保证金",
         "保证金金额", "项目部经营人员", "项目进度", "初审金额", "结算应收金额", "备注",
       ],
       [
         1, 2026, "DEMO-A-2026", "示例住宅A区", "示例建设集团", "示例劳务公司", 12e5, "9%",
-        "不含税", "80%", "", "", "有", 5e4, "王经营", "在建", 0, 0, "示例，导入前请改",
+        "不含税", "", "80%", "", "", "", "", "有", 5e4, "王经营", "在建", 0, 0, "示例，导入前请改",
       ],
     ]),
     "合同管理表",
@@ -1022,7 +1232,7 @@ export function buildContractWorkbook(args: {
       "报量金额", "合同付款比例", "应收（含税报量×比例）", "开票金额", "已付（代付+到分包）",
       "代付农民工", "到分包公司", "合同未付（应收−已付）", "剩余款（开票金额−已付）",
       "质保期开始时间", "质保期结束时间", "是否有保证金", "保证金金额", "项目部经营人员",
-      "项目进度", "初审金额", "结算应收金额", "备注",
+      "项目进度", "初审金额", "结算应收金额", "有无合同", "合同扫描件", "无合同原因", "备注",
     ],
   ];
   contracts.forEach((c, i) => {
@@ -1034,7 +1244,8 @@ export function buildContractWorkbook(args: {
       c.payRatio ? `${c.payRatio}%` : "", r.payable || "", r.invoice || "", r.receipt || "",
       r.workerPay || "", r.subPay || "", r.dueRemain || "", r.remain || "", c.warrantyStart,
       c.warrantyEnd, c.hasDeposit ? "有" : "无", c.hasDeposit ? c.depositAmount || "" : "",
-      c.manager, c.status, c.prelimAmount || "", c.settleReceivable || "", c.remark,
+      c.manager, c.status, c.prelimAmount || "", c.settleReceivable || "",
+      c.hasPaper === false ? "无" : "有", c.scanFileName || "", c.noContractReason || "", c.remark,
     ]);
   });
   utils.book_append_sheet(wb, sheetFromAoa(aoa), "合同管理表");
@@ -1054,20 +1265,20 @@ export function buildContractWorkbook(args: {
     if (e.kind === "report") {
       const tax = splitTax(e.amount, c.taxRate, c.reportTaxMode || "excl");
       reportRows.push([
-        c.year, c.code, c.name, e.date, e.amount || "",
-        c.reportTaxMode === "incl" ? "含税" : "不含税", c.taxRate || "", tax.incl || "",
-        tax.excl || "", e.no, e.fileName, e.remark,
+        c.year, c.code, c.name, e.date, numOut(e.amount),
+        c.reportTaxMode === "incl" ? "含税" : "不含税", numOut(c.taxRate), numOut(tax.incl),
+        numOut(tax.excl), e.no, e.fileName, e.remark,
       ]);
     } else if (e.kind === "invoice")
       invoiceRows.push([
-        c.year, c.code, c.name, e.date, e.amount || "", e.amountExcl || "",
-        e.taxRate || "", e.no, e.fileName, e.remark,
+        c.year, c.code, c.name, e.date, numOut(e.amount), numOut(e.amountExcl),
+        numOut(e.taxRate), e.no, e.fileName, e.remark,
       ]);
     else if (e.kind === "receipt")
       receiptRows.push([
         c.year, c.code, c.name, e.date,
         e.payTo === "worker" ? "总包代付农民工" : "到分包公司",
-        e.amount || "", e.no, e.fileName, e.remark,
+        numOut(e.amount), e.no, e.fileName, e.remark,
       ]);
     if (e.fileName)
       filesRows.push([
