@@ -153,7 +153,11 @@
   （`使用说明.md` 已于 1.7.7 改为「版本以 `VERSION.txt` 为准」并对齐版本号规则。）
 - **权限预设缺口**：预设「合同财务」没有 `people.view`，而全量台账读取需要它 → 该预设实际上看不到数据。
   修它要么给该预设 `people.view`（会连身份证/银行卡一起开放），要么做实体级权限；属产品决策。
-- **HTTP 层无请求体上限**：`scripts/app-server-index.mjs` 在鉴权前把整个 body 读进内存。
+- **HTTP 层无请求体上限**：~~`scripts/app-server-index.mjs` 在鉴权前把整个 body 读进内存。~~
+  已于 1.7.13 加 52MB 上限 + 崩溃日志落盘（本条过时，待删）。
+- **`pnpm dev` 起不来**（2026-09-12 复查发现）：SSR 加载 react 报 `module is not defined`
+  （rolldown-vite + react 的 CJS 互操作，框架层问题）。生产路径 `pnpm build` + `node app/server/index.mjs` 正常。
+  详见 `docs/审查与报告/全量复查-20260912.md` §三.1。
 - **`dates.ts` 的日校验、`idcard.ts` 的 16/17 位、工资历史 `fromDate` 补零**：均已于 1.7.8 修复
   （原来的 `todo` 用例已转成正式用例）。
 - **照片类型仍按文件名匹配**（张三-身份证-正面.jpg）：跨台账隔离已做，但同名不同人仍需人工核对。

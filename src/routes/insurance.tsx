@@ -6,18 +6,16 @@ import { Input, Label } from "~/components/ui/input";
 import { WideTable, usePager } from "~/components/wide-table";
 import { Need, Can, useCan } from "~/components/can";
 import { useApp } from "~/lib/store";
-import { daysBetween } from "~/lib/dates";
+import { daysBetween, localToday } from "~/lib/dates";
 import { uid, money } from "~/lib/utils";
+import { round2 } from "~/lib/wage";
 import { TplLink, InsuranceMemberImport } from "~/components/excel-import";
 import { DocActions, setDoc, renameFile } from "~/components/doc-actions";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { InsuranceMember, InsurancePolicy } from "~/lib/types";
 
-function today() {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+// 统一用 dates.ts 的 localToday()，不再各自手写当天日期
+const today = localToday;
 
 function datePart(dt: string): string {
   return (dt || "").slice(0, 10);
@@ -118,24 +116,38 @@ function DateTimeField({
   );
 }
 
+/** 弹窗内部的「取消」按钮通过 context 拿到带脏检查的关闭，保证所有出口口径一致 */
+const ModalCloseCtx = React.createContext<() => void>(() => {});
+
+function ModalCancelButton({ children }: { children?: React.ReactNode }) {
+  const requestClose = React.useContext(ModalCloseCtx);
+  return (
+    <Button variant="outline" type="button" onClick={requestClose}>
+      {children || "取消"}
+    </Button>
+  );
+}
+
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { markDirty, requestClose } = useGuardedClose(onClose);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={requestClose}>
-      <div
-        className="max-h-[85vh] w-full max-w-md overflow-auto rounded-xl border border-line bg-surface p-5 shadow-panel"
-        onClick={(e) => e.stopPropagation()}
-        onChange={markDirty}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">{title}</h2>
-          <button type="button" className="text-sm text-muted hover:text-ink" onClick={onClose}>
-            关闭
-          </button>
+    <ModalCloseCtx.Provider value={requestClose}>
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 md:items-center md:p-6" onClick={requestClose}>
+        <div
+          className="max-h-screen w-full max-w-md overflow-y-auto rounded-t-xl border border-line bg-surface p-5 shadow-panel md:rounded-xl"
+          onClick={(e) => e.stopPropagation()}
+          onChange={markDirty}
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold">{title}</h2>
+            <button type="button" className="text-sm text-muted hover:text-ink" onClick={requestClose}>
+              关闭
+            </button>
+          </div>
+          {children}
         </div>
-        {children}
       </div>
-    </div>
+    </ModalCloseCtx.Provider>
   );
 }
 
@@ -204,7 +216,7 @@ function InsurancePage() {
   // 使用天数统一夹紧到保单期，手填越界不参与结算
   const clamp = { start: selected?.periodStart || "", end: selected?.periodEnd || "" };
   const md = (m: InsuranceMember) => memberDays(m, clamp);
-  const settleOf = (m: InsuranceMember) => Math.round(perPersonDaily * md(m) * 100) / 100;
+  const settleOf = (m: InsuranceMember) => round2(perPersonDaily * md(m));
   const activeCount = policyMembers.filter((m) => isActive(m)).length;
   const shownPersonDays = shownMembers.reduce((s, m) => s + md(m), 0);
   const shownSettle = shownMembers.reduce((s, m) => s + settleOf(m), 0);
@@ -420,10 +432,10 @@ function InsurancePage() {
                 <span>人数 <b className="tabular-nums text-ink">{headcount}</b></span>
                 <span>保额/人 <b className="tabular-nums text-ink">{money(coverage)}</b> 元</span>
                 <span>总保费 <b className="tabular-nums text-ink">{money(totalPremium)}</b> 元</span>
-                <span>每人每天 <b className="tabular-nums text-ink">{money(Math.round(perPersonDaily * 100) / 100)}</b> 元</span>
+                <span>每人每天 <b className="tabular-nums text-ink">{money(round2(perPersonDaily))}</b> 元</span>
                 <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> 人 · 已结束 <b className="tabular-nums text-ink">{policyMembers.length - activeCount}</b> 人</span>
-                <span>累计人天 <b className="tabular-nums text-ink">{Math.round(shownPersonDays * 100) / 100}</b></span>
-                <span>保费合计 <b className="tabular-nums text-ink">{money(Math.round(shownSettle * 100) / 100)}</b> 元</span>
+                <span>累计人天 <b className="tabular-nums text-ink">{round2(shownPersonDays)}</b></span>
+                <span>保费合计 <b className="tabular-nums text-ink">{money(round2(shownSettle))}</b> 元</span>
               </div>
               <p className="mt-1 text-xs text-subtle">
                 每人每天 = 每人保费 ÷ 保险期天数；每人保费 = 每人每天 × 使用天数。
@@ -631,9 +643,7 @@ function InsurancePage() {
                 <Input value={policyEdit.remark} onChange={(e) => setPolicyEdit({ ...policyEdit, remark: e.target.value })} />
               </Field>
               <div className="flex justify-end gap-2 pt-1">
-                <Button variant="outline" type="button" onClick={() => setPolicyEdit(null)}>
-                  取消
-                </Button>
+                <ModalCancelButton />
                 <Button type="button" onClick={savePolicy}>
                   保存
                 </Button>
@@ -673,9 +683,7 @@ function InsurancePage() {
                 <Input value={memberEdit.remark} onChange={(e) => setMemberEdit({ ...memberEdit, remark: e.target.value })} />
               </Field>
               <div className="flex justify-end gap-2 pt-1">
-                <Button variant="outline" type="button" onClick={() => setMemberEdit(null)}>
-                  取消
-                </Button>
+                <ModalCancelButton />
                 <Button type="button" onClick={saveMember}>
                   保存
                 </Button>
@@ -712,9 +720,7 @@ function InsurancePage() {
                 <Input value={replaceState.remark} onChange={(e) => setReplaceState({ ...replaceState, remark: e.target.value })} />
               </Field>
               <div className="flex justify-end gap-2 pt-1">
-                <Button variant="outline" type="button" onClick={() => setReplaceState(null)}>
-                  取消
-                </Button>
+                <ModalCancelButton />
                 <Button type="button" onClick={confirmReplace}>
                   确认替换
                 </Button>
@@ -766,8 +772,8 @@ function InsurancePage() {
                   <td className="border border-black px-2 py-1 text-right" colSpan={5}>
                     合计
                   </td>
-                  <td className="border border-black px-2 py-1">{Math.round(shownPersonDays * 100) / 100}</td>
-                  <td className="border border-black px-2 py-1">{money(Math.round(shownSettle * 100) / 100)}</td>
+                  <td className="border border-black px-2 py-1">{round2(shownPersonDays)}</td>
+                  <td className="border border-black px-2 py-1">{money(round2(shownSettle))}</td>
                 </tr>
               </tfoot>
             </table>
@@ -789,8 +795,8 @@ function InsurancePage() {
                     <tr key={g.leader}>
                       <td className="border border-black px-2 py-0.5">{g.leader}</td>
                       <td className="border border-black px-2 py-0.5">{g.count}</td>
-                      <td className="border border-black px-2 py-0.5">{Math.round(g.days * 100) / 100}</td>
-                      <td className="border border-black px-2 py-0.5">{money(Math.round(g.settle * 100) / 100)}</td>
+                      <td className="border border-black px-2 py-0.5">{round2(g.days)}</td>
+                      <td className="border border-black px-2 py-0.5">{money(round2(g.settle))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -798,8 +804,8 @@ function InsurancePage() {
                   <tr className="font-semibold">
                     <td className="border border-black px-2 py-0.5 text-right">合计</td>
                     <td className="border border-black px-2 py-0.5">{leaderSummary.reduce((s, g) => s + g.count, 0)}</td>
-                    <td className="border border-black px-2 py-0.5">{Math.round(shownPersonDays * 100) / 100}</td>
-                    <td className="border border-black px-2 py-0.5">{money(Math.round(shownSettle * 100) / 100)}</td>
+                    <td className="border border-black px-2 py-0.5">{round2(shownPersonDays)}</td>
+                    <td className="border border-black px-2 py-0.5">{money(round2(shownSettle))}</td>
                   </tr>
                 </tfoot>
               </table>

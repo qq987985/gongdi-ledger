@@ -411,7 +411,7 @@ function PersonEditor({
                 删除
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" onClick={onClose}>
+            <Button variant="outline" size="sm" onClick={requestClose}>
               取消
             </Button>
             <Button size="sm" onClick={save}>
@@ -422,7 +422,7 @@ function PersonEditor({
               className="inline-flex size-8 items-center justify-center rounded-sm text-xl leading-none text-muted hover:bg-accent-soft hover:text-ink"
               aria-label="关闭"
               title="关闭（Esc）"
-              onClick={onClose}
+              onClick={requestClose}
             >
               ×
             </button>

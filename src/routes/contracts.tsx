@@ -19,6 +19,7 @@ const CONTRACT_DONE = new Set(["完工", "结算完成", "结算已开票", "退
 import { buildContractWorkbook } from "~/lib/excel";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
+import { round2 } from "~/lib/wage";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { ContractRecord, ContractEntry } from "~/lib/types";
 
@@ -582,19 +583,19 @@ function ContractEditor({
           <h2 className="font-semibold">{creating ? "新增合同" : c.name || "编辑合同"}</h2>
           <div className="btn-row">
             {c.scanFileName ? <Badge tone="ok">有合同</Badge> : <Badge>无合同</Badge>}
-            <Button variant="outline" type="button" onClick={onCancel}>
-              关闭
-            </Button>
-            {!creating ? (
-              <Button variant="outline" type="button" onClick={() => window.print()}>
-                打印对账单
-              </Button>
-            ) : null}
             {!creating ? (
               <Button variant="danger" type="button" onClick={() => onDelete?.()}>
                 删除
               </Button>
             ) : null}
+            {!creating ? (
+              <Button variant="outline" type="button" onClick={() => window.print()}>
+                打印对账单
+              </Button>
+            ) : null}
+            <Button variant="outline" type="button" onClick={requestClose}>
+              关闭
+            </Button>
             <Button
               type="button"
               onClick={() => {
@@ -1104,10 +1105,6 @@ function ReceiptBook({
       </div>
     </div>
   );
-}
-
-function round2(n: number) {
-  return Math.round((Number(n) || 0) * 100) / 100;
 }
 
 function FileLink({ id, kind, fileName, suggest }: { id: string; kind: string; fileName: string; suggest: string }) {

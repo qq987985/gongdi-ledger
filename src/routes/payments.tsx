@@ -428,14 +428,14 @@ function PaymentEditor({
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-3">
           <h2 className="font-display text-lg font-semibold">{creating ? "新增发放" : c.owner ? `编辑发放 · ${c.owner}` : "编辑发放"}</h2>
           <div className="btn-row">
-            <Button variant="outline" type="button" onClick={onCancel}>
-              关闭
-            </Button>
             {!creating ? (
               <Button variant="danger" type="button" onClick={onDelete}>
                 删除
               </Button>
             ) : null}
+            <Button variant="outline" type="button" onClick={requestClose}>
+              关闭
+            </Button>
             <Button type="button" onClick={save}>
               {creating ? "确认新增" : "保存发放信息"}
             </Button>

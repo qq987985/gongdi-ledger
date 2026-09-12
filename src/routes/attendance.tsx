@@ -21,6 +21,13 @@ function AttendancePage() {
   const [month, setMonth] = React.useState<number | null>(null);
   const existing = attendance.filter((a) => a.year === year && a.month === (month || 0));
   const upcoming = nextYear(derivedYears(store));
+  // 月表是本地编辑、「保存本月」才落盘：切月/返回总览前要拦住未保存的修改
+  const monthDirtyRef = React.useRef(false);
+  const leaveMonth = (action: () => void) => {
+    if (monthDirtyRef.current && !window.confirm("本月考勤有未保存的修改，确定离开吗？未保存的修改会丢失。")) return;
+    monthDirtyRef.current = false;
+    action();
+  };
   if (month == null)
     return (
       <YearOverview
@@ -37,7 +44,7 @@ function AttendancePage() {
       <div className="space-y-5">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <button type="button" className="mb-2 inline-flex items-center gap-1 text-xs text-muted hover:text-ink" onClick={() => setMonth(null)}>
+            <button type="button" className="mb-2 inline-flex items-center gap-1 text-xs text-muted hover:text-ink" onClick={() => leaveMonth(() => setMonth(null))}>
               <ArrowLeft className="size-3.5" /> 返回 {year} 年总览
             </button>
             <h1 className="font-display text-2xl font-semibold">
@@ -47,7 +54,7 @@ function AttendancePage() {
               只填本月实际出勤的人。下面可上传几份考勤表照片或 PDF，以后在「影像资料」里查、下、复制、替换、删除。
             </p>
           </div>
-          <select className="field-select w-auto" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+          <select className="field-select w-auto" value={month} onChange={(e) => leaveMonth(() => setMonth(Number(e.target.value)))}>
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
               <option value={m} key={m}>
                 {m}月
@@ -61,6 +68,9 @@ function AttendancePage() {
           month={month}
           people={people}
           existing={existing}
+          onDirtyChange={(d) => {
+            monthDirtyRef.current = d;
+          }}
           onSave={(rows) => {
             saveAttendanceMonth(year, month, rows);
             toast.success("本月考勤已保存");
@@ -292,28 +302,34 @@ function MonthTable({
   month,
   people,
   existing,
+  onDirtyChange,
   onSave,
 }: {
   year: number;
   month: number;
   people: ReturnType<typeof useApp.getState>["people"];
   existing: ReturnType<typeof useApp.getState>["attendance"];
+  onDirtyChange?: (dirty: boolean) => void;
   onSave: (rows: MonthRow[]) => void;
 }) {
   const byName = Object.fromEntries(existing.map((a) => [a.name, a]));
-  const [rows, setRows] = React.useState<MonthRow[]>(() =>
-    existing
-      .filter((a) => a.name.trim())
-      .map((a) => ({
-        name: a.name,
-        team: a.team || byName[a.name]?.team || "",
-        days: a.days ?? 0,
-        otHours: a.otHours ?? 0,
-        allowance: a.allowance ?? 0,
-        deduction: a.deduction ?? 0,
-        remark: a.remark ?? "",
-      })),
-  );
+  // 初始快照：与保存后的 store 数据同序同字段，保存成功后 dirty 会自动回到 false
+  const initialRows: MonthRow[] = existing
+    .filter((a) => a.name.trim())
+    .map((a) => ({
+      name: a.name,
+      team: a.team || byName[a.name]?.team || "",
+      days: a.days ?? 0,
+      otHours: a.otHours ?? 0,
+      allowance: a.allowance ?? 0,
+      deduction: a.deduction ?? 0,
+      remark: a.remark ?? "",
+    }));
+  const [rows, setRows] = React.useState<MonthRow[]>(() => initialRows);
+  const dirty = JSON.stringify(rows) !== JSON.stringify(initialRows);
+  React.useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
   const [pick, setPick] = React.useState("");
   const [selected, setSelected] = React.useState<string[]>([]);
   const pmap = Object.fromEntries(people.map((p) => [p.name, p]));
@@ -460,6 +476,7 @@ function MonthTable({
             </Button>
           ) : null}
         </div>
+        {dirty ? <span className="text-xs text-warn">有未保存的修改</span> : null}
         <Button onClick={() => onSave(rows)}>保存本月</Button>
       </div>
       <WideTable id="attendance-month">

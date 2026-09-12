@@ -169,12 +169,17 @@ function AuditPage() {
                             size="sm"
                             type="button"
                             onClick={async () => {
-                              await fetch("/api/audit", {
+                              const r = await fetch("/api/audit", {
                                 method: "PUT",
                                 credentials: "include",
                                 headers: { "content-type": "application/json" },
                                 body: JSON.stringify(edit),
                               });
+                              // 以前不看 res.ok：保存失败（如权限不够）也会提示「已保存」
+                              if (!r.ok) {
+                                toast.error(`保存失败（${r.status}）`);
+                                return;
+                              }
                               setEdit(null);
                               await load();
                               toast.success("已保存");
@@ -197,7 +202,11 @@ function AuditPage() {
                             type="button"
                             onClick={async () => {
                               if (!confirm("删除这条记录？")) return;
-                              await fetch(`/api/audit?id=${encodeURIComponent(e.id)}`, { method: "DELETE", credentials: "include" });
+                              const r = await fetch(`/api/audit?id=${encodeURIComponent(e.id)}`, { method: "DELETE", credentials: "include" });
+                              if (!r.ok) {
+                                toast.error(`删除失败（${r.status}）`);
+                                return;
+                              }
                               await load();
                             }}
                           >

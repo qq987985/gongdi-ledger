@@ -13,6 +13,7 @@ import { DocActions, prepareNamedFile, setDoc } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
 import { money, formatCardNo, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
+import { round2 } from "~/lib/wage";
 import { useGuardedClose } from "~/lib/confirm-close";
 
 const PAY_METHODS = ["现金", "转账", "微信", "支付宝", "对公", "其他"];
@@ -78,9 +79,6 @@ function payoutBase(items: any[]) {
   if (!items.length) return "收报销款-0-0笔";
   const total = round2(items.reduce((s, e) => s + (e.amount || 0), 0));
   return `收报销款-${amountTag(total)}-${items.length}笔`;
-}
-function round2(n: number) {
-  return Math.round((Number(n) || 0) * 100) / 100;
 }
 function uniqueNames(people: any[], expenses: any[]) {
   const s = new Set<string>();
@@ -959,19 +957,19 @@ function ExpenseEditor({
           <h2 className="font-semibold">{creating ? "新增报销" : c.name || "编辑报销"}</h2>
           <div className="btn-row">
             <Badge tone={c.status === "已报销" ? "ok" : "warn"}>{c.status}</Badge>
-            <Button variant="outline" type="button" onClick={onCancel}>
-              关闭
-            </Button>
-            {!creating ? (
-              <Button variant="outline" type="button" onClick={() => onPrintSingle(c)}>
-                打印报销单
-              </Button>
-            ) : null}
             {!creating ? (
               <Button variant="danger" type="button" onClick={onDelete}>
                 删除
               </Button>
             ) : null}
+            {!creating ? (
+              <Button variant="outline" type="button" onClick={() => onPrintSingle(c)}>
+                打印报销单
+              </Button>
+            ) : null}
+            <Button variant="outline" type="button" onClick={requestClose}>
+              关闭
+            </Button>
             <Button
               type="button"
               onClick={() => {
