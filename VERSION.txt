@@ -1,7 +1,15 @@
-1.7.15
+1.7.16
 
 
 
+
+[1.7.16] 2026-09-12
+- 新增 UI 约定守卫测试（tests/ui-guards.test.ts，3 条）：
+  · 用了 useGuardedClose 的弹窗，按钮直接 onClick={onClose/onCancel} 会被测试拦下（防误关回退）；
+  · 页面/组件里再写本地 round2 或手写 Math.round(x*100)/100 会被拦下（金额取整唯一来源：wage.ts）；
+  · 页面/组件里再定义本地 today 函数会被拦下（当天日期唯一来源：dates.ts 的 localToday）。
+  三条守卫均做过负向验证（故意改坏能被抓到）。测试总数 136 → 139。
+- 顺手清扫：报销/文件页/文档组件里 3 处手写取整改用 round2；报销页 todayYmd() 包装删除，直接用 localToday()。
 
 [1.7.15] 2026-09-12
 - 修复 `pnpm dev` 开发服务器整站 500：SSR 加载 react 报 `module is not defined`。

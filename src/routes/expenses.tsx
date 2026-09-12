@@ -24,11 +24,8 @@ function safeBase(s: string) {
 function needsVoucher(method: string) {
   return (method || "现金") !== "现金";
 }
-function todayYmd() {
-  return localToday();
-}
 function emptyExpense(year: number): any {
-  const today = todayYmd();
+  const today = localToday();
   return {
     id: uid(),
     year,
@@ -58,14 +55,14 @@ function emptyExpense(year: number): any {
 }
 function amountTag(n: number) {
   const x = Number(n) || 0;
-  return String(Number.isInteger(x) ? x : Math.round(x * 100) / 100);
+  return String(Number.isInteger(x) ? x : round2(x));
 }
 function dateFromPeriod(period: string, fallback: string) {
   const p = String(period || "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(p)) return p;
   const m = p.match(/^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-  return fallback || todayYmd();
+  return fallback || localToday();
 }
 function voucherBase(items: any[]) {
   if (!items.length) return "报销凭证";
@@ -395,7 +392,7 @@ function ExpensesPage() {
       return;
     const pid = batch.payoutId || uid();
     const acc = formatPayAccount(batch.payBank, batch.payCardNo);
-    const day = markDone ? batch.payoutDate || todayYmd() : "";
+    const day = markDone ? batch.payoutDate || localToday() : "";
     for (const e of batchRows) {
       // 打款凭证按 (payoutId, payout) 存；换新 pid 时旧文件名不能再引用（否则找不到文件）
       const keepFile = batch.payoutFileName || (batch.payoutId && batch.payoutId === e.payoutId ? e.payoutFileName : "");
@@ -861,7 +858,7 @@ function ExpenseEditor({
       if (key === "payBank" || key === "payCardNo") next.payAccount = formatPayAccount(next.payBank, next.payCardNo);
       if (key === "status") {
         if (value === "已报销") {
-          next.payoutDate = prev.payoutDate || todayYmd();
+          next.payoutDate = prev.payoutDate || localToday();
           next.reimbursedAt = prev.reimbursedAt || next.payoutDate;
         } else {
           next.payoutDate = "";
@@ -935,7 +932,7 @@ function ExpenseEditor({
       id: c.id || uid(),
       payoutId: pid,
       payoutFileName: savedPay,
-      payoutDate: c.status === "已报销" ? c.payoutDate || todayYmd() : "",
+      payoutDate: c.status === "已报销" ? c.payoutDate || localToday() : "",
     };
     setC(next);
     onSave(next);
@@ -986,7 +983,7 @@ function ExpenseEditor({
                   ...c,
                   id: c.id || uid(),
                   payAccount: formatPayAccount(c.payBank, c.payCardNo),
-                  payoutDate: c.status === "已报销" ? c.payoutDate || todayYmd() : "",
+                  payoutDate: c.status === "已报销" ? c.payoutDate || localToday() : "",
                   amount: round2(c.amount || c.qty * c.price),
                 });
               }}
@@ -1175,7 +1172,7 @@ function ExpenseEditor({
 
 function ExpenseSheets({ rows, showVoucher }: { rows: any[]; showVoucher?: boolean }) {
   if (!rows.length) return null;
-  const today = todayYmd();
+  const today = localToday();
   const total = rows.reduce((s, e) => s + (e.amount || 0), 0);
   const claimants = [...new Set(rows.map((e) => e.claimant).filter(Boolean))];
   const forWhoms = [...new Set(rows.map((e) => e.forWhom).filter(Boolean))];

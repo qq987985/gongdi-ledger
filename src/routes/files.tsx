@@ -11,6 +11,7 @@ import {
   receiptWorkerBase,
   attendanceBase,
 } from "~/components/doc-actions";
+import { round2 } from "~/lib/wage";
 import { useApp } from "~/lib/store";
 
 function safeBase(s: string) {
@@ -119,7 +120,7 @@ function FilesPage() {
       const group = (expenses || []).filter((x: any) => x.payoutId === e.payoutId);
       const sib = group.length;
       const total = group.reduce((s: number, x: any) => s + (x.amount || 0), 0);
-      const amt = Number.isInteger(total) ? String(total) : String(Math.round(total * 100) / 100);
+      const amt = Number.isInteger(total) ? String(total) : String(round2(total));
       out.push({
         id: e.payoutId,
         kind: "payout",

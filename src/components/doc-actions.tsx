@@ -5,6 +5,7 @@ import { nasEnabled } from "~/lib/nas-sync";
 import { logOp } from "~/lib/audit";
 import { PreviewModal, previewKindOf, type PreviewTarget } from "~/components/preview";
 import { copyText } from "~/lib/utils";
+import { round2 } from "~/lib/wage";
 
 const DB_NAME = "gongdi-docs";
 const STORE = "docs";
@@ -179,7 +180,7 @@ function monthLabel(dateOrYear: string | number, month?: number): string {
 function amountTag(n: unknown): string {
   const x = Number(n) || 0;
   if (Number.isInteger(x)) return String(x);
-  return String(Math.round(x * 100) / 100);
+  return String(round2(x));
 }
 
 function safeBase(s: string): string {
