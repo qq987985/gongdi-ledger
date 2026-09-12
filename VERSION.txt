@@ -1,7 +1,15 @@
-1.7.14
+1.7.15
 
 
 
+
+[1.7.15] 2026-09-12
+- 修复 `pnpm dev` 开发服务器整站 500：SSR 加载 react 报 `module is not defined`。
+  根因：`vite.config.ts` 里 `ssr.noExternal: true`（当初为让 Docker 镜像免装 node_modules 而加）在 dev 模式下
+  把 CJS 的 react 也内联进 rolldown-vite 的模块运行器当 ESM 跑。
+  现在 `noExternal` 只在构建时生效（`command === "build" ? true : []`），dev 恢复默认外部化。
+  生产产物验证仍自包含（server.js 无外部 require），dev 全页面 200。
+- 文档：未闭环清单里「pnpm dev 起不来」一条闭环。
 
 [1.7.14] 2026-09-12
 - 全量复查（操作一致性专项，见 docs/审查与报告/全量复查-20260912.md）：

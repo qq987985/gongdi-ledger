@@ -69,10 +69,9 @@
 7. ✅ 已修（1.7.11）：人员信息表新增「工资历史」列，导出/导入无损往返；列被手改坏时按「没有历史」处理。
 8. ✅ 已修（1.7.13）：启动器加了 52MB 请求体上限（声明超限立刻 413，不再把连接挂住），未捕获异常也落 `data/logs`。
 9. `saveDoc` 仍是「先删旧文件再 rename」（崩溃窗口内旧文件已删、新文件还是隐藏临时名）。
-10. `pnpm dev`（vite dev）SSR 加载 react 报 `ReferenceError: module is not defined`（rolldown-vite 7.3.1 + react 19.2.8
-    的 CJS 互操作，框架层报错、与业务代码无关）。**生产路径 `pnpm build` + `node app/server/index.mjs` 正常**。
-    依赖全写 `latest` 导致 dev 模式随依赖漂移而坏的口子一直在，建议排查或固定相关版本。
-    （2026-09-12 复查发现，见 `审查与报告/全量复查-20260912.md` §三.1）
+10. ✅ 已修（1.7.15）：`pnpm dev` 整站 500（SSR 加载 react 报 `module is not defined`）。
+    根因是 `vite.config.ts` 的 `ssr.noExternal: true`（为 Docker 免 node_modules 而加）在 dev 下把 CJS 的 react 内联成 ESM 跑；
+    现改为仅构建时生效，dev 恢复默认外部化。
 
 **D. 待现场确认**
 

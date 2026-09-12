@@ -155,8 +155,8 @@
   修它要么给该预设 `people.view`（会连身份证/银行卡一起开放），要么做实体级权限；属产品决策。
 - **HTTP 层无请求体上限**：~~`scripts/app-server-index.mjs` 在鉴权前把整个 body 读进内存。~~
   已于 1.7.13 加 52MB 上限 + 崩溃日志落盘（本条过时，待删）。
-- **`pnpm dev` 起不来**（2026-09-12 复查发现）：SSR 加载 react 报 `module is not defined`
-  （rolldown-vite + react 的 CJS 互操作，框架层问题）。生产路径 `pnpm build` + `node app/server/index.mjs` 正常。
+- **`pnpm dev` 起不来**（2026-09-12 复查发现）：已于 **1.7.15** 修复 —— 根因是 `vite.config.ts` 的
+  `ssr.noExternal: true` 在 dev 下把 CJS 的 react 内联成 ESM；现仅构建时生效。
   详见 `docs/审查与报告/全量复查-20260912.md` §三.1。
 - **`dates.ts` 的日校验、`idcard.ts` 的 16/17 位、工资历史 `fromDate` 补零**：均已于 1.7.8 修复
   （原来的 `todo` 用例已转成正式用例）。
