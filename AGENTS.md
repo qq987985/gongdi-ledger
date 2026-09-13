@@ -23,6 +23,11 @@
   `nas-flag.ts`（不要从 nas-sync 引）；Excel 导入导出在 `src/lib/excel/` 目录（common + 七个实体模块，
   经 `excel.ts` barrel 导出，实体模块不得反向依赖 full）；服务端存储三层单向依赖
   `paths.server ← assets.server ← nas-fs.server`（影像层要台账内容时由调用方传入，不要 import nas-fs）。
+- 模块结构（1.7.19 起，UI/更新层）：应用外壳件在 `src/components/shell/`（导航/品牌/主题/切换器/
+  更新卡/版本日志/登录与兜底屏）；报销、合同编辑弹窗分别是 `expense-editor.tsx`/`contract-editor.tsx`
+  （共享小件在 `expense-bits.tsx`）；设置页卡片在 `src/components/settings/`；一键更新在
+  `src/lib/update/`（consts/log/version/docker/updater-script/apply，经 `update.server.ts` barrel 导出；
+  守卫测试按模块扫源码，拆文件时同步改扫描路径）。
 - 修改数据模型时同步检查 `types.ts`、`store.ts`、`nas-sync.ts`、Excel 导入导出。
 - 提交前跑三道闸：`pnpm run typecheck`、`pnpm test`、`pnpm build`（规范 §2，测试见 §10）。
 

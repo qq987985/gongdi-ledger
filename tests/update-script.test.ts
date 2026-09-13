@@ -195,7 +195,9 @@ test("后台更新任务：抛异常时状态里带出原因（前端据此提�
 });
 
 test("dockerReq 调用：第三参数必须写成 { body } / { stream }（防「请求体被丢掉」重演）", async () => {
-  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  // dockerReq 的调用方在拆分后落在 docker.ts（模块内部）与 apply.ts（更新编排）两个文件里，都要扫。
+  const read = (p: string) => readFile(fileURLToPath(new URL(p, import.meta.url)), "utf8");
+  const src = (await read("../src/lib/update/docker.ts")) + "\n" + (await read("../src/lib/update/apply.ts"));
   const calls = dockerReqCalls(stripComments(src));
   assert.equal(calls.length >= 8, true, `应能解析出 dockerReq 调用（实际 ${calls.length} 处）`);
   const bad = calls
@@ -206,7 +208,7 @@ test("dockerReq 调用：第三参数必须写成 { body } / { stream }（防「
 });
 
 test("dockerReq：容器配置直传（历史写法）也要能发出请求体", async () => {
-  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update/docker.ts", import.meta.url)), "utf8");
   assert.match(src, /body === undefined && o\.stream === undefined && Object\.keys\(opts\)\.length > 0/);
 });
 
@@ -263,7 +265,7 @@ test("更新脚本：换新容器成功后顺手删掉上一个版本的镜像�
 });
 
 test("更新脚本：下一个容器要带上老镜像 ID（否则不知道删哪份）", async () => {
-  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update/apply.ts", import.meta.url)), "utf8");
   assert.match(src, /oldImage: String\(me\.Image \|\| ""\)/);
 });
 
@@ -327,14 +329,14 @@ test("更新脚本：第一步就留痕（以前脚本没跑起来时一点记�
 });
 
 test("更新容器：脚本走 Cmd 内联 + 不再自动删除（失败后还能查到它的日志）", async () => {
-  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update/apply.ts", import.meta.url)), "utf8");
   assert.match(src, /Cmd: \["node", "-e", UPDATER_SCRIPT\]/);
   assert.match(src, /Env: \[`GONGDI_JOB=\$\{JSON\.stringify\(job\)\}`/, "任务通过环境变量传进去");
   assert.match(src, /AutoRemove: false/, "不能再自动删除：否则失败后没有日志可查");
 });
 
 test("更新任务文件必须写在 DATA_DIR 下（容器内挂载点不一定是 /data，写死会静默失败）", async () => {
-  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update/apply.ts", import.meta.url)), "utf8");
   assert.doesNotMatch(src, /writeFile\("\/data\//, "不能往字面量 /data 写更新任务（自定义挂载点时文件会丢）");
   assert.match(src, /join\(dataPath, "\.gondi-next\.json"\)/, "任务文件应落在 dataDir() 下");
   assert.match(src, /DATA_DIR=\$\{dataPath\}/, "更新容器的 DATA_DIR 环境变量要跟本机一致");
@@ -342,20 +344,20 @@ test("更新任务文件必须写在 DATA_DIR 下（容器内挂载点不一定�
 });
 
 test("更新容器的数据挂载按容器内路径识别，不猜宿主路径", async () => {
-  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update/apply.ts", import.meta.url)), "utf8");
   assert.doesNotMatch(src, /vol1\/1000\/docker/, "以前写死飞牛路径做兜底，换目录就挂错；找不到挂载应只记警告");
   assert.match(src, /containerPathOf\(b\) === dataPath/, "按「容器内路径 === DATA_DIR」识别数据挂载");
 });
 
 test("更新容器：启动两秒后要检查它是否已经退出（否则只剩一句「已受理」）", async () => {
-  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update/apply.ts", import.meta.url)), "utf8");
   assert.match(src, /State\?\.Running === false/);
   assert.match(src, /更新容器启动后立即退出/);
   assert.match(src, /本次更新没有执行，容器与台账都没动/);
 });
 
 test("查看更新日志：要带上更新容器自己的日志与状态", async () => {
-  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update/log.ts", import.meta.url)), "utf8");
   assert.match(src, /helperReport/);
   assert.match(src, /\/containers\/\$\{encodeURIComponent\(id\)\}\/logs\?stdout=1&stderr=1/);
   assert.match(src, /更新容器：/, "面板里要能看到「更新容器：正在运行 / 已退出（exit N）」");

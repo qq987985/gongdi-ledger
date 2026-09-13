@@ -1,7 +1,20 @@
-1.7.18
+1.7.19
 
 
 
+
+[1.7.19] 2026-09-14
+- 结构重构第二轮（UI 层与更新模块拆分，模块化/低耦合专项续，见
+  docs/审查与报告/结构重构-20260914.md），不改任何行为：
+  · shell.tsx（1247 行）→ src/components/shell/ 组件目录：导航/品牌/主题/年切换/
+    台账切换/Windows 更新卡/版本日志/各登录与兜底屏，各件单文件。
+  · expenses.tsx / contracts.tsx / settings.tsx 三个大页面的「编辑器弹窗」拆成独立组件
+    （expense-editor.tsx / contract-editor.tsx / settings/ 五张卡片），路由文件只留页面骨架。
+  · update.server.ts（1176 行）→ src/lib/update/ 六个模块：consts（常量）/
+    log（更新日志与容器现场）/ version（版本检查与拉取候选）/ docker（引擎交互与镜像清理）/
+    updater-script（内联替换脚本）/ apply（执行与后台任务）；update.server.ts 保留为
+    转发出口，路由与测试导入路径不变，8 条源码守卫测试随迁移更新扫描目标。
+- 回归验证：typecheck 通过，146 个测试全绿，70 个 Excel 往返对拍全过，构建通过。
 
 [1.7.18] 2026-09-14
 - 结构重构（模块化 / 低耦合专项，见 docs/审查与报告/结构重构-20260914.md），不改任何行为：
