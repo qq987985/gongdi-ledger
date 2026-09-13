@@ -948,19 +948,29 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
     NetworkingConfig: { EndpointsConfig: endpoints },
   };
   const job = { oldId: me.Id, oldImage: String(me.Image || ""), name, create };
-  await writeFile("/data/.gondi-next.json", JSON.stringify(job));
-  await writeFile("/data/.gongdi-updater.cjs", UPDATER_SCRIPT);
+  // 数据目录必须走 DATA_DIR（容器内挂载点不一定是 /data，自定义挂载时写死 /data 会丢任务、更新静默失败）。
+  // .cjs 文件是 1.7.10 之前「写脚本文件再挂载执行」的残留，现在脚本走 Cmd 内联 + GONGDI_JOB 环境变量，
+  // 不再生成；更新容器成功后也会顺手删掉旧版本留下的这个文件。
+  const dataPath = dataDir() || "/data";
+  await writeFile(join(dataPath, ".gondi-next.json"), JSON.stringify(job));
   try {
     await dockerReq("POST", `/containers/${HELPER_NAME}/stop?t=2`);
   } catch {}
   try {
     await dockerReq("DELETE", `/containers/${HELPER_NAME}?force=true`);
   } catch {}
+  // 更新容器只需要两个挂载：docker.sock（换容器）和数据目录（往 data/logs/update.log 写进展）。
+  // 数据挂载按「容器内路径 === DATA_DIR」识别；找不到时**不再猜宿主路径**
+  // （以前会写死一个飞牛默认路径做兜底，换个 NAS/目录就挂错），只记警告——
+  // 换容器靠 GONGDI_JOB 环境变量，不依赖任何挂载，更新照样执行，只是进展不落盘。
+  const containerPathOf = (b: string) => String(b).split(":")[1] || "";
   const helperBinds = binds.filter(
-    (b: string) => String(b).includes(":/data") || String(b).includes("docker.sock"),
+    (b: string) => containerPathOf(b) === dataPath || String(b).includes("docker.sock"),
   );
-  if (!helperBinds.some((b: string) => String(b).includes(":/data")))
-    helperBinds.unshift("/vol1/1000/docker/attendance/data:/data");
+  if (!helperBinds.some((b: string) => containerPathOf(b) === dataPath))
+    await logServer("warn", "更新容器缺少数据挂载（找不到容器内路径等于 DATA_DIR 的挂载），更新进展不会写入 update.log", {
+      dataPath,
+    });
   if (!helperBinds.some((b: string) => String(b).includes("docker.sock"))) helperBinds.push(`${SOCK}:${SOCK}`);
   const helper = await dockerReq("POST", `/containers/create?name=${HELPER_NAME}`, {
     body: {
@@ -968,7 +978,7 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
       Entrypoint: [],
       Cmd: ["node", "-e", UPDATER_SCRIPT],
       WorkingDir: "/",
-      Env: [`GONGDI_JOB=${JSON.stringify(job)}`, "DATA_DIR=/data"],
+      Env: [`GONGDI_JOB=${JSON.stringify(job)}`, `DATA_DIR=${dataPath}`],
       HostConfig: { Binds: helperBinds, AutoRemove: false, RestartPolicy: { Name: "no" } },
     },
   });
@@ -1037,6 +1047,10 @@ async function applyWindowsUpdate(): Promise<{ ok: boolean; error?: string; rest
     return { ok: false, error: "安装目录不存在" };
   }
   const { spawn } = await import("node:child_process");
+  // 安装目录会被原样拼进 .bat（批处理对 & | < > ^ % ! 等字符是语法），路径里带这些字符会生成坏脚本。
+  // 只防不转：把特殊字符的情況明确拒掉，比转义规则写错安全。
+  if (/[&|<>\r\n^%!@()"]/.test(home))
+    return { ok: false, error: `安装目录含批处理特殊字符（& | < > ^ % ! " 等）：${home}。请把软件放到简单路径（如 D:\\gongdi）后再更新。` };
   const bat = join(home, "正在更新.bat");
   const unpack = join(tmp, "out");
   const script = `@echo off

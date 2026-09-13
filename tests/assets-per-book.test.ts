@@ -11,6 +11,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const root = await mkdtemp(join(tmpdir(), "gongdi-assets-test-"));
 process.env.DATA_DIR = root;
@@ -118,4 +119,62 @@ test("A1：文档写入目录是本台账的（不是全局）", async () => {
     "新上传的合同扫描件要落在本台账目录",
   );
   assert.equal(existsSync(join(root, "photos", "合同扫描件", "c9--新合同-合同电子版.pdf")), false);
+});
+
+test("B9：合同扫描件覆盖写是先就位后清旧（崩溃也不会两头空）", async () => {
+  const dir = bookAssets("bookA", "合同扫描件");
+  await inBook("bookA", () => F.saveDoc("c10", "contract", Buffer.from("第一版"), "方案.pdf"));
+  assert.equal(await inBook("bookA", async () => (await F.findDoc("c10", "contract"))?.buf.toString()), "第一版");
+
+  // 同名覆盖：新内容就位后旧文件才被清掉（目录里还有别的用例的文件，只校验 c10 名下）
+  await inBook("bookA", () => F.saveDoc("c10", "contract", Buffer.from("第二版"), "方案.pdf", { replace: true }));
+  assert.equal(await inBook("bookA", async () => (await F.findDoc("c10", "contract"))?.buf.toString()), "第二版");
+  assert.equal(await readFile(join(dir, "方案.pdf"), "utf8"), "第二版");
+  assert.equal(await readFile(join(dir, "c10.name.txt"), "utf8"), "方案.pdf", "指针应指向新文件");
+
+  // 换名上传（不替换）：指针指向新文件，旧文件属于本 id 的历史版本被清，新文件内容可读
+  await inBook("bookA", () => F.saveDoc("c10", "contract", Buffer.from("第三版"), "终版.pdf"));
+  assert.equal(await inBook("bookA", async () => (await F.findDoc("c10", "contract"))?.buf.toString()), "第三版");
+  assert.equal(await inBook("bookA", async () => (await F.findDoc("c10", "contract"))?.fileName), "终版.pdf");
+  assert.equal(existsSync(join(dir, "方案.pdf")), false, "被替换的旧文件应已清掉");
+  assert.equal(await readFile(join(dir, "终版.pdf"), "utf8"), "第三版");
+});
+
+test("B9：前缀类文档（考勤影像）覆盖写后只剩新文件、能按 id 读回", async () => {
+  const dir = bookAssets("bookA", "考勤影像");
+  await inBook("bookA", () => F.saveDoc("a1", "attendance", Buffer.from("一月"), "1月.jpg"));
+  await inBook("bookA", () => F.saveDoc("a1", "attendance", Buffer.from("一月修订"), "1月.jpg"));
+  const hit = await inBook("bookA", () => F.findDoc("a1", "attendance"));
+  assert.equal(hit?.buf.toString(), "一月修订");
+  assert.equal(hit?.fileName, "1月.jpg");
+  const files = (await readdir(dir)).filter((f) => f.startsWith("a1--"));
+  assert.equal(files.length, 1, "同一 id 的旧前缀文件应被清掉，只留新文件");
+});
+
+test("B9：共享文件不被清（别的 id 指针还指着它）", async () => {
+  const dir = bookAssets("bookA", "合同扫描件");
+  // 两个合同 id 指向同一份扫描件（共用文件名）
+  await inBook("bookA", () => F.saveDoc("s1", "contract", Buffer.from("共享件"), "共用扫描.pdf"));
+  await inBook("bookA", () => F.saveDoc("s2", "contract", Buffer.from("共享件"), "共用扫描.pdf", { replace: true }));
+  // s2 换文件时，旧文件仍被 s1 的指针引用，不能删
+  await inBook("bookA", () => F.saveDoc("s2", "contract", Buffer.from("自己的"), "s2专用.pdf"));
+  assert.equal(existsSync(join(dir, "共用扫描.pdf")), true, "s1 还在用的共享文件不能被 s2 的清理删掉");
+  assert.equal(await inBook("bookA", async () => (await F.findDoc("s1", "contract"))?.buf.toString()), "共享件");
+  assert.equal(await inBook("bookA", async () => (await F.findDoc("s2", "contract"))?.buf.toString()), "自己的");
+});
+
+/** 源码守卫：saveDoc 必须是「rename 就位 → 写指针 → 清旧」，顺序一换，崩溃窗口就会两头空 */
+test("B9 守卫：saveDoc 里 rename 必须先于 sweepDocFiles", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/nas-fs.server.ts", import.meta.url)), "utf8");
+  const body = src.slice(src.indexOf("export async function saveDoc"));
+  const renameAt = body.indexOf("await rename(tmp, dest)");
+  const sweepAt = body.indexOf("await sweepDocFiles(");
+  assert.ok(renameAt > 0, "saveDoc 必须先 rename 临时文件就位");
+  assert.ok(sweepAt > renameAt, "清旧文件必须在新文件就位之后（防「先删后写」回归）");
+});
+
+/** 源码守卫：ensureDirs 的一次性缓存键必须含数据目录本身（只按台账 id 会在换 DATA_DIR 后误判已就绪） */
+test("读路径守卫：ensureDirs 缓存键含数据目录 + 台账 id", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/nas-fs.server.ts", import.meta.url)), "utf8");
+  assert.match(src, /\$\{dataDir\(\)\}::\$\{currentBookId\(\)\}/, "缓存键必须同时含 DATA_DIR 与台账 id");
 });

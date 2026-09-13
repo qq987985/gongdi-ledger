@@ -110,6 +110,13 @@ async function sessionToken(user: UserRecord): Promise<string> {
 
 /* ── 登录限速：同一用户名连续失败 5 次，锁 5 分钟 ── */
 const authRate = new Map<string, { fails: number; until: number }>();
+/** 超过这个条数就顺手淘汰 idle/过期的记录，防止 Map 只增不减（不同用户名的失败记录会无限累积） */
+const AUTH_RATE_SWEEP_AT = 500;
+function rateSweep(): void {
+  const now = Date.now();
+  for (const [k, rec] of authRate)
+    if (rec.until <= now && rec.fails === 0) authRate.delete(k);
+}
 function rateKey(kind: string, username: string) {
   return `${kind}:${username.toLowerCase()}`;
 }
@@ -118,6 +125,7 @@ function rateLocked(kind: string, username: string): boolean {
   return Boolean(rec && rec.until > Date.now());
 }
 function rateFail(kind: string, username: string): void {
+  if (authRate.size >= AUTH_RATE_SWEEP_AT) rateSweep();
   const k = rateKey(kind, username);
   const rec = authRate.get(k) || { fails: 0, until: 0 };
   rec.fails += 1;

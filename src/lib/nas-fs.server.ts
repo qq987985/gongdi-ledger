@@ -8,6 +8,9 @@ import type { AuditEntry, LedgerState } from "./types";
 
 const bookAls = new AsyncLocalStorage<string>();
 
+/** ensureDirs 已就绪的台账（按 bookId 记，切台账后对新台账会再跑一次） */
+let ensuredFor = "";
+
 export function dataDir(): string {
   return process.env.DATA_DIR?.trim() || "";
 }
@@ -221,6 +224,12 @@ const PHOTO_SUBS = [
 async function ensureDirs(): Promise<void> {
   const root = dataDir();
   if (!root) return;
+  // 这些 mkdir/迁移/说明文件对每个「数据目录 × 台账」只做一次：readLedger 在每次 GET 和
+  // 每次写前 CAS 读都会走到这里，原来每次都重复 30 来个 mkdir + 重写说明.txt，纯读请求也在写盘。
+  // 键必须含数据目录本身：测试/多实例场景会换 DATA_DIR，只按台账 id 会把新目录误判成已就绪。
+  const key = `${dataDir()}::${currentBookId()}`;
+  if (ensuredFor === key) return;
+  ensuredFor = key;
   await mkdir(root, { recursive: true });
   await mkdir(join(root, "accounts"), { recursive: true });
   await mkdir(join(root, "books"), { recursive: true });
@@ -285,7 +294,9 @@ templates/    导入模板
 不要删 books 和 accounts。
 `;
   try {
-    await writeFile(p, text, "utf8");
+    // 内容是不变的模板，只在文件缺失时写一次（ensureDirs 已按台账限频，这里再兜一层：
+    // 用户手改过说明时不覆盖）
+    if (!existsSync(p)) await writeFile(p, text, "utf8");
   } catch {}
 }
 
@@ -524,7 +535,13 @@ export async function writeAudit(entries: AuditEntry[]): Promise<void> {
   await ensureDirs();
   // 原子写（临时名带随机后缀）：原来固定用 `${target}.tmp`，两次并发写会互相搬走对方写了一半的文件，
   // rename 抛 ENOENT → 这条记录就丢了；客户端又把失败静默吞掉，界面表现为「操作没被记录」。
-  await atomicWriteFile(auditPath(), JSON.stringify({ entries: entries.slice(0, 2e3) }, null, 2));
+  // 上限 2 万条：超出后从最老的开始丢，但必须留痕——以前静默 slice， oldest 记录悄悄消失。
+  const MAX_AUDIT_ENTRIES = 2e4;
+  if (entries.length > MAX_AUDIT_ENTRIES) {
+    await logServer("warn", "操作记录超出上限，最老的记录将被丢弃", { count: entries.length, keep: MAX_AUDIT_ENTRIES });
+    entries = entries.slice(0, MAX_AUDIT_ENTRIES);
+  }
+  await atomicWriteFile(auditPath(), JSON.stringify({ entries }, null, 2));
 }
 
 /** 审计写入串行化：appendAudit 是「读—改—写」，并发不排队必然丢记录 */
@@ -847,15 +864,27 @@ function uniqueFileName(dir: string, orig: string, allow: string): string {
   return `${stem}-${i}${ext}`;
 }
 
-/** 扫描/删除只在本台账自己的目录里进行，绝不动公共回落目录（那是别人的历史数据） */
-async function sweepDocFiles(kind: string, sid: string): Promise<void> {
+/**
+ * 清理本台账自己目录里的旧文件，绝不动公共回落目录（那是别人的历史数据）。
+ *
+ * 调用时机有讲究：必须在「新文件已经 rename 就位之后」再调（saveDoc），
+ * 不能在新文件就位之前删旧——否则崩溃窗口内旧文件已删、新文件还是隐藏临时名，影像就丢了。
+ * opts.prev / opts.sharedPrev 由调用方在改指针**之前**读好传进来：
+ * 扫的时候若指针已指向新名，旧文件名将再也算不出来，旧文件就成了删不掉的孤儿。
+ */
+async function sweepDocFiles(
+  kind: string,
+  sid: string,
+  opts: { keep?: string; prev?: string; sharedPrev?: boolean; dropPointer?: boolean } = {},
+): Promise<void> {
+  const { keep = "", prev = "", sharedPrev = false, dropPointer = true } = opts;
   for (const d of bookDocDirs(kind)) {
     const files = await listDirSafe(d);
-    const prev = await readPointerName(d, sid);
-    const shared = prev ? await otherPointersUse(d, sid, prev) : false;
     for (const f of files) {
-      if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt`) await rm(join(d, f), { force: true });
-      else if (prev && f === prev && !shared) await rm(join(d, f), { force: true });
+      if (keep && f === keep) continue;
+      if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt`) {
+        if (f !== `${sid}.name.txt` || dropPointer) await rm(join(d, f), { force: true });
+      } else if (prev && f === prev && !sharedPrev) await rm(join(d, f), { force: true });
     }
   }
 }
@@ -876,37 +905,45 @@ export async function saveDoc(
   if (!sid) return fileName || "";
   const ext = extname(fileName || "").slice(0, 8) || ".bin";
   let orig = (fileName || `file${ext}`).replace(/[\\/]/g, "");
+  // 改指针之前先读出旧指针与共享情况（sweep 要用；扫的时候指针已换新名就算不出旧名了）
   const prev = await readPointerName(dir, sid);
   const sharedPrev = prev ? await otherPointersUse(dir, sid, prev) : false;
   if (!opts.replace) orig = uniqueFileName(dir, orig, prev && !sharedPrev ? prev : "");
   const tmp = `${dir}/.${sid}.upload-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  if (kind === "contract" || kind === "expense" || kind === "payout") {
-    const dest = join(dir, orig);
-    try {
-      await writeFile(tmp, buf);
-      await sweepDocFiles(kind, sid);
-      await rename(tmp, dest);
-      await atomicWriteFile(join(dir, `${sid}.name.txt`), orig);
-    } catch (err) {
-      await rm(tmp, { force: true }).catch(() => {});
-      throw err;
-    }
-  } else {
-    try {
-      await writeFile(tmp, buf);
-      await sweepDocFiles(kind, sid);
-      await rename(tmp, join(dir, `${sid}--${orig}`));
-    } catch (err) {
-      await rm(tmp, { force: true }).catch(() => {});
-      throw err;
-    }
+  // 合同/报销/打款三类按「指针 + 原始文件名」存（同名可多人共用，靠指针找回）；
+  // 其余按「id--文件名」前缀存（findDoc 直接前缀匹配）。
+  const pointed = kind === "contract" || kind === "expense" || kind === "payout";
+  const dest = join(dir, pointed ? orig : `${sid}--${orig}`);
+  try {
+    await writeFile(tmp, buf);
+    // 1) 新文件先就位（原子 rename）；此后任何一步崩溃，旧文件/旧指针都还在，不会丢影像
+    await rename(tmp, dest);
+    // 2) 指针指向新文件（同样是原子写）
+    if (pointed) await atomicWriteFile(join(dir, `${sid}.name.txt`), orig);
+    // 3) 新文件就位后才清旧：同名前缀的旧文件、未被其它 id 共享的旧指针目标
+    //    （keep 传文件名——sweep 比较的是 readdir 出来的 basename，传全路径会匹配不上）
+    await sweepDocFiles(kind, sid, { keep: pointed ? orig : `${sid}--${orig}`, prev, sharedPrev, dropPointer: false });
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => {});
+    throw err;
   }
   return orig;
 }
 
 export async function removeDocFile(id: string, kind: string): Promise<void> {
   if (!persistOn()) return;
-  await sweepDocFiles(kind, safeId(id));
+  const sid = safeId(id);
+  if (!sid) return;
+  // 逐目录先读旧指针再清（与 saveDoc 同一口径：删也要删指针指向的那个文件，共享的除外）
+  for (const d of bookDocDirs(kind)) {
+    const prev = await readPointerName(d, sid);
+    const sharedPrev = prev ? await otherPointersUse(d, sid, prev) : false;
+    const files = await listDirSafe(d);
+    for (const f of files) {
+      if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt`) await rm(join(d, f), { force: true });
+      else if (prev && f === prev && !sharedPrev) await rm(join(d, f), { force: true });
+    }
+  }
 }
 
 /** 找到文档所在的目录与文件名（供读取和「历史影像归入本台账」共用同一套匹配口径） */
@@ -1039,6 +1076,9 @@ function contractScanBase(name: string): string {
 async function reconcileContractScans(raw: { contracts?: { id?: string; name?: string; scanFileName?: string }[] }): Promise<boolean> {
   const list = raw?.contracts;
   if (!Array.isArray(list) || !list.length) return false;
+  // 快速路径：没有缺扫描件名的合同时，连目录都不扫（这个函数在每次 readLedger 都被调，
+  // 原来无条件 readdir 约 10 个影像目录，大目录下每次读台账都全扫一遍）
+  if (list.every((c) => c.scanFileName)) return false;
   const dirs = docSearchDirs("contract");
   const all: string[] = [];
   for (const d of dirs)

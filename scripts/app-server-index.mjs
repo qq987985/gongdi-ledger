@@ -168,9 +168,14 @@ function requestBody(req) {
     }
     const chunks = [];
     let size = 0;
+    let rejected = false;
     req.on("data", (c) => {
+      // 已拒绝后再来的数据直接丢弃：否则一个慢速灌数据的连接会让内存一直涨，
+      // 直到 res.finish 后 req.destroy() 才停（拒绝后 chunks 不再接收，但仍受 TCP 背压）
+      if (rejected) return;
       size += c.length;
       if (size > MAX_BODY_BYTES) {
+        rejected = true;
         const e = new Error("请求体太大");
         e.tooLarge = true;
         return reject(e);

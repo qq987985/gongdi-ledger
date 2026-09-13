@@ -333,6 +333,20 @@ test("更新容器：脚本走 Cmd 内联 + 不再自动删除（失败后还能
   assert.match(src, /AutoRemove: false/, "不能再自动删除：否则失败后没有日志可查");
 });
 
+test("更新任务文件必须写在 DATA_DIR 下（容器内挂载点不一定是 /data，写死会静默失败）", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  assert.doesNotMatch(src, /writeFile\("\/data\//, "不能往字面量 /data 写更新任务（自定义挂载点时文件会丢）");
+  assert.match(src, /join\(dataPath, "\.gondi-next\.json"\)/, "任务文件应落在 dataDir() 下");
+  assert.match(src, /DATA_DIR=\$\{dataPath\}/, "更新容器的 DATA_DIR 环境变量要跟本机一致");
+  assert.doesNotMatch(src, /gongdi-updater\.cjs"\), UPDATER_SCRIPT/, "脚本早已改 Cmd 内联，不应再生成 .cjs 文件");
+});
+
+test("更新容器的数据挂载按容器内路径识别，不猜宿主路径", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
+  assert.doesNotMatch(src, /vol1\/1000\/docker/, "以前写死飞牛路径做兜底，换目录就挂错；找不到挂载应只记警告");
+  assert.match(src, /containerPathOf\(b\) === dataPath/, "按「容器内路径 === DATA_DIR」识别数据挂载");
+});
+
 test("更新容器：启动两秒后要检查它是否已经退出（否则只剩一句「已受理」）", async () => {
   const src = await readFile(fileURLToPath(new URL("../src/lib/update.server.ts", import.meta.url)), "utf8");
   assert.match(src, /State\?\.Running === false/);

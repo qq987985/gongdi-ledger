@@ -33,7 +33,7 @@
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。**现在 0 个 todo（已知缺陷已清零）**。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.8.0 起覆盖 139 个用例（139 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.7.17 起覆盖 146 个用例（146 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源，见 tests/ui-guards.test.ts）。
 
@@ -72,7 +72,7 @@
 
 - 更新卡片显示**上次更新结果**（开始/结束时间、成功或失败、失败原因一句话），失败时并说明容器仍是旧版本、数据没动。
 - 卡片下方「查看更新日志」在应用内直接读尾部 120 行：`GET /api/update-log`（登录 + 管理员，只读）返回
-  `data/logs/update.log` 与 `data/.gongdi-update-error.txt`；`readUpdateLog()` 在 `update.server.ts`，超过 64KB 按行截断。
+  `data/logs/update.log` 与 `data/.gondi-update-error.txt`；`readUpdateLog()` 在 `update.server.ts`，超过 64KB 按行截断。
 - 应用侧用 `appendUpdateLog()` 写**同一个** `update.log`（开始更新 / 拉镜像成功或失败 / 已启动更新容器 / 结果）。
   为什么要落盘：容器被替换或重启后内存里的 `updateJobState` 就没了，只有落盘能回答「上次更新到底怎么了」。
 - 教训固化：`dockerReq` 第三参数必须是 `{ body: … }` 或 `{ stream: … }`（1.7.6 前直传容器配置被当成空请求体，
@@ -138,6 +138,23 @@
 - **别让它占住镜像**：已退出的更新容器在 Docker 里仍算「引用了镜像」。`usedImageIdsOf()` 在统计占用时
   跳过「已退出且名为 gongdi-updater」的容器；`pruneLocalImages()` 在清理前先把它删掉。
   否则它会让上一次更新拉到的那份镜像永远删不掉。
+
+## 1.7.17 整体复查修掉的 8 项（要点）
+
+- **一键更新去硬编码**：更新任务写 `join(DATA_DIR, ".gondi-next.json")`（原写字面量 `/data`，自定义挂载点必坏）；
+  更新容器的 `DATA_DIR` 环境变量与数据挂载识别都按本机实际挂载（按「容器内路径 === DATA_DIR」找挂载），
+  找不到只记警告、不再猜飞牛默认路径（换 NAS/目录会挂错）。`.gongdi-updater.cjs` 不再生成
+  （脚本早已改 Cmd 内联，文件是 1.7.10 之前的残留写法）。
+- **`saveDoc` 先就位后清旧**（未闭环清单第 9 条闭环）：临时文件 → rename 就位 → 写指针 → 清旧文件。
+  旧指针/旧文件在新文件就位前一律不动，崩溃不再两头空；`sweepDocFiles` 的 keep 比较的是 basename；
+  共享文件（别的 id 指针还指着）不删。`removeDocFile` 逐目录先读指针再清，与 save 同口径。
+- **读路径降载**：`ensureDirs` 每个「数据目录 × 台账」只做一次（缓存键必须含 DATA_DIR 本身，
+  只按台账 id 会在换 DATA_DIR 后误判已就绪、写盘 ENOENT）；合同扫描件补名在没有缺名合同时直接跳过，
+  不再每次读台账都 readdir 约 10 个影像目录。
+- **审计上限 2000 → 20000**，截断最老记录时 `logServer` 留痕（原静默 slice）。
+- 小项：登录限速表超限自动淘汰；启动器请求体超限拒绝后停止缓冲；Windows 更新 bat 拒绝含
+  `& | < > ^ % ! " ` 等特殊字符的安装目录；文档更正 `.gondi-update-error.txt`（原误写 gongdi）。
+- 完整清单与处理状态见 `docs/审查与报告/全量复查-20260913.md`。
 
 ## 仍待处理（已核实、未修）
 
