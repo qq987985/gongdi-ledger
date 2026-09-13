@@ -11,7 +11,8 @@ import { AttendanceImport, TplLink } from "~/components/excel-import";
 import { DocActions, prepareNamedFile, setDoc, attendanceBase } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear, paymentsInYear } from "~/lib/dates";
-import { hasWork, monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
+import { monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
+import { hasWork } from "~/lib/work";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import type { AttendanceDoc } from "~/lib/types";
 

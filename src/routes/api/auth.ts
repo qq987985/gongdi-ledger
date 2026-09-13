@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ensureAccounts, handleAuthPost } from "~/lib/accounts.server";
-import { persistOn } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
 
 export const Route = createFileRoute("/api/auth")({
   server: {

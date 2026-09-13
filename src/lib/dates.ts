@@ -1,4 +1,4 @@
-import { hasWork } from "./wage";
+import { hasWork } from "./work";
 
 /**
  * 年份是否合法（2000–2100 的整数，与「新增年份」入口的口径一致）。

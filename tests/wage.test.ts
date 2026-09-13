@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { getWageAt, hasWork, monthPay, overtimePay, parseOtRule, round2 } from "../src/lib/wage";
+import { getWageAt, monthPay, overtimePay, parseOtRule, round2 } from "../src/lib/wage";
+import { hasWork } from "../src/lib/work";
 import type { Person } from "../src/lib/types";
 
 function person(over: Partial<Person> = {}): Person {

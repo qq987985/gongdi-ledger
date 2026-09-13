@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { checkSameOrigin, checkUpdate, isPortable, startUpdateJob, updateJobStatus } from "~/lib/update.server";
 import { resolveTenant } from "~/lib/accounts.server";
-import { persistOn } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
 import { logServer } from "~/lib/log.server";
 
 export const Route = createFileRoute("/api/update")({

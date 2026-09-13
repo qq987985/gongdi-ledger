@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { readFile } from "node:fs/promises";
-import { persistOn, findPhotoPath } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
+import { findPhotoPath } from "~/lib/assets.server";
 import { withTenant } from "~/lib/accounts.server";
 
 function kindOf(v: string | null) {

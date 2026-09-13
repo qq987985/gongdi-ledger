@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { persistOn, saveBackup } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
+import { saveBackup } from "~/lib/nas-fs.server";
 import { withTenant } from "~/lib/accounts.server";
 
 export const Route = createFileRoute("/api/backup")({

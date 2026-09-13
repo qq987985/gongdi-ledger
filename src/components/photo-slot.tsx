@@ -6,7 +6,7 @@ import { Badge } from "~/components/ui/badge";
 import { DropSurface } from "~/components/file-pick";
 import { copyPhoto, deletePhoto, downloadPhoto, fileToDataUrl, getPhoto, listPhotoFlags, scanPhotoFolder, setPhoto } from "~/lib/photos";
 import { cn } from "~/lib/utils";
-import { nasEnabled } from "~/lib/nas-sync";
+import { nasEnabled } from "~/lib/nas-flag";
 
 const LABELS: Record<string, string> = {
   id: "身份证-正面",

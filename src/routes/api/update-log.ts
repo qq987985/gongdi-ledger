@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { resolveTenant } from "~/lib/accounts.server";
-import { persistOn } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
 import { readUpdateLog } from "~/lib/update.server";
 
 /**

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ledgerRevisionValue, ledgerUnreadable, persistOn, readLedger, writeLedger } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
+import { ledgerRevisionValue, ledgerUnreadable, readLedger, writeLedger } from "~/lib/nas-fs.server";
 import { isValidYear } from "~/lib/dates";
 import { withTenant } from "~/lib/accounts.server";
 import { logServer } from "~/lib/log.server";

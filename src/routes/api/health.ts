@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { persistOn } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
 
 export const Route = createFileRoute("/api/health")({
   server: {

@@ -12,9 +12,10 @@ import {
   peopleTemplateWb,
   insuranceMemberTemplateWb,
 } from "~/lib/excel";
-import { hasWork } from "~/lib/wage";
+import { hasWork } from "~/lib/work";
 import { writeCenteredXlsx } from "~/lib/xlsx-center";
-import { ledgerUnreadable, persistOn, readLedger } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
+import { ledgerUnreadable, readLedger } from "~/lib/nas-fs.server";
 import { withTenant, type NeedSpec } from "~/lib/accounts.server";
 import { parseDateYmd, dateYear, nextYear } from "~/lib/dates";
 

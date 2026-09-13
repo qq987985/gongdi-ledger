@@ -2,10 +2,10 @@ import { canManageLedger, livePerms } from "./perms";
 import { emptyState, useApp } from "./store";
 import { buildFullWorkbook } from "./excel";
 import { toast } from "sonner";
+import { nasEnabled, setNasEnabled } from "./nas-flag";
 import type { LedgerState } from "./types";
 import { LEDGER_SCHEMA_VERSION } from "./types";
 
-let nas = false;
 let pushFailed = false;
 let pushQueue: Promise<void> = Promise.resolve();
 let ledgerRevision = "";
@@ -26,10 +26,6 @@ export interface PullNasLedgerOptions {
   discardLocal?: boolean;
 }
 
-export function nasEnabled(): boolean {
-  return nas;
-}
-
 function timeoutFetch(url: string, ms: number, init?: RequestInit): Promise<Response> {
   const c = new AbortController();
   const t = window.setTimeout(() => c.abort(), ms);
@@ -39,13 +35,15 @@ function timeoutFetch(url: string, ms: number, init?: RequestInit): Promise<Resp
 }
 
 export async function detectNas(): Promise<boolean> {
+  let on = false;
   try {
     const j = await (await timeoutFetch("/api/health", 2500)).json();
-    nas = Boolean(j.persist);
+    on = Boolean(j.persist);
   } catch {
-    nas = false;
+    on = false;
   }
-  return nas;
+  setNasEnabled(on);
+  return on;
 }
 
 function sliceState(s: LedgerState) {
@@ -82,7 +80,7 @@ async function reportPullFailure(r: Response): Promise<void> {
 }
 
 export async function pullNasLedger(opts: PullNasLedgerOptions = {}): Promise<void> {
-  if (!nas) return;
+  if (!nasEnabled()) return;
   pullDepth += 1;
   try {
     const r = await timeoutFetch("/api/ledger", 4e3);
@@ -171,7 +169,7 @@ async function refreshRevision(): Promise<string | null> {
 }
 
 async function pushNasLedgerNow(force = false): Promise<void> {
-  if (!nas) return;
+  if (!nasEnabled()) return;
   // 正在拉取台账时不要推：此刻内存里可能还是上一本台账的数据，推上去会串本。
   // force=true 仅用于「首次把本机数据升级进空台账」这条明确要走写入的路径。
   if (!force && pullDepth > 0) return;
@@ -269,14 +267,14 @@ export function pushNasLedger(): Promise<void> {
  * 否则切换后 cookie 已指向新台账，这批改动会推错台账或被丢弃。
  */
 export async function flushPendingLedger(): Promise<void> {
-  if (!nas) return;
+  if (!nasEnabled()) return;
   try {
     await pushNasLedger();
   } catch {}
 }
 
 export async function pushNasBackup(): Promise<string> {
-  if (!nas) return "";
+  if (!nasEnabled()) return "";
   const s = useApp.getState();
   const wb = buildFullWorkbook({
     year: s.year,
@@ -295,7 +293,7 @@ export async function pushNasBackup(): Promise<string> {
 
 export async function startNasSync(): Promise<boolean> {
   await detectNas();
-  if (!nas) return false;
+  if (!nasEnabled()) return false;
   // 开机第一次同步：允许把本机旧数据升级进当前台账（服务器上这本还是空的时）
   await pullNasLedger({ seed: true });
   let t: number | undefined;

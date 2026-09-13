@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Copy, Download, Eye, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { nasEnabled } from "~/lib/nas-sync";
+import { nasEnabled } from "~/lib/nas-flag";
 import { logOp } from "~/lib/audit";
 import { PreviewModal, previewKindOf, type PreviewTarget } from "~/components/preview";
 import { copyText } from "~/lib/utils";

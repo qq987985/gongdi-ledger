@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { persistOn, photoFlags } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
+import { photoFlags } from "~/lib/assets.server";
 import { withTenant } from "~/lib/accounts.server";
 
 async function namesFrom(request: Request) {

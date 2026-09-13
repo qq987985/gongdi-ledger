@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { appendAudit, auditUnreadable, persistOn, readAudit, writeAudit } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
+import { appendAudit, auditUnreadable, readAudit, writeAudit } from "~/lib/nas-fs.server";
 import { logServer } from "~/lib/log.server";
 import { resolveTenant, withTenant } from "~/lib/accounts.server";
 

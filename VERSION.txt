@@ -1,7 +1,20 @@
-1.7.17
+1.7.18
 
 
 
+
+[1.7.18] 2026-09-14
+- 结构重构（模块化 / 低耦合专项，见 docs/审查与报告/结构重构-20260914.md），不改任何行为：
+  · 解开 dates ↔ wage 循环依赖：出勤判断 hasWork 抽到独立模块 work.ts。
+  · NAS 开关 nasEnabled 从同步引擎（nas-sync）抽到 nas-flag：照片组件不再需要依赖整个同步引擎。
+  · excel.ts（1320 行）按实体拆成 src/lib/excel/ 目录：common 共享层 +
+    people/attendance/payments/expenses/insurance/contracts/full 七个实体模块，
+    原 excel.ts 只做 re-export，调用方零改动。
+  · nas-fs.server.ts（1184 行）拆成三层：paths.server（数据目录/台账上下文/原子写）、
+    assets.server（照片与文档的查找/写入/删除/归入）、nas-fs.server 只留台账/审计/备份/台账册。
+    依赖单向 paths ← assets ← nas-fs；「影像归入本台账」改为由调用方读出台账传入，
+    影像层不再依赖台账存储。
+- 回归验证：typecheck 通过，146 个测试全绿，70 个 Excel 往返对拍全过，构建通过。
 
 [1.7.17] 2026-09-13
 - 整体复查（见 docs/审查与报告/全量复查-20260913.md）修掉 8 项：

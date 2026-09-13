@@ -59,8 +59,8 @@ export interface MonthPayResult {
  * `"2026-7-1" > "2026-07-31"` —— 那条调薪当月读不到，工资静默回退成当前工资。
  * 解析不了的原样返回（保持旧行为：比较结果自然不匹配 → 回退当前工资）。
  *
- * 这里没有用 `dates.ts` 的 `parseDateYmd`：`dates.ts` 已经 import 了本文件（`hasWork`），
- * 反向 import 会形成循环依赖。
+ * 这里没有用 `dates.ts` 的 `parseDateYmd`：本文件只该被「工资计算」依赖，
+ * 不反向依赖工具模块（hasWork 已抽到 work.ts，dates ↔ wage 的环随之解开）。
  */
 function padFromDate(v: string | undefined): string {
   const m = (v || "").trim().match(/^(\d{4})[-/.年](\d{1,2})[-/.月]?(\d{1,2})日?$/);
@@ -174,16 +174,6 @@ export function monthPay(
     pay: round2(base + ot + meal + allowance - deduction),
     monthly,
   };
-}
-
-export function hasWork(a: MonthAttendance | null | undefined): boolean {
-  if (!a) return false;
-  return (
-    (a.days || 0) > 0 ||
-    (a.otHours || 0) > 0 ||
-    (a.allowance || 0) !== 0 ||
-    (a.deduction || 0) !== 0
-  );
 }
 
 export function round2(n: number): number {

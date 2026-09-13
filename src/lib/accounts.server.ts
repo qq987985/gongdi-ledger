@@ -4,13 +4,11 @@ import { mkdir, readFile, rm, writeFile, rename } from "node:fs/promises";
 import { randomBytes, scryptSync, createHash, timingSafeEqual } from "node:crypto";
 import {
   appendAudit,
-  dataDir,
   listBookIds,
-  persistOn,
   readBookMeta,
-  runWithBook,
   writeBookMeta,
 } from "./nas-fs.server";
+import { dataDir, persistOn, runWithBook } from "./paths.server";
 import { ALL_PERMS, PRESETS, canWriteLedger, canManageLedger, hasPerm, type NeedId } from "./perms";
 import { logServer } from "./log.server";
 import { uid } from "./utils";

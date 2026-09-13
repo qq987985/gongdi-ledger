@@ -19,6 +19,10 @@
 - 台账、账户和审计文件使用临时文件加 `rename` 原子写入。照片和文档上传也必须先写临时文件，再替换正式文件。
 - 自动保存是整本台账快照，必须通过 `pushNasLedger()` 的串行队列，不能直接并发 PUT。
 - 日期必须使用 `src/lib/dates.ts` 的解析函数；金额必须使用 `round2()`；工资计算必须集中在 `src/lib/wage.ts`。
+- 模块结构（1.7.18 起）：`hasWork` 在 `work.ts`（dates/wage 共同依赖，勿再造环）；`nasEnabled` 在
+  `nas-flag.ts`（不要从 nas-sync 引）；Excel 导入导出在 `src/lib/excel/` 目录（common + 七个实体模块，
+  经 `excel.ts` barrel 导出，实体模块不得反向依赖 full）；服务端存储三层单向依赖
+  `paths.server ← assets.server ← nas-fs.server`（影像层要台账内容时由调用方传入，不要 import nas-fs）。
 - 修改数据模型时同步检查 `types.ts`、`store.ts`、`nas-sync.ts`、Excel 导入导出。
 - 提交前跑三道闸：`pnpm run typecheck`、`pnpm test`、`pnpm build`（规范 §2，测试见 §10）。
 

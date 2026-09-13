@@ -14,7 +14,8 @@ import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear, confirmRemoveYear } from "~/lib/dates";
 import { wageLabel, parseOtRule } from "~/lib/wage";
 import { hashPassword, unlockGate, lockGate, authStatus, authOp } from "~/lib/auth";
-import { nasEnabled, pushNasBackup, pullNasLedger, flushPendingLedger } from "~/lib/nas-sync";
+import { pushNasBackup, pullNasLedger, flushPendingLedger } from "~/lib/nas-sync";
+import { nasEnabled } from "~/lib/nas-flag";
 import { clearAllPhotos } from "~/lib/photos";
 import { PERM_GROUPS, PRESETS } from "~/lib/perms";
 

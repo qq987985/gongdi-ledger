@@ -1,4 +1,4 @@
-import { nasEnabled } from "./nas-sync";
+import { nasEnabled } from "./nas-flag";
 import { logOp } from "./audit";
 
 const DB_NAME = "gongdi-photos";

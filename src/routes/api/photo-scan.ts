@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ledgerUnreadable, persistOn, readLedger, scanPhotoFolder } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
+import { ledgerUnreadable, readLedger } from "~/lib/nas-fs.server";
+import { scanPhotoFolder } from "~/lib/assets.server";
 import { withTenant, type NeedSpec } from "~/lib/accounts.server";
 
 /** 一次最多扫描多少个姓名：photoFlags 对每个姓名 × 4 类 × 约 10 个目录做匹配，无上限会被一个请求打满单线程 */

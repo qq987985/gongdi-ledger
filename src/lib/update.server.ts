@@ -1,4 +1,5 @@
-import { dataDir, readVersionText } from "./nas-fs.server";
+import { dataDir } from "./paths.server";
+import { readVersionText } from "./nas-fs.server";
 import { logServer } from "./log.server";
 import { join } from "node:path";
 import { access, appendFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";

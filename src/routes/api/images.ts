@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { hasDockerSock, listLocalImages, pruneLocalImages, staleHelperContainer, checkSameOrigin } from "~/lib/update.server";
 import { resolveTenant } from "~/lib/accounts.server";
-import { persistOn } from "~/lib/nas-fs.server";
+import { persistOn } from "~/lib/paths.server";
 import { logServer } from "~/lib/log.server";
 
 /**
