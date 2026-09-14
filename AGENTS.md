@@ -27,7 +27,8 @@
   更新卡/版本日志/登录与兜底屏）；报销、合同编辑弹窗分别是 `expense-editor.tsx`/`contract-editor.tsx`
   （共享小件在 `expense-bits.tsx`）；设置页卡片在 `src/components/settings/`；一键更新在
   `src/lib/update/`（consts/log/version/docker/updater-script/apply，经 `update.server.ts` barrel 导出；
-  守卫测试按模块扫源码，拆文件时同步改扫描路径）。
+  守卫测试按模块扫源码，拆文件时同步改扫描路径）；保险结算口径在 `src/lib/insurance.ts`
+  （memberDays 夹紧/isActive/prevDayEnd，页面只导入不实现）。
 - 结构三条标准（模块化/可拓展/低耦合）已写进 `开发规范.md` §12（1.7.19 起），
   红线：单文件约 1000 行评估拆分、禁循环依赖（共同依赖下沉第三模块）、存储三层/excel/shell
   三条主线依赖单向；拆分=机械提取+barrel 兼容+守卫扫描路径同步改。
@@ -45,10 +46,11 @@
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。**现在 0 个 todo（已知缺陷已清零）**。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.7.19 起覆盖 161 个用例（161 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.7.20 起覆盖 169 个用例（169 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源，见 tests/ui-guards.test.ts）/
-  工具函数与版本日志解析（1.7.19 起：tests/utils.test.ts、changelog.test.ts、xlsx-center.test.ts）。
+  工具函数与版本日志解析（1.7.19 起：tests/utils.test.ts、changelog.test.ts、xlsx-center.test.ts）/
+  保险结算口径（1.7.20 起：tests/insurance.test.ts，函数在 src/lib/insurance.ts，勿在页面重写）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
 
