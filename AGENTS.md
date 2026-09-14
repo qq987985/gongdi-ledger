@@ -28,6 +28,9 @@
   （共享小件在 `expense-bits.tsx`）；设置页卡片在 `src/components/settings/`；一键更新在
   `src/lib/update/`（consts/log/version/docker/updater-script/apply，经 `update.server.ts` barrel 导出；
   守卫测试按模块扫源码，拆文件时同步改扫描路径）。
+- 结构三条标准（模块化/可拓展/低耦合）已写进 `开发规范.md` §12（1.7.19 起），
+  红线：单文件约 1000 行评估拆分、禁循环依赖（共同依赖下沉第三模块）、存储三层/excel/shell
+  三条主线依赖单向；拆分=机械提取+barrel 兼容+守卫扫描路径同步改。
 - 修改数据模型时同步检查 `types.ts`、`store.ts`、`nas-sync.ts`、Excel 导入导出。
 - 提交前跑三道闸：`pnpm run typecheck`、`pnpm test`、`pnpm build`（规范 §2，测试见 §10）。
 
