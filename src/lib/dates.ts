@@ -1,4 +1,14 @@
-import { hasWork } from "./work";
+import { hasWork, hasContent } from "./work";
+
+/**
+ * 年×12 月 的排序键（唯一实现）。
+ *
+ * 原本在 `src/components/ym-pick.tsx` 里，纯函数逻辑下沉到 lib（§12）：
+ * `ym-pick.tsx` 仍然 re-export 这个名字，页面导入路径不变。
+ */
+export function ymKey(y: number, m: number): number {
+  return y * 12 + m;
+}
 
 /**
  * 年份是否合法（2000–2100 的整数，与「新增年份」入口的口径一致）。
@@ -136,7 +146,9 @@ export function monthStatus(
   month: number,
 ): MonthStatusResult {
   const rows = attendance.filter((a) => a.year === year && a.month === month);
-  const filled = rows.filter((r) => hasWork(r));
+  // 「有内容」= 有工天/加班/补助/扣款，**或只有备注**（与 Excel 月表、年度汇总同口径，
+  // 见 work.ts 的 hasContent）。金额合计仍按逐行原字段相加，纯备注行加的都是 0。
+  const filled = rows.filter((r) => hasContent(r));
   return {
     total: rows.length,
     filled: filled.length,

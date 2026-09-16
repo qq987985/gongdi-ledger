@@ -1,6 +1,7 @@
-export function ymKey(y: number, m: number): number {
-  return y * 12 + m;
-}
+// ymKey 的唯一实现在 src/lib/dates.ts（纯函数下沉到 lib，§12）；
+// 这里 re-export，页面「从 ym-pick 导入」的写法保持不变。
+export { ymKey } from "~/lib/dates";
+import { ymKey } from "~/lib/dates";
 
 export function monthsInRange(
   fromY: number,

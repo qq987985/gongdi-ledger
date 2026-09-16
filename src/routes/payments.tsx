@@ -13,6 +13,21 @@ import { useApp } from "~/lib/store";
 import { dateYear, derivedYears, parseDateYmd, localToday } from "~/lib/dates";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { useGuardedClose } from "~/lib/confirm-close";
+import { ALL_BUCKETS } from "~/lib/buckets";
+import {
+  byOwnerRows,
+  detailSections,
+  filterPayments,
+  paymentSummary,
+  paymentsInRange,
+  printOwnerBuckets,
+  printSummary,
+  printTotals,
+  ownerTotals,
+  sectionTotals,
+  sourceBuckets,
+} from "~/lib/payments-stats";
+import { PaymentSheets } from "~/components/payment-sheets";
 import type { Payment } from "~/lib/types";
 
 function emptyPayment(): Payment {
@@ -30,7 +45,9 @@ function PaymentsPage() {
   const [toY, setToY] = React.useState(year);
   const [toM, setToM] = React.useState(12);
   const [status, setStatus] = React.useState<"all" | "pending" | "paid">("all");
-  const [batch, setBatch] = React.useState("all");
+  const [batch, setBatch] = React.useState(ALL_BUCKETS);
+  const [printOwner, setPrintOwner] = React.useState(ALL_BUCKETS);
+  const [printMode, setPrintMode] = React.useState<"detail" | "summary">("detail");
   const [selected, setSelected] = React.useState<string[]>([]);
   const [editing, setEditing] = React.useState<Payment | null>(null);
   const [creating, setCreating] = React.useState(false);
@@ -47,46 +64,42 @@ function PaymentsPage() {
   const lo = ymKey(span[0].year, span[0].month);
   const hi = ymKey(span[span.length - 1].year, span[span.length - 1].month);
   const label = rangeLabel(fromY, fromM, toY, toM);
-  const ranged = React.useMemo(() => {
-    return payments.filter((p) => {
-      const d = parseDateYmd(p.date) || p.date;
-      if (!d) return true;
-      const y = Number(d.slice(0, 4));
-      const m = Number(d.slice(5, 7));
-      if (!y || !m) return true;
-      const k = ymKey(y, m);
-      return k >= lo && k <= hi;
-    });
-  }, [payments, lo, hi]);
-  const batches = React.useMemo(() => [...new Set(ranged.map((p) => p.source).filter(Boolean))], [ranged]);
-  const filtered = React.useMemo(() => {
-    let list = ranged;
-    if (status === "pending") list = list.filter((p) => !p.date);
-    if (status === "paid") list = list.filter((p) => Boolean(p.date));
-    if (batch !== "all") list = list.filter((p) => p.source === batch);
-    if (q.trim()) {
-      const s = q.trim();
-      list = list.filter((p) => [p.owner, p.receiver].some((x) => (x || "").includes(s)));
-    }
-    return list;
-  }, [ranged, batch, q, status]);
+  // 区间 / 状态+发放方+搜索 / 汇总 / 分组 / 下拉 / 打印 全部走 src/lib/payments-stats.ts 一套口径
+  const ranged = React.useMemo(() => paymentsInRange(payments, lo, hi), [payments, lo, hi]);
+  const batches = React.useMemo(() => sourceBuckets(ranged), [ranged]);
+  const filtered = React.useMemo(() => filterPayments(ranged, { status, source: batch, q }), [ranged, batch, q, status]);
   const pager = usePager("payments", filtered, [status, batch, q, lo, hi].join("|"));
   const pageRows = pager.rows;
   // 汇总口径与当前筛选一致（全部用 filtered），避免待发放按区间、已发放按筛选导致对不上
-  const pendingCount = filtered.filter((p) => !p.date).length;
-  const pendingAmt = filtered.filter((p) => !p.date).reduce((s, p) => s + p.amount, 0);
-  const paidAmt = filtered.filter((p) => p.date).reduce((s, p) => s + p.amount, 0);
-  const total = filtered.reduce((s, p) => s + p.amount, 0);
-  const proxyCount = filtered.filter((p) => p.owner !== p.receiver).length;
+  const { pendingCount, pendingAmt, paidAmt, total, proxyCount } = paymentSummary(filtered);
   const ownerNames = [...new Set([...names, ...payments.map((p) => p.owner)].filter(Boolean))];
   const receiverNames = [...new Set([...names, ...payments.map((p) => p.receiver)].filter(Boolean))];
   const sources = [...new Set(payments.map((p) => p.source).filter(Boolean))];
   const allChecked = pageRows.length > 0 && pageRows.every((p) => selected.includes(p.id));
-  const byOwner = React.useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of filtered.filter((x) => x.date)) m.set(p.owner, (m.get(p.owner) || 0) + p.amount);
-    return [...m.entries()].sort((a, b) => b[1] - a[1]);
-  }, [filtered]);
+  // 分组面板与汇总同一份 filtered：以前这里 `.slice(0, 12)`，超过 12 个人就不显示，
+  // 面板金额之和 < 汇总「已发」金额（用户报的「统计显示不全」）。
+  const byOwner = React.useMemo(() => byOwnerRows(filtered), [filtered]);
+  const printOwners = React.useMemo(() => printOwnerBuckets(filtered), [filtered]);
+  const printOwnerLabel = printOwner === ALL_BUCKETS ? "全部实际收款人" : printOwner || "（未填实际收款人）";
+  const detail = React.useMemo(() => detailSections(filtered, printOwner), [filtered, printOwner]);
+  const summary = React.useMemo(() => printSummary(filtered, printOwner), [filtered, printOwner]);
+  // 打印表尾的「总计」必须与打印出来的行同源：选单人时是该人的合计，不是全部人的
+  const detailTotal = React.useMemo(() => sectionTotals(detail), [detail]);
+  const summaryTotal = React.useMemo(() => ownerTotals(summary), [summary]);
+  const printTotal = printOwner === ALL_BUCKETS ? printTotals(filtered) : (summaryTotal.count ? summaryTotal : detailTotal);
+  function runPrint(kind: "detail" | "summary") {
+    if (!printTotal.count) {
+      toast.error("当前筛选没有可打印的记录（待发放不算已发，只打已填日期的）");
+      return;
+    }
+    if (kind === "detail" && !detail.length) {
+      toast.error("当前筛选没有可打印的记录");
+      return;
+    }
+    // 先落模式再打印（与报销单「打印单张」同一写法：setTimeout 让 DOM 先渲染出打印件）
+    setPrintMode(kind);
+    setTimeout(() => window.print(), 0);
+  }
   function dropIds(ids: string[], hint: string) {
     if (!ids.length) return;
     if (!confirmBatchDelete("发放记录", ids.length, "只删发放流水。人员档案和考勤不动。")) return;
@@ -148,10 +161,10 @@ function PaymentsPage() {
         <div className="flex flex-wrap items-center gap-3">
           <Input className="max-w-xs" placeholder="搜索实际收款人 / 收款人" value={q} onChange={(e) => setQ(e.target.value)} />
           <select className="field-select w-auto max-w-xs" value={batch} onChange={(e) => setBatch(e.target.value)}>
-            <option value="all">全部发放方</option>
+            <option value={ALL_BUCKETS}>全部发放方</option>
             {batches.map((b) => (
-              <option value={b} key={b}>
-                {b}
+              <option value={b.value} key={b.value || "__empty__"}>
+                {b.label}
               </option>
             ))}
           </select>
@@ -175,6 +188,27 @@ function PaymentsPage() {
             {filtered.length} 笔 · 合计 ¥{money(total)}
             {status === "all" ? ` · 待发放 ¥${money(pendingAmt)}` : ""}
             {status === "paid" ? ` · 已发 ¥${money(paidAmt)}` : ""} · 代收 {proxyCount} 笔
+          </span>
+          <span className="flex flex-wrap items-center gap-2">
+            <select
+              className="field-select h-9 w-auto max-w-xs"
+              value={printOwner}
+              onChange={(e) => setPrintOwner(e.target.value)}
+              aria-label="打印的实际收款人"
+            >
+              <option value={ALL_BUCKETS}>全部实际收款人</option>
+              {printOwners.map((b) => (
+                <option value={b.value} key={b.value || "__empty__"}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            <Button size="sm" variant="outline" type="button" onClick={() => runPrint("detail")} disabled={!printTotal.count}>
+              打印明细{detail.length ? `（${printTotal.count} 笔）` : ""}
+            </Button>
+            <Button size="sm" variant="outline" type="button" onClick={() => runPrint("summary")} disabled={!printTotal.count}>
+              打印汇总
+            </Button>
           </span>
           {selected.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -323,25 +357,43 @@ function PaymentsPage() {
         ) : null}
         {byOwner.length > 0 ? (
           <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-            <div className="border-b border-line px-4 py-2 text-xs text-muted">按实际收款人入账（只计已填日期的；待发放不算已发）</div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2">
+              <span className="text-xs text-muted">按实际收款人入账（只计已填日期的；待发放不算已发）</span>
+              <span className="text-xs text-muted">
+                共 {byOwner.length} 人 · {byOwner.reduce((s, r) => s + r.count, 0)} 笔 · ¥{money(byOwner.reduce((s, r) => s + r.amount, 0))}
+              </span>
+            </div>
             <table className="fit-table text-left text-sm">
               <thead className="text-xs text-muted">
                 <tr>
                   <th className="p-3">实际收款人</th>
+                  <th className="p-3">笔数</th>
                   <th className="p-3">已入账金额</th>
+                  <th className="p-3">备注</th>
                 </tr>
               </thead>
               <tbody>
-                {byOwner.slice(0, 12).map(([name, amt]) => (
-                  <tr className="border-t border-line" key={name}>
-                    <td className="p-3">{name}</td>
-                    <td className="p-3 text-right tabular-nums">¥{money(amt)}</td>
+                {byOwner.map((r) => (
+                  <tr className="border-t border-line" key={r.owner || "__empty__"}>
+                    <td className="p-3">{r.owner}</td>
+                    <td className="p-3 tabular-nums text-muted">{r.count}</td>
+                    <td className="p-3 text-right tabular-nums">¥{money(r.amount)}</td>
+                    <td className="p-3 text-xs text-muted">{r.proxyCount ? `含代收 ${r.proxyCount} 笔` : ""}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : null}
+        <PaymentSheets
+          mode={printMode}
+          label={label}
+          filterText={`${batch === ALL_BUCKETS ? "全部发放方" : batch ? `发放方：${batch}` : "发放方：未填发放方"} · ${printOwnerLabel}`}
+          sections={detail}
+          summary={summary}
+          totals={printMode === "detail" ? detailTotal : summaryTotal}
+          printOwner={printOwner}
+        />
       </div>
     </Need>
   );
