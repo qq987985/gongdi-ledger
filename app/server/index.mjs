@@ -5,7 +5,7 @@
  */
 import { createServer } from "node:http";
 import { readFile, stat, mkdir } from "node:fs/promises";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import handler from "./server.js";
@@ -131,8 +131,77 @@ async function nodeFetch(req) {
  */
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 52 * 1024 * 1024);
 
+// ───────────────── 日志开关（与 src/lib/log.server.ts 同一套语义） ─────────────────
+// 启动器在 Docker 里只带 app/（不能 import src/），所以这几个判断在这里复刻了一份最小实现。
+// 应用进程内的日志走 src/lib/log.server.ts（同样认这几个环境变量）。
+
+/** LOG_LEVEL=debug|info|warn|error，默认 info；低于该级别的事件既不写文件也不打 stdout */
+const LOG_LEVELS = ["debug", "info", "warn", "error"];
+const MIN_LOG_LEVEL = (() => {
+  const v = String(process.env.LOG_LEVEL ?? "").trim().toLowerCase();
+  return LOG_LEVELS.includes(v) ? v : "info";
+})();
+function shouldLog(level) {
+  const i = LOG_LEVELS.indexOf(level);
+  return i >= 0 && i >= LOG_LEVELS.indexOf(MIN_LOG_LEVEL);
+}
+
+/** LOG_KEEP_DAYS：data/logs 只保留最近 N 天（默认 14），非法值走默认 */
+function keepDays() {
+  const n = Math.floor(Number(String(process.env.LOG_KEEP_DAYS ?? "").trim()));
+  return Number.isFinite(n) && n >= 1 ? Math.min(n, 3650) : 14;
+}
+
+/** LOG_MAX_MB：单天日志文件上限（默认 8MB），非法值走默认 */
+function maxLogMb() {
+  const n = Number(String(process.env.LOG_MAX_MB ?? "").trim());
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 10240) : 8;
+}
+function maxLogBytes() {
+  return maxLogMb() * 1024 * 1024;
+}
+
+/** SLOW_MS：请求耗时达到该毫秒数就记「慢请求」（默认 2000） */
+const SLOW_MS = (() => {
+  const n = Number(String(process.env.SLOW_MS ?? "").trim());
+  return Number.isFinite(n) && n >= 0 ? n : 2000;
+})();
+
+/** 只删形如 YYYY-MM-DD.log 且超过保留期的文件；update.log 等一律不碰 */
+const DATED_LOG_RE = /^\d{4}-\d{2}-\d{2}\.log$/;
+const PROTECTED_LOGS = ["update.log"];
+function isExpiredLogName(name, today) {
+  if (typeof name !== "string" || PROTECTED_LOGS.includes(name) || !DATED_LOG_RE.test(name)) return false;
+  const day = name.slice(0, 10);
+  if (!Number.isFinite(Date.parse(`${day}T00:00:00.000Z`))) return false;
+  const cutoff = new Date(`${today}T00:00:00.000Z`);
+  cutoff.setUTCDate(cutoff.getUTCDate() - (keepDays() - 1));
+  return day < cutoff.toISOString().slice(0, 10);
+}
+
+const logsDir = join(dataDir, "logs");
+let lastCleanupDay = null;
+/** 当天已写字节数（-1=还没探测过）；capped 表示当天已达上限、停止写文件 */
+let logState = { day: "", bytes: -1, capped: false };
+
+/**
+ * 清理过期日志：只在**进程启动后的第一次写**（lastCleanupDay=null）
+ * 与**每天第一次写**时跑，不放在每次写的热路径上扫目录。
+ */
+function pruneOldLogs(today) {
+  try {
+    for (const name of readdirSync(logsDir)) {
+      if (!isExpiredLogName(name, today)) continue;
+      try {
+        unlinkSync(join(logsDir, name));
+      } catch {}
+    }
+  } catch {}
+}
+
 /** 唯一的日志出口：stdout + data/logs/YYYY-MM-DD.log（NAS 上直接能看） */
 function logLine(level, event, detail = {}) {
+  if (!shouldLog(level)) return;
   let line;
   try {
     line = JSON.stringify({ at: new Date().toISOString(), level, event, ...detail });
@@ -141,14 +210,77 @@ function logLine(level, event, detail = {}) {
   }
   try {
     if (level === "error") console.error(line);
-    else console.warn(line);
+    else if (level === "warn") console.warn(line);
+    else if (level === "debug") console.debug(line);
+    else console.log(line);
   } catch {}
   try {
-    const dir = join(dataDir, "logs");
-    mkdirSync(dir, { recursive: true });
-    appendFileSync(join(dir, `${new Date().toISOString().slice(0, 10)}.log`), `${line}\n`, "utf8");
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    mkdirSync(logsDir, { recursive: true });
+    if (lastCleanupDay !== today) {
+      lastCleanupDay = today;
+      pruneOldLogs(today);
+    }
+    if (logState.day !== today) logState = { day: today, bytes: -1, capped: false };
+    if (logState.capped) return;
+    const file = join(logsDir, `${today}.log`);
+    if (logState.bytes < 0) {
+      try {
+        logState.bytes = statSync(file).size;
+      } catch {
+        logState.bytes = 0;
+      }
+    }
+    const size = Buffer.byteLength(line, "utf8") + 1;
+    const max = maxLogBytes();
+    if (logState.bytes + size > max) {
+      // 单文件上限：停止写当天文件（不轮转 .log.1——那会在 NAS 上再堆一份没人清的日志）
+      // 这条提示是保险丝，不随 LOG_LEVEL 静音（否则文件被撑满时一点痕迹都没有）
+      logState.capped = true;
+      console.warn(
+        JSON.stringify({
+          at: now.toISOString(),
+          level: "warn",
+          event: "当天日志已达上限，今天不再写文件",
+          file,
+          maxMb: maxLogMb(),
+        }),
+      );
+      return;
+    }
+    appendFileSync(file, `${line}\n`, "utf8");
+    logState.bytes += size;
   } catch {}
 }
+
+/** 只取路径：丢掉查询串（台账查询里可能带身份证/关键字）与 Cookie，绝不记录敏感值 */
+function safePath(rawUrl) {
+  try {
+    return new URL(String(rawUrl ?? ""), "http://localhost").pathname;
+  } catch {
+    return "<非法URL>";
+  }
+}
+
+/** 请求收尾观测：5xx 必记一条；耗时达到 SLOW_MS 记「慢请求」（不记请求体/查询串/Cookie） */
+function recordRequest(req, res, startedAt) {
+  try {
+    const ms = Date.now() - startedAt;
+    const status = res.statusCode || 0;
+    const method = req.method || "-";
+    const path = safePath(req.url);
+    if (status >= 500) logLine("error", "HTTP 5xx", { method, path, status, ms });
+    else if (ms >= SLOW_MS) logLine("warn", "慢请求", { method, path, status, ms });
+  } catch {}
+}
+
+// 进程启动时清理一次过期日志（另一次在「每天第一次写日志」时）
+try {
+  mkdirSync(logsDir, { recursive: true });
+  lastCleanupDay = new Date().toISOString().slice(0, 10);
+  pruneOldLogs(lastCleanupDay);
+} catch {}
 
 // 未捕获异常原来只进 stdout：NAS 上按日期翻 data/logs 是空的，事后查不到任何 500
 process.on("uncaughtException", (err) => logLine("error", "未捕获异常", { error: String((err && err.stack) || err) }));
@@ -188,6 +320,9 @@ function requestBody(req) {
 }
 
 const server = createServer(async (req, res) => {
+  // 请求耗时观测：挂在 finish 上，所有出口（正常/413/500/早退）都覆盖，且不阻塞响应
+  const startedAt = Date.now();
+  res.on("finish", () => recordRequest(req, res, startedAt));
   try {
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     const headers = new Headers();
@@ -201,7 +336,7 @@ const server = createServer(async (req, res) => {
         body = await requestBody(req);
       } catch (e) {
         const tooLarge = Boolean(e && e.tooLarge);
-        logLine("warn", "请求体被拒", { url: req.url, tooLarge, error: String((e && e.message) || e) });
+        logLine("warn", "请求体被拒", { path: safePath(req.url), tooLarge, error: String((e && e.message) || e) });
         res.statusCode = tooLarge ? 413 : 400;
         res.setHeader("content-type", "application/json; charset=utf-8");
         res.end(JSON.stringify({ error: tooLarge ? "请求体太大（上限 52MB）" : "读取请求体失败" }));
@@ -263,4 +398,6 @@ const port = Number(process.env.PORT || process.env.NITRO_PORT || 8080);
 const host = process.env.HOST || process.env.NITRO_HOST || "0.0.0.0";
 server.listen(port, host, () => {
   console.log(`➜ Listening on: http://localhost:${port}/ (${host})`);
+  // 启动留痕：NAS 上翻当天日志时能看到「服务什么时候起过」，也顺带证明日志通道是通的
+  logLine("info", "服务启动", { port, host, node: process.version, slowMs: SLOW_MS, logLevel: MIN_LOG_LEVEL });
 });

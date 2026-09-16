@@ -6,6 +6,7 @@ import {
   isDerivedSheet,
   isTotalRow,
   noteSheet,
+  numOr,
   numPick,
   pick,
   readWb,
@@ -40,7 +41,9 @@ export function parseAttendanceSheet(buf: ArrayBuffer | Uint8Array, year: number
     const monthMatch = name.match(/(\d+)\s*月/);
     const rows = sheetRecords(wb.Sheets[name]);
     for (const row of rows) {
-      const month = Number(pick(row, ["月份", "月"])) || (monthMatch ? Number(monthMatch[1]) : 0);
+      // 「月份」列是手填的（可能是「3月」「３」这种），用容错解析：读不出来才回落到 sheet 名里的月份。
+      // 老写法 `Number("3月")` 是 NaN → 静默按 sheet 月份/0 处理，会造出月份错的幽灵考勤。
+      const month = numOr(pick(row, ["月份", "月"]), 0) || (monthMatch ? Number(monthMatch[1]) : 0);
       const sheetYear = name.match(/(20\d{2})/);
       const rec = attFromRow(row, sheetYear ? Number(sheetYear[1]) : y, month);
       if (rec) out.push(rec);

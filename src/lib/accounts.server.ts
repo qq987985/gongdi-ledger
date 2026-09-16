@@ -348,7 +348,15 @@ async function logAuth(
     await runWithBook(bookId, () =>
       appendAudit({ userId: user.id, userName: user.name || user.username, action, detail, module }),
     );
-  } catch {}
+  } catch (e) {
+    // 审计写失败**不能**让登录/建号失败（否则用户被锁在门外），但必须留痕：
+    // 这里原来是空 catch —— 账号操作没记进操作记录时，事后完全查不出原因（架构方案 P0 #2）。
+    void logServer("error", "操作记录写入失败（账户操作）", {
+      action,
+      module,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
 }
 
 export async function handleAuthPost(request: Request): Promise<Response> {

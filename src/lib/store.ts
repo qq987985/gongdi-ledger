@@ -1,12 +1,20 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { uid } from "./utils";
+import { numOrWarn } from "./num";
 import { normalizeIdDate, parseIdCard } from "./idcard";
 import { derivedYears, nextYear, localToday } from "./dates";
 import { normalizeEntry, splitLegacyReceipts, type ContractEntry, type ContractRecord } from "./contracts";
 import { logOp } from "./audit";
 import type { AttendanceDoc, AttendanceRow, Expense, InsuranceMember, InsurancePolicy, LedgerState, Payment, Person } from "./types";
 import { LEDGER_SCHEMA_VERSION } from "./types";
+
+/**
+ * 外部输入数值（表单 / Excel / 旧版持久化数据）统一入口：
+ * 用 num.numOrWarn 容错解析（千分位、货币符号、全角数字、单位后缀、括号负数），
+ * 读不出来才按 0，并 warn 留痕 —— 不再用 `Number(x) || 0` 把「1,200」静默写成 0。
+ */
+const numIn = (v: unknown, what: string): number => numOrWarn(v, 0, what);
 
 export function emptyState(): LedgerState {
   const year = 2026;
@@ -385,8 +393,8 @@ export const useApp = create<AppStore>()(
           .filter((r) => (r.name || "").trim())
           .map((r) => ({
             ...r,
-            allowance: Number(r.allowance) || 0,
-            deduction: Number(r.deduction) || 0,
+            allowance: numIn(r.allowance, "考勤.补助"),
+            deduction: numIn(r.deduction, "考勤.扣款"),
             id: uid(),
             year,
             month,
@@ -488,9 +496,9 @@ export const useApp = create<AppStore>()(
         const next = {
           ...row,
           id: row.id || uid(),
-          qty: Number(row.qty) || 0,
-          price: Number(row.price) || 0,
-          amount: Number(row.amount) || 0,
+          qty: numIn(row.qty, "报销.数量"),
+          price: numIn(row.price, "报销.单价"),
+          amount: numIn(row.amount, "报销.金额"),
           status: (row.status === "已报销" ? "已报销" : "未报销") as Expense["status"],
           payMethod: row.payMethod || "现金",
           voucherId: row.voucherId || "",
@@ -539,9 +547,9 @@ export const useApp = create<AppStore>()(
           buyer: p.buyer || "",
           name: p.name || "",
           company: p.company || "",
-          premiumPerPerson: Number(p.premiumPerPerson) || 0,
-          headcount: Number(p.headcount) || 0,
-          coverage: Number(p.coverage) || 0,
+          premiumPerPerson: numIn(p.premiumPerPerson, "保单.每人保费"),
+          headcount: numIn(p.headcount, "保单.人数"),
+          coverage: numIn(p.coverage, "保单.保额"),
           periodStart: p.periodStart || "",
           periodEnd: p.periodEnd || "",
           linkedPolicyId: p.linkedPolicyId || "",
@@ -616,11 +624,12 @@ export const useApp = create<AppStore>()(
         typeof window === "undefined" ? emptyStorage : localStorage,
       ),
       migrate: (persisted, _version) => {
+        // 旧版 localStorage 里的数据也是「外部输入」：同样容错解析 + 留痕
         const s = persisted as LedgerState;
         const attendance = (s.attendance || []).map((a) => ({
           ...a,
-          allowance: Number(a.allowance) || 0,
-          deduction: Number(a.deduction) || 0,
+          allowance: numIn(a.allowance, "旧数据.考勤补助"),
+          deduction: numIn(a.deduction, "旧数据.考勤扣款"),
         }));
         const contracts = (s.contracts || []).map((c) => ({
           ...c,
@@ -629,9 +638,9 @@ export const useApp = create<AppStore>()(
         const contractEntries = splitLegacyReceipts(
           (s.contractEntries || []).map((e) => ({
             ...e,
-            amountExcl: Number(e.amountExcl) || 0,
-            taxRate: Number(e.taxRate) || 0,
-            workerPay: Number(e.workerPay) || 0,
+            amountExcl: numIn(e.amountExcl, "旧数据.合同不含税金额"),
+            taxRate: numIn(e.taxRate, "旧数据.合同税率"),
+            workerPay: numIn(e.workerPay, "旧数据.合同代付金额"),
             workerPayDate: e.workerPayDate || "",
             payTo: e.payTo === "worker" || e.payTo === "sub" ? e.payTo : "",
             fileName: e.fileName || "",
@@ -642,8 +651,8 @@ export const useApp = create<AppStore>()(
         const people = (s.people || []).map((p) => ({
           ...p,
           payType: p.payType === "month" ? ("month" as const) : ("day" as const),
-          monthWage: Number(p.monthWage) || 0,
-          dailyWage: Number(p.dailyWage) || 0,
+          monthWage: numIn(p.monthWage, "旧数据.月工资"),
+          dailyWage: numIn(p.dailyWage, "旧数据.日工资"),
         }));
         return {
           ...s,

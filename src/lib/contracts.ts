@@ -1,5 +1,6 @@
 import { uid } from "./utils";
 import { round2 } from "./wage";
+import { numOrWarn } from "./num";
 
 export const CONTRACT_STATUSES = [
   "在建",
@@ -118,9 +119,11 @@ export interface ContractEntry {
 }
 
 export function normalizeEntry(e: Partial<ContractEntry> & { kind: EntryKind; contractId: string }): ContractEntry {
-  const amount = Number(e.amount) || 0;
-  const taxRate = Number(e.taxRate) || 0;
-  let amountExcl = Number(e.amountExcl) || 0;
+  // 明细金额可能来自 Excel 单元格 / 表单 / 旧版持久化数据（运行时是字符串），
+  // 用容错解析：读不出来才按 0，并留一条 warn，不再静默把「1,200」写成 0。
+  const amount = numOrWarn(e.amount, 0, "合同明细.金额");
+  const taxRate = numOrWarn(e.taxRate, 0, "合同明细.税率");
+  let amountExcl = numOrWarn(e.amountExcl, 0, "合同明细.不含税金额");
   if (e.kind === "invoice" && amount && !amountExcl && taxRate > 0)
     amountExcl = round2(amount / (1 + taxRate / 100));
   const payTo = e.kind === "receipt" ? (e.payTo === "worker" ? "worker" : "sub") : "";
@@ -132,7 +135,7 @@ export function normalizeEntry(e: Partial<ContractEntry> & { kind: EntryKind; co
     amount,
     amountExcl,
     taxRate,
-    workerPay: Number(e.workerPay) || 0,
+    workerPay: numOrWarn(e.workerPay, 0, "合同明细.代付金额"),
     workerPayDate: e.workerPayDate || "",
     payTo,
     no: e.no || "",
@@ -157,8 +160,8 @@ export function splitLegacyReceipts(
       out.push(e);
       continue;
     }
-    const w = Number(raw.workerPay) || 0;
-    const sub = round2((Number(raw.amount) || 0) - w);
+    const w = numOrWarn(raw.workerPay, 0, "收款.代付金额");
+    const sub = round2(numOrWarn(raw.amount, 0, "收款.金额") - w);
     if (w > 0 && sub > 0) {
       out.push(normalizeEntry({ ...e, payTo: "sub", amount: sub, workerPay: 0 }));
       out.push(

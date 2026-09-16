@@ -6,6 +6,17 @@
 
 ---
 
+## 本地等价命令
+
+CI 跑的四步，本机一条命令等价（`package.json` 的 `check` 脚本）：
+
+```sh
+pnpm run check   # typecheck → test → test:roundtrip → build
+```
+
+另外 `tests/guards-paths.test.ts` 会校验「守卫测试引用的源码路径都存在」——
+拆文件/改名后如果忘了同步守卫路径，`pnpm test` 会直接红（`开发规范.md` §12 末尾有说明）。
+
 ## 1. `check.workflow.yml` —— 质量闸门（**建议尽快启用**）
 
 把本文件内容粘贴成 `.github/workflows/check.yml` 即可。启用后每次 push / PR 会跑：

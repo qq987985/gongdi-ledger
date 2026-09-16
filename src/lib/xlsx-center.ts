@@ -32,7 +32,11 @@ export async function writeCenteredXlsx(wb: XLSX.WorkBook): Promise<ArrayBuffer>
     if (title == null || last < 2) continue;
     try {
       ws.mergeCells(1, 1, 1, last);
-    } catch {}
+    } catch (e) {
+      // A1 已在合并区里时 mergeCells 会抛错——那是重复调用，可忽略；
+      // 其它原因失败会让标题不居中，记一条 warn 留痕，别让版式问题无声无息。
+      if (!ws.getCell(1, 1).isMerged) console.warn("[xlsx] 标题行合并失败，标题可能没居中", e);
+    }
     const cell = ws.getCell(1, 1);
     cell.value = title as ExcelJS.CellValue;
     cell.alignment = { horizontal: "center", vertical: "middle" };

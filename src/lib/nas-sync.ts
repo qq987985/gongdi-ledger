@@ -145,13 +145,37 @@ function applyRemote(fn: () => void): void {
 
 const PUT_HEADERS = (revision: string) => ({ "content-type": "application/json", "if-match": revision });
 
-function putLedger(revision: string): Promise<Response> {
+/**
+ * 浏览器端 gzip。
+ *
+ * 为什么用 CompressionStream：浏览器里没有 node:zlib，整本台账（中等工地 ~1.45MB）每次改动全量上传，
+ * 是最大的一个性能项。旧浏览器 / 非安全上下文里 CompressionStream 可能不存在，**必须**能退回不压缩：
+ * 压缩只是省流量，绝不能因为它不可用就让用户保存失败。
+ * @returns 压缩后的字节；不可用或压缩失败时返回 null（调用方按未压缩上传）
+ */
+async function gzipJson(text: string): Promise<ArrayBuffer | null> {
+  if (typeof CompressionStream !== "function") return null;
+  try {
+    const stream = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"));
+    return await new Response(stream).arrayBuffer();
+  } catch (err) {
+    console.warn("台账压缩失败，改用未压缩上传", err);
+    return null;
+  }
+}
+
+async function putLedger(revision: string): Promise<Response> {
   const body = sliceState(useApp.getState());
+  const json = JSON.stringify(body);
+  const gz = await gzipJson(json);
+  // gz 为 null = 未压缩：不带 content-encoding，服务端按原样解析（向后兼容老客户端/老浏览器）
+  const headers: Record<string, string> = { ...PUT_HEADERS(revision) };
+  if (gz) headers["content-encoding"] = "gzip";
   return fetch("/api/ledger", {
     method: "PUT",
     credentials: "include",
-    headers: PUT_HEADERS(revision),
-    body: JSON.stringify(body),
+    headers,
+    body: gz ?? json,
   });
 }
 

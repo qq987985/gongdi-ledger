@@ -5,7 +5,7 @@
  */
 import { existsSync } from "node:fs";
 import { extname, join, sep } from "node:path";
-import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { logServer } from "./log.server";
 import type { LedgerRead } from "./nas-fs.server";
 import {
@@ -60,6 +60,80 @@ function compactName(s: string): string {
 interface PhotoSearchDir {
   dir: string;
   mixed: boolean;
+}
+
+/**
+ * 目录项缓存（性能）。
+ *
+ * 为什么需要：影像查找是「列目录 + 文件名匹配」，而一次页面渲染会对同一批目录反复 readdir
+ * （photoFlags 是 人数 × 4 类 × ~14 个回落目录；每次 GET 台账还会调 reconcileContractScans 全扫一遍）。
+ * 这里只缓存**目录项列表**（绝不缓存文件内容），键 = 目录绝对路径。
+ *
+ * 失效有三条路，缺一不可：
+ * 1. mtime 校验：每次取用都 stat 目录取 mtimeMs，与缓存记录不同就重新 readdir（外部改动也能看到）；
+ * 2. TTL 兜底：默认 3000ms（`ASSETS_CACHE_MS` 可配，0 = 完全关闭），避免 stat 开销和文件系统
+ *    mtime 精度不足（同一毫秒内两次改动）导致的漏刷；
+ * 3. 主动失效：上传/删除/改名等写路径调用 invalidateDirCache，保证「刚上传的立刻能查到、
+ *    刚删除的立刻查不到」——不依赖 mtime 精度。
+ *
+ * stat 失败（目录不存在/不可读）时**不缓存**并返回空，与 listDirSafe 的既有行为一致。
+ */
+interface DirEntryCache {
+  names: string[];
+  mtimeMs: number;
+  at: number;
+}
+
+const dirEntryCache = new Map<string, DirEntryCache>();
+
+/** 缓存 TTL（ms）：0 = 关闭缓存；未配置/非法值用默认 3000ms */
+export function assetsCacheMs(): number {
+  const raw = process.env.ASSETS_CACHE_MS;
+  if (raw === undefined || raw.trim() === "") return 3000;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 3000;
+}
+
+/** 主动失效某个目录的缓存（写路径必须调用；空串忽略） */
+export function invalidateDirCache(dir: string): void {
+  if (dir) dirEntryCache.delete(dir);
+}
+
+/** 清空全部目录缓存（测试与迁移场景用） */
+export function clearAssetDirCache(): void {
+  dirEntryCache.clear();
+}
+
+/** 当前缓存的目录数（仅用于测试/诊断：TTL=0 时必须恒为 0） */
+export function assetsDirCacheSize(): number {
+  return dirEntryCache.size;
+}
+
+/** 带失效的目录项列表：缓存未过期且目录 mtime 未变时直接返回，否则重新 readdir */
+export async function listDirCached(dir: string): Promise<string[]> {
+  if (!dir) return [];
+  const ttl = assetsCacheMs();
+  if (ttl <= 0) return listDirSafe(dir);
+  let mtimeMs: number;
+  try {
+    mtimeMs = (await stat(dir)).mtimeMs;
+  } catch {
+    // 目录不存在/读不到：不缓存、返回空（与 listDirSafe 一致）
+    dirEntryCache.delete(dir);
+    return [];
+  }
+  const now = Date.now();
+  const hit = dirEntryCache.get(dir);
+  if (hit && hit.mtimeMs === mtimeMs && now - hit.at < ttl) return hit.names;
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    dirEntryCache.delete(dir);
+    return [];
+  }
+  dirEntryCache.set(dir, { names, mtimeMs, at: now });
+  return names;
 }
 
 /**
@@ -187,7 +261,7 @@ async function findPhotoHit(name: string, kind: string): Promise<{ dir: string; 
   const n = safeName(name);
   if (!n) return null;
   for (const loc of photoSearchDirs(kind)) {
-    const hits = (await listDirSafe(loc.dir)).filter((f) => photoFileMatches(f, n, kind, loc.mixed));
+    const hits = (await listDirCached(loc.dir)).filter((f) => photoFileMatches(f, n, kind, loc.mixed));
     if (!hits.length) continue;
     hits.sort((a, b) => photoRank(b, n, kind) - photoRank(a, n, kind));
     return { dir: loc.dir, file: hits[0] };
@@ -241,6 +315,9 @@ export async function savePhoto(name: string, kind: string, dataUrl: string): Pr
     await rm(tmp, { force: true }).catch(() => {});
     throw err;
   }
+  // 写路径主动失效：新照片立即可查、被清掉的旧照片立即不可查（不依赖 mtime 精度）
+  invalidateDirCache(dir);
+  if (hit) invalidateDirCache(hit.dir);
 }
 
 /** 本台账自己的照片目录（写入与删除都只针对这些；公共回落目录不动） */
@@ -287,11 +364,14 @@ export async function removePhoto(name: string, kind: string): Promise<void> {
   const removed = new Set<string>();
   for (const d of bookPhotoDirs(kind)) {
     const files = await listDirSafe(d);
+    let touched = false;
     for (const f of files)
       if (photoFileMatches(f, n, kind, true)) {
         removed.add(f);
         await rm(join(d, f), { force: true });
+        touched = true;
       }
+    if (touched) invalidateDirCache(d);
   }
   // 公共回落目录里「本台账归入过的同名副本」一起清掉，避免删了还显示；
   // 只删同名的，别的台账的历史文件一律不动（原实现会把公共目录里所有同名文件删光）
@@ -299,7 +379,13 @@ export async function removePhoto(name: string, kind: string): Promise<void> {
   for (const loc of photoSearchDirs(kind)) {
     if (isInsideBookAssets(loc.dir)) continue;
     const files = await listDirSafe(loc.dir);
-    for (const f of files) if (removed.has(f) && photoFileMatches(f, n, kind, loc.mixed)) await rm(join(loc.dir, f), { force: true });
+    let touched = false;
+    for (const f of files)
+      if (removed.has(f) && photoFileMatches(f, n, kind, loc.mixed)) {
+        await rm(join(loc.dir, f), { force: true });
+        touched = true;
+      }
+    if (touched) invalidateDirCache(loc.dir);
   }
 }
 
@@ -314,7 +400,8 @@ export async function photoFlags(names: string[]): Promise<Record<string, PhotoF
   const kinds = ["id", "idBack", "bank", "ic"];
   const cache = new Map<string, string[]>();
   async function filesOf(dir: string): Promise<string[]> {
-    if (!cache.has(dir)) cache.set(dir, await listDirSafe(dir));
+    // 本地 map 只是同一次调用内的 memo（省掉重复 stat），真正的缓存与失效在 listDirCached
+    if (!cache.has(dir)) cache.set(dir, await listDirCached(dir));
     return cache.get(dir)!;
   }
   const out: Record<string, PhotoFlagRow> = {};
@@ -354,7 +441,7 @@ export async function scanPhotoFolder(names: string[]): Promise<ScanResult> {
     for (const loc of photoSearchDirs(kind)) {
       if (seen.has(loc.dir)) continue;
       seen.add(loc.dir);
-      const files = (await listDirSafe(loc.dir)).filter((f) => PHOTO_EXT.has(extname(f).toLowerCase()));
+      const files = (await listDirCached(loc.dir)).filter((f) => PHOTO_EXT.has(extname(f).toLowerCase()));
       dirs.push({ dir: loc.dir, kind, count: files.length, samples: files.slice(0, 8) });
     }
   return { flags, matched, dirs, people: names.length };
@@ -410,7 +497,7 @@ async function readPointerName(dir: string, sid: string): Promise<string> {
 
 async function otherPointersUse(dir: string, sid: string, fileName: string): Promise<boolean> {
   if (!fileName) return false;
-  const files = await listDirSafe(dir);
+  const files = await listDirCached(dir);
   for (const f of files) {
     if (!f.endsWith(".name.txt") || f === `${sid}.name.txt`) continue;
     try {
@@ -447,12 +534,20 @@ async function sweepDocFiles(
   const { keep = "", prev = "", sharedPrev = false, dropPointer = true } = opts;
   for (const d of bookDocDirs(kind)) {
     const files = await listDirSafe(d);
+    let touched = false;
     for (const f of files) {
       if (keep && f === keep) continue;
       if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt`) {
-        if (f !== `${sid}.name.txt` || dropPointer) await rm(join(d, f), { force: true });
-      } else if (prev && f === prev && !sharedPrev) await rm(join(d, f), { force: true });
+        if (f !== `${sid}.name.txt` || dropPointer) {
+          await rm(join(d, f), { force: true });
+          touched = true;
+        }
+      } else if (prev && f === prev && !sharedPrev) {
+        await rm(join(d, f), { force: true });
+        touched = true;
+      }
     }
+    if (touched) invalidateDirCache(d);
   }
 }
 
@@ -494,6 +589,8 @@ export async function saveDoc(
     await rm(tmp, { force: true }).catch(() => {});
     throw err;
   }
+  // 写路径主动失效：新文档立即可查（sweep 掉旧文件的目录在 sweepDocFiles 里也已失效）
+  for (const d of bookDocDirs(kind)) invalidateDirCache(d);
   return orig;
 }
 
@@ -506,10 +603,17 @@ export async function removeDocFile(id: string, kind: string): Promise<void> {
     const prev = await readPointerName(d, sid);
     const sharedPrev = prev ? await otherPointersUse(d, sid, prev) : false;
     const files = await listDirSafe(d);
+    let touched = false;
     for (const f of files) {
-      if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt`) await rm(join(d, f), { force: true });
-      else if (prev && f === prev && !sharedPrev) await rm(join(d, f), { force: true });
+      if (f.startsWith(`${sid}--`) || f === `${sid}.name.txt`) {
+        await rm(join(d, f), { force: true });
+        touched = true;
+      } else if (prev && f === prev && !sharedPrev) {
+        await rm(join(d, f), { force: true });
+        touched = true;
+      }
     }
+    if (touched) invalidateDirCache(d);
   }
 }
 
@@ -518,7 +622,7 @@ async function findDocLocation(id: string, kind: string): Promise<{ dir: string;
   if (!persistOn()) return null;
   const sid = safeId(id);
   for (const d of docSearchDirs(kind)) {
-    const files = await listDirSafe(d);
+    const files = await listDirCached(d);
     const hit = files.find((f) => f.startsWith(`${sid}--`));
     if (hit) return { dir: d, file: hit, fileName: hit.slice(`${sid}--`.length) || hit };
     const orig = await readPointerName(d, sid);
@@ -575,6 +679,8 @@ export async function adoptLegacyAssets(led: LedgerRead): Promise<AdoptResult> {
       await mkdir(destDir, { recursive: true });
       await copyFile(join(fromDir, file), dest);
       out.photos += 1;
+      // 归入是写路径：目标目录缓存要失效，否则「刚归入的影像」在 TTL 内查不到
+      invalidateDirCache(destDir);
     } catch (err) {
       await logServer("warn", "影像归入失败", { from: join(fromDir, file), error: String(err) });
     }
@@ -650,7 +756,7 @@ export async function reconcileContractScans(raw: { contracts?: { id?: string; n
   const dirs = docSearchDirs("contract");
   const all: string[] = [];
   for (const d of dirs)
-    for (const f of await listDirSafe(d)) {
+    for (const f of await listDirCached(d)) {
       if (f.endsWith(".name.txt") || f.startsWith(".")) continue;
       all.push(f);
     }

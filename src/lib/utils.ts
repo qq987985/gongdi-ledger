@@ -51,6 +51,8 @@ export function copyText(text: unknown): boolean {
   try {
     ok = document.execCommand("copy");
   } catch {
+    // 可忽略：部分浏览器/非安全上下文里 execCommand 会直接抛错，等于「没复制成功」；
+    // 下面会用 navigator.clipboard 兜底，两路都失败才返回 false。
     ok = false;
   }
   document.body.removeChild(ta);

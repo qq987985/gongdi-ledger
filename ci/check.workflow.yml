@@ -45,6 +45,9 @@ jobs:
       - name: 回归测试
         run: pnpm test
 
+      - name: Excel 往返对拍（导出→导入，70 用例）
+        run: pnpm run test:roundtrip
+
       - name: 构建产物必须与源码同步
         run: |
           pnpm run build

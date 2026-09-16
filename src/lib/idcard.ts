@@ -38,6 +38,8 @@ export function parseIdCard(idCard: string | undefined | null): IdCardInfo {
     const d = String(birth.getDate()).padStart(2, "0");
     return { gender, age, birthday: `${y}-${m}-${d}` };
   } catch {
+    // 可忽略：身份证是外部输入，Date/切片在极端值下可能抛错；解析不出来一律按
+    // 「性别未知、年龄未知」返回，绝不因为一个脏号码让整行人员导入失败。
     return { gender: "", age: null, birthday: "" };
   }
 }

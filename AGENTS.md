@@ -45,8 +45,10 @@
 - 只在 `tests/*.test.ts` 里测纯函数；`tests/register.mjs` 负责给省略扩展名的相对导入补 `.ts`。Node 需 ≥ 22.18。
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。**现在 0 个 todo（已知缺陷已清零）**。
-- CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.8.0 起覆盖 173 个用例（173 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴
+  （1.8.1 已在该模板里补「Excel 往返对拍」一步；本机等价命令 `pnpm run check`）。**目前 GitHub 上仍未创建 check.yml**，
+  所以四道闸只能靠人跑（推 main 触发的只有 docker.yml 的镜像构建与 Release）。
+- 1.8.1 起覆盖 238 个用例（238 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源，见 tests/ui-guards.test.ts）/
   工具函数与版本日志解析（1.7.19 起：tests/utils.test.ts、changelog.test.ts、xlsx-center.test.ts）/
@@ -54,7 +56,11 @@
   全面检查守卫（1.8.0 起：savePhoto 先 rename 就位后清旧、导出月份识别含纯备注行、启动器请求级 500 落盘，
   见 tests/api-guards.test.ts 与 docs/审查与报告/全面检查-20260916.md）/
   版本号规则守卫（1.8.0 起：当前版本 Y≤9、Z≤19，违规直接测试失败，见 tests/changelog.test.ts；
-  发版升版本前必看开发规范 §1——1.6.20 与 1.7.20 两次误发都是「知道规则、发版没核对」）。
+  发版升版本前必看开发规范 §1——1.6.20 与 1.7.20 两次误发都是「知道规则、发版没核对」）/
+  数值解析唯一实现（1.8.1 起：src/lib/num.ts 是全库唯一来源，excel/common.ts 只 re-export，见 tests/num.test.ts）/
+  日志模块（1.8.1 起：级别/保留天数/单文件上限、慢请求与 5xx 观测，见 tests/log-server.test.ts）/
+  台账 gzip 传输与影像目录缓存（1.8.1 起：tests/ledger-transfer.test.ts、tests/assets-cache.test.ts）/
+  守卫路径元测试（1.8.1 起：守卫引用的源码路径必须存在，拆文件忘改会让 pnpm test 直接红，见 tests/guards-paths.test.ts）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
 

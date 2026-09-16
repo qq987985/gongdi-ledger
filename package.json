@@ -1,7 +1,7 @@
 {
   "name": "gongdi-ledger",
   "private": true,
-  "version": "1.8.0",
+  "version": "1.8.1",
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 3000",
@@ -10,21 +10,19 @@
     "postbuild": "node scripts/copy-output.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import ./tests/register.mjs --test \"tests/**/*.test.ts\"",
-    "test:roundtrip": "node --import ./tests/register.mjs tests/roundtrip/run.ts"
+    "test:roundtrip": "node --import ./tests/register.mjs tests/roundtrip/run.ts",
+    "check": "pnpm run typecheck && pnpm test && pnpm run test:roundtrip && pnpm run build"
   },
   "dependencies": {
     "@tanstack/react-router": "latest",
     "@tanstack/react-start": "latest",
-    "archiver": "latest",
     "class-variance-authority": "latest",
     "clsx": "latest",
-    "dayjs": "latest",
     "exceljs": "latest",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
     "sonner": "latest",
-    "srvx": "^0.12.7",
     "tailwind-merge": "latest",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "latest",

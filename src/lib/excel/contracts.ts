@@ -13,8 +13,10 @@ import {
   isDerivedSheet,
   isTotalRow,
   noteSheet,
+  numOr,
   numOut,
   numPick,
+  parseNum,
   parseNumber,
   pick,
   readWb,
@@ -38,7 +40,9 @@ function yesNo(s: string): boolean {
   if (!t) return false;
   if (/^(无|否|没有|n|no|0)$/i.test(t)) return false;
   if (/^(有|是|保证金|押金|y|yes|1)$/i.test(t)) return true;
-  return Number(t) > 0;
+  // 有的表直接在「保证金」列填金额（「1,200」「¥1200」）：能读出正数就算有保证金。
+  // 老写法 `Number("1,200") > 0` 是 false，会把有保证金的合同判成没有。
+  return (parseNum(t) ?? 0) > 0;
 }
 
 function parseTaxMode(s: string): "incl" | "excl" {
@@ -123,7 +127,7 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
         const kind = kindLabel.includes("开票") ? "invoice" : kindLabel.includes("收款") ? "receipt" : "report";
         const project = pick(row, ["项目名称", "项目"]);
         if (!project || isTotalRow(project)) continue;
-        const year = parseNumber(pick(row, ["年份"])) || 0;
+        const year = numOr(pick(row, ["年份"]), 0);
         const c = lookup(project, year, pick(row, ["项目号"]));
         if (!c) continue;
         const taxCol = ["开票税率", "税率"].some((k) => k in row);
@@ -161,7 +165,7 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
       }
       const project = pick(row, ["项目名称"]);
       if (!project || isTotalRow(project)) continue;
-      const year = parseNumber(pick(row, ["年份"])) || 0;
+      const year = numOr(pick(row, ["年份"]), 0);
       const c = lookup(project, year, pick(row, ["项目号"]));
       if (!c) continue;
       const report = numPick(row, ["月报量金额", "月报量", "报量金额"]);

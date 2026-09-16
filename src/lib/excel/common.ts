@@ -1,7 +1,10 @@
 import * as XLSX from "xlsx";
 import { uid } from "../utils";
 import { parseDateYmd } from "../dates";
+import { numOr, numOrWarn, parseNum, parseNumber } from "../num";
 import type { Expense, Payment } from "../types";
+
+export { numOr, numOrWarn, parseNum, parseNumber };
 
 export const { utils } = XLSX;
 
@@ -38,29 +41,12 @@ export function isTotalRow(name: unknown): boolean {
  * 手填数值的容错解析：千分位逗号、货币符号、全角数字/括号、常见单位后缀
  * （元/天/个/次/人/月…）、(300) 括号负数都能读；读不出来返回 0。
  * 注意：必须保留 0 —— 报销金额 0 不能被 `|| 0` 之外的兜底重算掉。
+ *
+ * 实现已提到 `../num.ts`（全库唯一来源），这里只 re-export：
+ * 既有的 `from "./common"` / `from "~/lib/excel"` 导入路径与行为都不变。
+ * 需要区分「读出来是 0」与「读不出来」时用 `parseNum`（读不出来返回 null）。
  */
-export function parseNumber(v: unknown): number {
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  if (v == null) return 0;
-  let s = String(v).trim();
-  if (!s) return 0;
-  // 全角 → 半角：数字、逗号、圆括号、正负号等
-  s = s.replace(/[！-～]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
-  let neg = false;
-  const paren = s.match(/^\((.*)\)$/);
-  if (paren) {
-    neg = true;
-    s = paren[1];
-  }
-  s = s
-    .replace(/[,\s]/g, "")
-    .replace(/[¥￥$]/g, "")
-    .replace(/(元|天|个|次|人|月|年|日|项|台|套|小时|时|%|％)$/, "");
-  if (!s) return 0;
-  const n = Number(s);
-  if (!Number.isFinite(n)) return 0;
-  return neg ? -n : n;
-}
+// 上面 import 进来的名字已由本文件的 `export { … }` 转出去（保持既有导入路径不变）。
 
 export type Row = Record<string, string>;
 
@@ -277,17 +263,27 @@ export function planAttendanceImport<T extends { year?: number; month?: number; 
   });
 }
 
+/**
+ * SheetJS 的类型把样式写成 `s?: any`，但值本身是我们自己塞给它的对齐/字体。
+ * 给个具体形状（而不是 `as any`），免得写错字段名没人发现。
+ */
+interface CellStyle {
+  alignment: { horizontal: "center"; vertical: "center" };
+  font: { bold: true; sz: number };
+}
+
+const titleStyle = (): CellStyle => ({
+  alignment: { horizontal: "center", vertical: "center" },
+  font: { bold: true, sz: 14 },
+});
+
 export function titledSheet(title: string, rows: unknown[][]): XLSX.WorkSheet {
   const cols = Math.max(1, ...rows.map((r) => r.length));
   const aoa = [[title], ...rows];
   const ws = utils.aoa_to_sheet(aoa);
   ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: cols - 1 } }];
   const cell = ws["A1"];
-  if (cell)
-    (cell as any).s = {
-      alignment: { horizontal: "center", vertical: "center" },
-      font: { bold: true, sz: 14 },
-    };
+  if (cell) cell.s = titleStyle();
   return ws;
 }
 
@@ -299,11 +295,7 @@ export function sheetFromAoa(aoa: unknown[][]): XLSX.WorkSheet {
   if (aoa[0] && aoa[0].length === 1) {
     ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: cols - 1 } }];
     const cell = ws["A1"];
-    if (cell)
-      (cell as any).s = {
-        alignment: { horizontal: "center", vertical: "center" },
-        font: { bold: true, sz: 14 },
-      };
+    if (cell) cell.s = titleStyle();
   }
   return ws;
 }
