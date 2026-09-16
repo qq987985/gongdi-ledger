@@ -49,6 +49,29 @@ function safeName(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, "").trim();
 }
 
+/**
+ * 照片写入要求的 data URL 形状（**唯一来源**：savePhoto 与本文件的判定函数共用同一份正则）。
+ *
+ * 名称/内容不合规时 savePhoto 会静默不写盘，路由必须在调用前用下面三个判定函数先返回 400，
+ * 否则「没写盘却回 200」又是一类静默失败（与 §5 上传/下载必须检查结果同源）。
+ */
+const PHOTO_DATA_URL_RE = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/;
+
+/** 名字去掉非法字符后还能落盘吗（空 = savePhoto/removePhoto 会静默跳过） */
+export function photoNameWritable(name: unknown): boolean {
+  return Boolean(safeName(String(name ?? "")));
+}
+
+/** 是「data:image/…;base64,…」形状吗（否则 savePhoto 会静默跳过） */
+export function isWritablePhotoDataUrl(dataUrl: unknown): boolean {
+  return PHOTO_DATA_URL_RE.test(String(dataUrl ?? ""));
+}
+
+/** 文档 id 去掉非法字符后还能落盘吗（空 = saveDoc 会静默跳过） */
+export function docIdWritable(id: unknown): boolean {
+  return Boolean(safeId(String(id ?? "")));
+}
+
 function compactName(s: string): string {
   return s
     .normalize("NFC")
@@ -290,7 +313,7 @@ export async function savePhoto(name: string, kind: string, dataUrl: string): Pr
   await ensureDirs();
   const n = safeName(name);
   if (!n) return;
-  const m = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  const m = dataUrl.match(PHOTO_DATA_URL_RE);
   if (!m) return;
   const mime = m[1];
   const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("bmp") ? "bmp" : "jpg";

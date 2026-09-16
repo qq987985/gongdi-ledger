@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { persistOn } from "~/lib/paths.server";
-import { findDoc, removeDocFile, saveDoc } from "~/lib/assets.server";
+import { docIdWritable, findDoc, removeDocFile, saveDoc } from "~/lib/assets.server";
 import { withTenant } from "~/lib/accounts.server";
 
 function kindOf(v: string | null) {
@@ -76,6 +76,9 @@ export const Route = createFileRoute("/api/doc")({
         const kind = kindOf(String(form.get("kind") || ""));
         const file = form.get("file");
         if (!id || !kind || !(file instanceof File)) return Response.json({ ok: false }, { status: 400 });
+        // id 去掉非法字符后为空时 saveDoc 会静默不写盘：先拒掉，不能让用户以为传上去了
+        if (!docIdWritable(id))
+          return Response.json({ error: "记录编号不合法（去掉非法字符后为空），无法保存文件" }, { status: 400 });
         // 文件名过长会在 rename 时 ENAMETOOLONG（500）
         if (Buffer.byteLength(file.name, "utf8") > 180)
           return Response.json({ error: "文件名太长（最多 180 字节），请改短一点再上传" }, { status: 400 });
