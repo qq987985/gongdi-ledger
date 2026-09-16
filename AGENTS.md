@@ -48,7 +48,7 @@
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴
   （1.8.1 已在该模板里补「Excel 往返对拍」一步；本机等价命令 `pnpm run check`）。**目前 GitHub 上仍未创建 check.yml**，
   所以四道闸只能靠人跑（推 main 触发的只有 docker.yml 的镜像构建与 Release）。
-- 1.8.1 起覆盖 238 个用例（238 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.1 起覆盖 250 个用例（250 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源，见 tests/ui-guards.test.ts）/
   工具函数与版本日志解析（1.7.19 起：tests/utils.test.ts、changelog.test.ts、xlsx-center.test.ts）/
@@ -60,7 +60,9 @@
   数值解析唯一实现（1.8.1 起：src/lib/num.ts 是全库唯一来源，excel/common.ts 只 re-export，见 tests/num.test.ts）/
   日志模块（1.8.1 起：级别/保留天数/单文件上限、慢请求与 5xx 观测，见 tests/log-server.test.ts）/
   台账 gzip 传输与影像目录缓存（1.8.1 起：tests/ledger-transfer.test.ts、tests/assets-cache.test.ts）/
-  守卫路径元测试（1.8.1 起：守卫引用的源码路径必须存在，拆文件忘改会让 pnpm test 直接红，见 tests/guards-paths.test.ts）。
+  守卫路径元测试（1.8.1 起：守卫引用的源码路径必须存在，拆文件忘改会让 pnpm test 直接红，见 tests/guards-paths.test.ts）/
+  写接口输入口径守卫（1.8.1 起：写 handler 必须有鉴权、必须在第一次写盘前有 4xx/重定向拒绝路径、
+  非法 dataUrl/空名字/空 id 必须 400 且不写盘，见 tests/api-input-guards.test.ts）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
 
