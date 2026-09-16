@@ -24,6 +24,9 @@ export function AccountsCard() {
   const [edits, setEdits] = React.useState<Record<string, { name: string; username: string }>>({});
   const [oldPwd, setOldPwd] = React.useState("");
   const [newPwd, setNewPwd] = React.useState("");
+  // 新建类操作请求期间禁用按钮：网络慢时用户会连点两下，
+  // 「新建台账」连点会建出两本同名台账、「新建账户」会重复提交一次（1.8.1）
+  const [creating, setCreating] = React.useState(false);
   async function load() {
     const s = await authStatus();
     setPersist(s.persist);
@@ -151,17 +154,25 @@ export function AccountsCard() {
           />
           <Button
             type="button"
+            disabled={creating}
             onClick={async () => {
-              if (!bookName.trim()) return;
-              await flushPendingLedger();
-              await authOp("createBook", { name: bookName.trim() });
-              setBookName("");
-              await load();
-              await pullNasLedger();
-              toast.success("已新建空台账，可在左侧切换");
+              if (!bookName.trim() || creating) return;
+              setCreating(true);
+              try {
+                await flushPendingLedger();
+                await authOp("createBook", { name: bookName.trim() });
+                setBookName("");
+                await load();
+                await pullNasLedger();
+                toast.success("已新建空台账，可在左侧切换");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "新建台账失败");
+              } finally {
+                setCreating(false);
+              }
             }}
           >
-            新建台账
+            {creating ? "新建中…" : "新建台账"}
           </Button>
         </div>
       </div>
@@ -223,12 +234,15 @@ export function AccountsCard() {
           <Button
             className="mt-3"
             type="button"
+            disabled={creating}
             onClick={async () => {
               try {
                 if (!uUser.trim() || uPwd.trim().length < 8) {
                   toast.error("登录名必填，密码至少 8 位");
                   return;
                 }
+                if (creating) return;
+                setCreating(true);
                 const r = await authOp("createUser", {
                   name: uName || uUser,
                   username: uUser,
@@ -243,10 +257,12 @@ export function AccountsCard() {
                 toast.success(joinCur ? "账户已建，并加入当前台账" : "账户已建，还没有台账，需要在成员里加");
               } catch (err: any) {
                 toast.error(err instanceof Error ? err.message : "新建失败");
+              } finally {
+                setCreating(false);
               }
             }}
           >
-            新建账户
+            {creating ? "新建中…" : "新建账户"}
           </Button>
           {users.length ? (
             <ul className="mt-4 space-y-3">

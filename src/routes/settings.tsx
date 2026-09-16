@@ -31,6 +31,10 @@ function SettingsPage() {
   const [clearPwd, setClearPwd] = React.useState("");
   const [showClearConfirm, setShowClearConfirm] = React.useState(false);
   const [isAdmin, setIsAdmin] = React.useState(false);
+  // 备份 / 影像归入都是「点一下、等几秒」的操作：请求期间禁用按钮，
+  // 否则连点两下会生成两份备份、或同时跑两遍归入（1.8.1）
+  const [backingUp, setBackingUp] = React.useState(false);
+  const [adopting, setAdopting] = React.useState(false);
   
   React.useEffect(() => {
     authStatus().then((s) => setIsAdmin(s.user?.role === "admin"));
@@ -153,16 +157,21 @@ function SettingsPage() {
             {nasEnabled() ? (
               <Button
                 type="button"
+                disabled={backingUp}
                 onClick={async () => {
+                  if (backingUp) return;
+                  setBackingUp(true);
                   try {
                     const fname = await pushNasBackup();
                     toast.success(`已备份到 data/backups/${fname}`);
                   } catch {
                     toast.error("备份失败");
+                  } finally {
+                    setBackingUp(false);
                   }
                 }}
               >
-                立即备份 Excel
+                {backingUp ? "备份中…" : "立即备份 Excel"}
               </Button>
             ) : null}
             {isAdmin && (
@@ -244,8 +253,11 @@ function SettingsPage() {
             variant="outline"
             size="sm"
             type="button"
+            disabled={adopting}
             onClick={async () => {
+              if (adopting) return;
               if (!confirm("把历史公共目录里的影像按姓名/合同归入本台账？\n\n不会删除、不会覆盖已有文件。")) return;
+              setAdopting(true);
               try {
                 const r = await fetch("/api/photo-adopt", { method: "POST", credentials: "include" });
                 const j = await r.json();
@@ -253,10 +265,12 @@ function SettingsPage() {
                 toast.success(`已归入照片 ${j.photos || 0} 个、文档 ${j.docs || 0} 个${j.skipped ? `，跳过已存在 ${j.skipped} 个` : ""}`);
               } catch (e) {
                 toast.error(e instanceof Error ? e.message : "归入失败");
+              } finally {
+                setAdopting(false);
               }
             }}
           >
-            开始归入
+            {adopting ? "归入中…" : "开始归入"}
           </Button>
         </section>
       </Can>

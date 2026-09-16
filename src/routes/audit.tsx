@@ -201,7 +201,14 @@ function AuditPage() {
                             variant="ghost"
                             type="button"
                             onClick={async () => {
-                              if (!confirm("删除这条记录？")) return;
+                              // 确认框要写清「删哪条、删了会怎样」：列表里每行都有删除按钮，
+                              // 只问一句「删除这条记录？」极易删错行，而操作记录是追溯谁改了什么的唯一凭据
+                              if (
+                                !confirm(
+                                  `删除这条操作记录？\n\n${fmt(e.at)}  ${e.userName}  ${e.action}\n\n删除后无法恢复，之后查不到这次操作。`,
+                                )
+                              )
+                                return;
                               const r = await fetch(`/api/audit?id=${encodeURIComponent(e.id)}`, { method: "DELETE", credentials: "include" });
                               if (!r.ok) {
                                 toast.error(`删除失败（${r.status}）`);
