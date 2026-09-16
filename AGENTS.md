@@ -40,6 +40,9 @@
   `table-footer-group` 会让整单合计在**每一页**页脚重复，半页下面印整单合计会被当成这页小计）；
   ② 单据抬头（保单号 / 合同编号 / 报销人）要写进 `<thead>` 第一行 —— 表头跨页重复，用户
   **拆开分发**时续页才认得出是哪张单。`开发规范.md` §6.6 与 `tests/ui-guards.test.ts` 同步约束。
+- **量打印分页只能在真 PDF 上量**（`ci/mobile-print-check.mjs pages` + `ci/print-pdf.mjs`）：真实打印的
+  内容宽是 703px（186mm），比屏幕按 A4 宽 794px 量的更窄 ⇒ 换行更多、纸面更高；只看屏幕 DOM 高度会误判
+  「1 页装得下」（1.8.13 踩过）。
 - 提交前跑三道闸：`pnpm run typecheck`、`pnpm test`、`pnpm build`（规范 §2，测试见 §10）。
 
 ## 回归测试与质量闸门（2026-09-10 起）
@@ -57,7 +60,7 @@
   **`check.yml` 已于 2026-09-16 建到 GitHub（1.8.10 起生效，推送 main / PR 都会跑 typecheck → test →
   test:roundtrip → build + `app/VERSION.txt` 一致性）**；本地 `git log origin/main` 里能看到它
   （本地 `git pull` 之前看不到文件，属正常）。
-- 1.8.12 起覆盖 **390 个用例（390 pass + 0 todo）**（1.8.11 时是 389、1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.13 起覆盖 **392 个用例（392 pass + 0 todo）**（1.8.12 时是 390、1.8.11 时是 389、1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源；
   1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外；
@@ -67,8 +70,11 @@
   **1.8.11 再加两条**：`tfoot` 必须 `display: table-row-group`（合计只在最后一页印一次）、
   保险 / 合同 / 报销三个打印件的单据抬头必须在 `<thead>` 里（跨页重复、拆开也认得出）；
   **1.8.12 再加一条**：「一条 = 一个人 / 一份单据」（发放明细里每个人的整节、合同对账单里每份合同）
-  必须带 `.print-doc`（整条放得下就并排塞满、放不下才整条另起一页，**不许** `break-before: page`），
-  见 tests/ui-guards.test.ts 与 `src/styles.css` 的「打印分页协议」）/
+  必须带 `.print-doc`（整条放得下就并排塞满、放不下才整条另起一页，**不许** `break-before: page`）；
+  **1.8.13 再加两条**：打印态必须**压行高**（`th/td` 纵向 1px）与**纸面留白**
+  （`article { padding: 2mm 3mm }` + 尾部段落 `margin-top: 1mm` 且 `break-before: avoid`），
+  且「无日期的待发放记录…」那句提示只在真有待发放时才印 —— 这几处正是「第 2 页只印一行、留白 243mm」
+  的来源；见 tests/ui-guards.test.ts 与 `src/styles.css` 的「打印分页协议」）/
   工具函数与版本日志解析（1.7.19 起：tests/utils.test.ts、changelog.test.ts、xlsx-center.test.ts）/
   保险结算口径（1.7.20 起：tests/insurance.test.ts，函数在 src/lib/insurance.ts，勿在页面重写）/
   全面检查守卫（1.8.0 起：savePhoto 先 rename 就位后清旧、导出月份识别含纯备注行、启动器请求级 500 落盘，

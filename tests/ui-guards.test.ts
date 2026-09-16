@@ -466,3 +466,35 @@ test("约定：一条 = 一个人 / 一份单据，必须带 .print-doc（整条
   assert.equal(/\.print-only\s+\.print-doc[^{}]*\{[^{}]*break-inside\s*:\s*avoid/.test(goodCss), true);
   assert.equal(/\.print-doc[^{}]*\{[^{}]*break-before\s*:\s*page/.test(badCss), true, "坏样本（强制换页）必须能被抓到");
 });
+
+test("约定：打印态必须压行高与纸面留白（1.8.13：屏幕上舒服的留白会把最后一行挤到第 2 页）", async () => {
+  const printCss = printMediaBlocks(await readFile(repo("src/styles.css"), "utf8")).join("\n");
+  assert.match(
+    printCss,
+    /\.print-only\s+table\s+th[\s\S]{0,80}\.print-only\s+table\s+td[\s\S]{0,160}padding-top\s*:\s*1px/,
+    "打印态表格单元格必须压到 `padding-top/bottom: 1px`：屏幕上每格上下 4px，31 行的汇总表光行内留白就吃掉 ~33mm，正好把尾部挤出第一页",
+  );
+  assert.match(
+    printCss,
+    /\.print-only\s+article[^{}]*\{[^{}]*padding\s*:\s*2mm/,
+    "打印件 article 必须 `padding: 2mm …`：@page 已有 12mm 页边距，单据再加一层 p-4 会把尾部挤走",
+  );
+  assert.match(
+    printCss,
+    /\.print-only\s+article\s*>\s*p:last-child[^{}]*\{[^{}]*break-before\s*:\s*avoid/,
+    "尾部「打印日期」必须 `break-before: avoid`：不许它单独占一页",
+  );
+  // 坏样本自检：回到「每格上下 4px、article p-4」必须被抓出来
+  const bad = "@media print { .print-only table td { padding-top: 4px; padding-bottom: 4px; } .print-only article { padding: 1rem; } }";
+  assert.equal(/padding-top\s*:\s*1px/.test(bad), false, "坏样本（4px 行高留白）必须判不合格");
+  assert.equal(/\.print-only\s+article[^{}]*\{[^{}]*padding\s*:\s*2mm/.test(bad), false, "坏样本（article p-4）必须判不合格");
+});
+
+test("约定：没有待发放记录时不印「无日期的待发放记录按当前年份显示」那一行（它就是被挤到第 2 页的临界量）", async () => {
+  const text = stripComments(await readFile(repo("src/components/payment-sheets.tsx"), "utf8"));
+  assert.match(
+    text,
+    /breakdown\.pendingCount\s*\?[\s\S]{0,200}无日期的待发放记录按当前年份/,
+    "那句提示必须用 `breakdown.pendingCount` 包起来：没有待发放记录时它纯占一行（实测正好把「打印日期」挤到第 2 页）",
+  );
+});

@@ -74,7 +74,10 @@ export function PaymentSheets({
             {label} · {filterText}
           </div>
           <div className="mt-0.5 text-[11px]">口径：{printCaliberNote(mode)}</div>
-          <div className="mt-0.5 text-[11px]">无日期的待发放记录按当前年份（{pendingYear}）显示。</div>
+          {/* 1.8.13：没有待发放记录时不印这句 —— 它占一行，正好是「最后一行被挤到第 2 页」的临界量 */}
+          {breakdown.pendingCount ? (
+            <div className="mt-0.5 text-[11px]">无日期的待发放记录按当前年份（{pendingYear}）显示。</div>
+          ) : null}
           <div className="mt-1 text-[11px] font-medium">
             已发 {breakdown.paidCount} 笔 ¥{money(breakdown.paidAmt)}（{PROXY_INLINE_LABEL} {breakdown.proxyCount} 笔 ¥
             {money(breakdown.proxyAmt)}） · 待发放 {breakdown.pendingCount} 笔 ¥{money(breakdown.pendingAmt)} · 合计{" "}
