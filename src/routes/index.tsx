@@ -16,7 +16,7 @@ function Home() {
   // 应发合计/已发/待发/代收/已录月份与考勤页年度汇总走同一个纯函数（见 lib/attendance-summary.ts）：
   // 以前这里各写一段循环，无日期旧发放的归属年份与「有内容」判定都和考勤页不同，数字会对不上。
   const summary = summarizeYear({ people, attendance, payments, year, fallbackYear: fallbackPayYear(store) });
-  const { should, paid, pendingAmt, proxyCount: proxy, filledMonths: monthsFilled } = summary;
+  const { should, paid, proxyAmt, pendingAmt, proxyCount: proxy, filledMonths: monthsFilled } = summary;
   const teams = [...new Set(people.map((p) => p.team).filter(Boolean))];
   const rows = teamRows(people);
   const overPeople = people.filter((p) => overAgeLabel(p.age, p.gender) === "超龄");
@@ -37,6 +37,7 @@ function Home() {
       should={should}
       noWage={noWage}
       paid={paid}
+      proxyAmt={proxyAmt}
       pendingAmt={pendingAmt}
       proxy={proxy}
       contractPay={contractPay}
@@ -55,6 +56,7 @@ function Home() {
       should={should}
       noWage={noWage}
       paid={paid}
+      proxyAmt={proxyAmt}
       pendingAmt={pendingAmt}
       proxy={proxy}
       contractPay={contractPay}
@@ -76,6 +78,8 @@ type HomeProps = {
   should: number;
   noWage: number;
   paid: number;
+  /** 代发（代收）金额：有发放日期但收款人非本人 —— 不进「已发放」KPI（决策四） */
+  proxyAmt: number;
   pendingAmt: number;
   proxy: number;
   contractPay: number;
@@ -86,9 +90,20 @@ type HomeProps = {
   onYear: (y: number) => void;
 };
 
+/**
+ * 「已发放」KPI 的副标题（决策一 + 决策四）：这笔数字只算**本人收款**，
+ * 代发（代收）与待发放都单列出来，三维修互不重叠、不做减法，别让人对着差额找错账。
+ */
+function paidHint(p: HomeProps): string {
+  const bits: string[] = [];
+  if (p.proxyAmt) bits.push(`代发 ¥${money(p.proxyAmt)}（${p.proxy} 笔）`);
+  else if (p.proxy) bits.push(`代发 ${p.proxy} 笔`);
+  if (p.pendingAmt) bits.push(`待发 ¥${money(p.pendingAmt)}`);
+  return bits.length ? `${bits.join(" · ")} · 只算本人收款` : "只算本人收款";
+}
+
 /* ＝＝ 新版（仪表盘）总览 ＝＝ */
-function NewHome(p: HomeProps) {
-  const unavailable = p.monthsFilled < 12 ? `${12 - p.monthsFilled} 个月没录` : "全年录齐";
+function NewHome(p: HomeProps) {  const unavailable = p.monthsFilled < 12 ? `${12 - p.monthsFilled} 个月没录` : "全年录齐";
   const heroes = [
     { to: "/attendance", label: "📅 录入考勤" },
     { to: "/payments", label: "💰 新增发放" },
@@ -133,9 +148,13 @@ function NewHome(p: HomeProps) {
         <Kpi label="在册人员" value={String(p.peopleCount)} hint={`${p.teamCount} 个班组 · 各年共用`} icon="👥" tone="bg-pink-100 text-pink-600" />
         <Kpi label="已录月份" value={`${p.monthsFilled} / 12`} hint={`${p.year} 年`} icon="📆" tone="bg-cyan-100 text-cyan-600" />
         <Kpi label="应发合计" value={`¥${money(p.should)}`} hint={p.noWage ? `${p.noWage} 人未设工资` : "已按规则计算"} icon="¥" tone="bg-green-100 text-green-600" />
-        <Kpi label="已发放" value={`¥${money(p.paid)}`} hint={p.pendingAmt ? `待发 ¥${money(p.pendingAmt)} · 代收 ${p.proxy} 笔` : `代收 ${p.proxy} 笔`} icon="💸" tone="bg-orange-100 text-orange-600" />
+        <Kpi label="已发放" value={`¥${money(p.paid)}`} hint={paidHint(p)} icon="💸" tone="bg-orange-100 text-orange-600" />
         <Kpi label={`${p.year} 年应收`} value={`¥${money(p.contractPay)}`} hint="含税报量 × 合同比例" icon="📄" tone="bg-violet-100 text-violet-600" />
       </section>
+
+      {p.pendingAmt ? (
+        <p className="text-xs text-subtle">无日期的待发放记录按当前年份（{p.year}）显示，不计入「已发放」。</p>
+      ) : null}
 
       {p.noWage > 0 ? (
         <section className="rounded-xl border border-warn-bg bg-warn-bg px-4 py-3 text-sm text-warn">
@@ -209,8 +228,11 @@ function ClassicHome(p: HomeProps) {
         <Stat label="在册人员" value={String(p.peopleCount)} hint={`${p.teamCount} 个班组 · 各年共用`} />
         <Stat label="已录月份" value={`${p.monthsFilled} / 12`} hint={`${p.year} 年`} />
         <Stat label="应发合计" value={`¥${money(p.should)}`} hint={p.noWage ? `${p.noWage} 人未设工资` : "已按规则计算"} />
-        <Stat label="已发放" value={`¥${money(p.paid)}`} hint={p.pendingAmt ? `待发放 ¥${money(p.pendingAmt)} · 代收 ${p.proxy} 笔` : `代收 ${p.proxy} 笔 · 记在实际收款人头上`} />
+        <Stat label="已发放" value={`¥${money(p.paid)}`} hint={paidHint(p)} />
       </section>
+      {p.pendingAmt ? (
+        <p className="text-xs text-subtle">无日期的待发放记录按当前年份（{p.year}）显示，不计入「已发放」。</p>
+      ) : null}
       <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Stat label={`${p.year} 年应收`} value={`¥${money(p.contractPay)}`} hint="含税报量 × 合同比例" />
       </section>

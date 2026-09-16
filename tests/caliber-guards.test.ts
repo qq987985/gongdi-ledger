@@ -76,13 +76,42 @@ test("守卫：筛选下拉选项必须走 lib/buckets（不许再用 map(...).f
 
 test("守卫：发放页的统计与打印只能来自 payments-stats（画面与纸张不许两套数）", async () => {
   const page = await srcCode("src/routes/payments.tsx");
-  for (const fn of ["paymentSummary(", "byOwnerRows(", "sourceBuckets(", "detailSections(", "printSummary("]) {
+  for (const fn of ["paymentSummary(", "panelRows(", "sourceBuckets(", "detailSections(", "printSummary(", "printTotals("]) {
     assert.match(page, new RegExp(fn.replace("(", "\\(")), `发放页要用 ${fn})`);
   }
   assert.equal(page.includes(".slice(0, 12)"), false, "分组面板不许再截断前 12 人（会与汇总对不上）");
   const sheets = await srcCode("src/components/payment-sheets.tsx");
   assert.match(sheets, /from "~\/lib\/payments-stats"/, "打印件必须吃 lib/payments-stats 的类型/数据");
   assert.equal(sheets.includes(".reduce("), false, "打印件不许自己再算一遍合计（合计只能来自纯函数传进来的 totals）");
+  assert.match(sheets, /PRINT_CALIBER_NOTE/, "打印件表头口径小字必须引唯一实现（决策一 / 决策四）");
+});
+
+test("守卫：「本人收款」判定与组合险标注各只有一份实现（1.8.5 决策三 / 决策四）", async () => {
+  const payLib = await src("src/lib/payments-stats.ts");
+  assert.equal((payLib.match(/export function isPaidSelf/g) || []).length, 1, "isPaidSelf 只能定义一次");
+  // 调用方：发放统计、年度汇总、工资条打印（三处必须同一判定）
+  const users: [string, RegExp][] = [
+    ["src/lib/payments-stats.ts", /rows\.filter\(isPaidSelf\)/],
+    ["src/lib/attendance-summary.ts", /import \{ isPaidSelf/],
+    ["src/routes/query.tsx", /filter\(isPaidSelf\)/],
+  ];
+  for (const [file, re] of users) {
+    assert.match(await src(file), re, `${file} 必须走 isPaidSelf（不许再写 owner === receiver 的第二套）`);
+  }
+  // 页面上不许再就地写「已发 = owner === receiver」
+  for (const file of ["src/routes/payments.tsx", "src/routes/attendance.tsx", "src/routes/index.tsx"]) {
+    assert.equal(/owner === receiver/.test(await srcCode(file)), false, `${file} 里又出现了 owner === receiver 的就地判定`);
+  }
+  const insLib = await src("src/lib/insurance.ts");
+  assert.equal((insLib.match(/export const COMBINED_POLICY_NOTE/g) || []).length, 1, "组合险标注只能定义一次");
+  const insPage = await src("src/routes/insurance.tsx");
+  assert.equal(
+    (insPage.match(/COMBINED_POLICY_NOTE/g) || []).length >= 2,
+    true,
+    "保险页屏幕 + 打印件都要带这句组合险标注（决策三）",
+  );
+  assert.match(await src("src/lib/insurance-stats.ts"), /export function linkedPolicyTargets/, "互挂目标唯一实现");
+  assert.match(insPage, /linkedPolicyTargets\(/, "页面 syncLinked 走唯一实现");
 });
 
 test("守卫：总览 KPI 与考勤年度汇总共用 lib/attendance-summary（口径构造上一致）", async () => {

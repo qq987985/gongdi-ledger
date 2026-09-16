@@ -96,7 +96,7 @@ function YearOverview({
   const { year, people, attendance, attendanceDocs = [], payments } = store;
   // 年度汇总与总览 KPI 走同一个纯函数（lib/attendance-summary.ts）：应发/已发/未发、
   // 「有内容」判定（含纯备注行）、无日期旧发放的归属年份都只有一套口径。
-  const { rows, filledMonths, offRowsPaid } = summarizeYear({
+  const { rows, filledMonths, offRowsPaid, paid, proxyAmt, pendingAmt } = summarizeYear({
     people,
     attendance,
     payments,
@@ -104,6 +104,8 @@ function YearOverview({
     fallbackYear: fallbackPayYear(store),
   });
   const personRows = rows.map((r) => ({ p: r.person, ...r }));
+  // 「本年无考勤记录」的补行只进工资汇总（决策二），工天加班表仍只列有出勤的人
+  const workRows = personRows.filter((r) => !r.noAttendance);
   const [sumTab, setSumTab] = React.useState<"pay" | "work">("pay");
   return (
     <div className="space-y-6">
@@ -124,6 +126,11 @@ function YearOverview({
       </header>
       <p className="text-sm text-muted">
         已录入 {filledMonths} / 12 个月 · 在册 {people.length} 人
+      </p>
+      <p className="text-xs text-muted">
+        本年已发（本人收款）¥{money(paid)}
+        {proxyAmt ? ` · 代发（代收）¥${money(proxyAmt)}` : ""}
+        {pendingAmt ? ` · 待发放 ¥${money(pendingAmt)}` : ""}。无日期的待发放记录按当前年份（{year}）显示，不计入已发。
       </p>
       {offRowsPaid.count > 0 ? (
         <p className="text-xs text-warn">
@@ -169,7 +176,7 @@ function YearOverview({
             </h2>
             <p className="mt-0.5 text-xs text-muted">
               {sumTab === "pay"
-                ? "只列出本年有出勤的人。没上班的不显示。加班规则没填时加班费按 0。"
+                ? "只列出本年有出勤的人；本年收到「本人收款」却没有考勤记录的，补一行并在备注注明。加班规则没填时加班费按 0。"
                 : "每月工天和加班小时。只显示本年有出勤的人。"}
             </p>
           </div>
@@ -205,12 +212,13 @@ function YearOverview({
                   <th className="p-3">全年</th>
                   <th className="p-3">已发</th>
                   <th className="p-3">未发</th>
+                  <th className="p-3">备注</th>
                 </tr>
               </thead>
               <tbody>
                 {personRows.length === 0 ? (
                   <tr>
-                    <td colSpan={16} className="py-8 text-center text-sm text-muted">
+                    <td colSpan={17} className="py-8 text-center text-sm text-muted">
                       这一年还没有人出勤。点上面某个月，把实际上班的人加进去。
                     </td>
                   </tr>
@@ -227,6 +235,7 @@ function YearOverview({
                     <td className="p-3 text-right font-medium tabular-nums">{money(r.yearPayAmt)}</td>
                     <td className="p-3 text-right tabular-nums">{money(r.paid)}</td>
                     <td className="p-3 text-right tabular-nums">{money(r.unpaid)}</td>
+                    <td className="p-3 text-xs text-warn">{r.remark}</td>
                   </tr>
                 ))}
               </tbody>
@@ -249,14 +258,14 @@ function YearOverview({
                 </tr>
               </thead>
               <tbody>
-                {personRows.length === 0 ? (
+                {workRows.length === 0 ? (
                   <tr>
                     <td colSpan={16} className="py-8 text-center text-sm text-muted">
                       这一年还没有人出勤。点上面某个月，把实际上班的人加进去。
                     </td>
                   </tr>
                 ) : null}
-                {personRows.map((r) => (
+                {workRows.map((r) => (
                   <tr className="border-t border-line" key={r.p.id}>
                     <td className="p-3 font-medium">{r.p.name}</td>
                     <td className="p-3 text-muted">{r.p.team}</td>

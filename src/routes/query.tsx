@@ -13,6 +13,7 @@ import { derivedYears } from "~/lib/dates";
 import { monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
 import { hasContent } from "~/lib/work";
 import { groupBuckets } from "~/lib/buckets";
+import { isPaidSelf } from "~/lib/payments-stats";
 import { overAgeLabel } from "~/lib/idcard";
 import { money, copyText } from "~/lib/utils";
 import type { Person, Payment, AttendanceRow } from "~/lib/types";
@@ -109,15 +110,22 @@ function buildSlips({
         .map((x) => ({
           date: x.date,
           amount: x.amount || 0,
+          // owner 必须留下：下面的「已打款（本人）/ 代收他人 / 他人代领」三步判定都要用它。
+          // 1.8.5 之前这里把 owner 丢掉了，`x.owner === name` 永远为 false，
+          // 工资条「已打款合计（本人）」恒为 ¥0.00（本次连同口径统一一起修掉）。
+          owner: x.owner,
           receiver: x.receiver || x.owner,
           source: x.source || "",
           remark: x.remark || "",
         }));
       if (!months.length && !pays.length) return null;
-      // 「已打款」必须和「应发」同口径：只算打进本人名下的款。
+      // 「已打款」必须和「应发」同口径：只算打进本人名下的款，且**收款人就是本人**。
+      // 判定走 lib/payments-stats.ts 的 isPaidSelf（与发放记录页 / 总览「已发放」KPI 同一处实现，决策四）。
       // 代收他人的钱记在 collected 里单列，否则工资条上会出现负数未打款。
-      const paid = pays.filter((x: any) => x.owner === name).reduce((s: number, x: any) => s + x.amount, 0);
+      const paid = pays.filter(isPaidSelf).reduce((s: number, x: any) => s + x.amount, 0);
       const collected = pays.filter((x: any) => x.owner !== name).reduce((s: number, x: any) => s + x.amount, 0);
+      // 本人名下的钱但由别人代领：不算本人已打款（决策四），单列说明，不让它静默消失
+      const proxyOut = pays.filter((x: any) => x.owner === name && !isPaidSelf(x)).reduce((s: number, x: any) => s + x.amount, 0);
       return {
         person: p,
         hasHistory: (p.wageHistory || []).some((h) => (h.fromDate || "").trim() !== ""),
@@ -126,6 +134,7 @@ function buildSlips({
         pays,
         paid,
         collected,
+        proxyOut,
       };
     })
     .filter(Boolean);
@@ -274,6 +283,13 @@ function PayslipSheets({
                       <tr>
                         <td className="border border-black px-1 py-1" colSpan={5}>
                           另代收他人 ¥{money(s.collected)}，不计入本人应发、也不算本人已打款。
+                        </td>
+                      </tr>
+                    ) : null}
+                    {s.proxyOut ? (
+                      <tr>
+                        <td className="border border-black px-1 py-1" colSpan={5}>
+                          其中本人名下 ¥{money(s.proxyOut)} 由他人代领（收款人非本人），按口径不算本人已打款，单列。
                         </td>
                       </tr>
                     ) : null}

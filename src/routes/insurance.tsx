@@ -13,13 +13,14 @@ import { TplLink, InsuranceMemberImport } from "~/components/excel-import";
 import { DocActions, setDoc, renameFile } from "~/components/doc-actions";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { InsuranceMember, InsurancePolicy } from "~/lib/types";
-import { datePart, emptyMember, emptyPolicy, isActive, memberDays, prevDayEnd } from "~/lib/insurance";
+import { COMBINED_POLICY_NOTE, datePart, emptyMember, emptyPolicy, isActive, memberDays, prevDayEnd } from "~/lib/insurance";
 import { ALL_BUCKETS } from "~/lib/buckets";
 import {
   filterMembers,
   groupTotals,
   leaderBuckets,
   leaderSummary as leaderSummaryOf,
+  linkedPolicyTargets,
   memberCalc,
   memberStats,
 } from "~/lib/insurance-stats";
@@ -117,17 +118,13 @@ function InsurancePage() {
   const canEdit = useCan("insurance.edit");
 
   // 挂钩的保单共用一套名单：把某个保单的人员清单同步到所有与之挂钩的保单（双向）
+  // 互挂目标的计算（唯一实现）在 lib/insurance-stats.ts 的 linkedPolicyTargets，页面只调不算
   function syncLinked(fromPolicyId: string) {
     const st = useApp.getState();
     const all = st.insurancePolicies || [];
     const members = st.insuranceMembers || [];
     const fromMembers = members.filter((m) => m.policyId === fromPolicyId);
-    const targets = new Set<string>();
-    const from = all.find((p) => p.id === fromPolicyId);
-    if (from?.linkedPolicyId && from.linkedPolicyId !== fromPolicyId) targets.add(from.linkedPolicyId);
-    for (const p of all) {
-      if (p.linkedPolicyId === fromPolicyId && p.id !== fromPolicyId) targets.add(p.id);
-    }
+    const targets = new Set(linkedPolicyTargets(all, fromPolicyId));
     if (!targets.size) return;
     const others = members.filter((m) => m.policyId !== fromPolicyId && !targets.has(m.policyId));
     // 保留来源保单的成员，再把副本同步到挂钩保单
@@ -288,6 +285,7 @@ function InsurancePage() {
             <p className="mt-1 text-sm text-muted">
               保单、被保人、替换与天数统计。这里的人员与「人员」模块完全隔离。
             </p>
+            <p className="mt-1 max-w-3xl text-xs text-subtle">{COMBINED_POLICY_NOTE}</p>
           </div>
         </header>
 
@@ -686,6 +684,7 @@ function InsurancePage() {
                 {leader !== ALL_BUCKETS ? ` · 队长：${leader || "未分班组"}` : ""}
                 {statusFilter === "active" ? " · 在保" : statusFilter === "ended" ? " · 已结束" : ""}
               </div>
+              <div className="mt-0.5 text-[11px]">{COMBINED_POLICY_NOTE}</div>
             </header>
             <table className="mt-3 w-full border-collapse text-center text-sm">
               <thead>

@@ -9,12 +9,22 @@
  * 在两处用的 fallbackYear 不同：总览取整本台账最早的一年，考勤页只用该年+考勤年份，
  * 于是同一年的「待发放」两处数字不一样；已录月份与人员是否入列也曾用两套「有内容」判定）。
  * 现在两处都调用本模块，数字由构造保证一致。
+ *
+ * 1.8.5 三条产品口径决策落在这里的部分：
+ * - 决策一：无日期的待发放记录按**当前工作年**归集（`fallbackPayYear` 不再取整本最早年）。
+ * - 决策二：本年没有考勤记录、但收到「本人收款」的人**补一行**（备注「本年无考勤记录」），
+ *   使年度表逐行「已发」之和 == 总览「已发放」KPI。
+ * - 决策四：「已发放」只算**本人收款**（`isPaidSelf`，收款人 = 本人）；他人代收单列 `proxyAmt`。
  */
 import { derivedYears, monthStatus, paymentsInYear, type YearSources } from "./dates";
-import { getWageAt, monthPay } from "./wage";
+import { getWageAt, monthPay, round2 } from "./wage";
 import { hasContent } from "./work";
 import { groupBuckets } from "./buckets";
+import { isPaidSelf, isPending, isProxyPaid } from "./payments-stats";
 import type { AttendanceRow, Payment, Person } from "./types";
+
+/** 年度表里「本年没有考勤记录、但收到本人收款」那一行的备注（决策二） */
+export const NO_ATTENDANCE_REMARK = "本年无考勤记录";
 
 export interface MonthCell {
   days: number;
@@ -31,32 +41,46 @@ export interface YearPersonRow {
   yearPayAmt: number;
   yearDays: number;
   yearOt: number;
+  /** 已发（本人收款）：只算 `isPaidSelf` 的记录；他人代收不算 */
   paid: number;
   unpaid: number;
   /** 本年是否有内容（有工天/加班/补助/扣款，或只有备注） */
   worked: boolean;
+  /** 本行是不是「本年无考勤记录」的补行（决策二）：工天加班表不列它 */
+  noAttendance: boolean;
+  /** 表格备注列：普通行空串；补行写 `NO_ATTENDANCE_REMARK` */
+  remark: string;
 }
 
 export interface YearSummary {
   rows: YearPersonRow[];
   /** 应发合计（= 各人全年之和 = 总览 KPI） */
   should: number;
-  /** 已发放（只认有发放日期的记录；含发给「本年没有考勤内容」的人） */
+  /** 已发放 = 本人收款合计（`isPaidSelf`；代收与待发放都不算，决策四） */
   paid: number;
-  /** 年度表逐行「已发」之和（是 paid 的子集） */
+  /** 年度表逐行「已发」之和（决策二起必须 == paid） */
   rowsPaidSum: number;
-  /** 本年有已发、但不在年度表里的人与钱 —— 显式暴露差额，不让它对不上还看不出来 */
+  /** 安全网：本年有本人收款、但没能落到任何一行的人与钱（决策二后恒为 0） */
   offRowsPaid: { count: number; amount: number };
-  /** 待发放（无发放日期） */
-  pendingAmt: number;
+  /** 代发（代收）：有发放日期但收款人非本人 —— 单独一列，不进 `paid` */
+  proxyAmt: number;
   proxyCount: number;
+  /** 待发放（无发放日期）—— 不算已发 */
+  pendingAmt: number;
   /** 本年有内容的月份数（0–12） */
   filledMonths: number;
 }
 
-/** 无日期的旧发放归到哪一年：整本台账里最早的一年（唯一实现，页面不许各写一套） */
+/**
+ * 无日期的待发放记录归到哪一年：**当前工作年**（= `store.year`，决策一 1.8.5）。
+ * 旧口径取「整本台账最早的一年」：同一笔待发放会跑到用户看不见的年份，
+ * 与「当前工作年」不一致。唯一实现，页面不许各写一套。
+ */
 export function fallbackPayYear(s: YearSources): number {
-  return derivedYears(s)[0] ?? new Date().getFullYear();
+  const y = Number(s.year);
+  if (y >= 2000 && y <= 2100) return y;
+  const years = derivedYears(s);
+  return years[years.length - 1] ?? new Date().getFullYear();
 }
 
 /** 某年有内容的月份数（月度卡「已录入 / 空表」与「已录月份 X / 12」的唯一口径） */
@@ -90,9 +114,10 @@ export function personMonths(person: Person, attendance: AttendanceRow[], year: 
 
 /**
  * 年度汇总：总览 KPI 与考勤页年度表共用。
- * - `rows` 只列本年**有内容**的人（没上班的不显示，页面上是这么写的）；
+ * - `rows` 列本年**有内容**的人 **+ 本年收到「本人收款」但一次考勤都没有的人**
+ *   （决策二：补一行、备注写「本年无考勤记录」，让逐行之和 == 总览「已发放」KPI）；
  * - 不在人员表里的考勤行（已删人员/手写名字）不进 rows，也不进 should —— 与旧口径一致；
- * - `should/paid/pendingAmt/proxyCount` 与该年 `rows` 同源，保证总览与考勤页对得上。
+ * - `should/paid/pendingAmt/proxyAmt/proxyCount` 与该年 `rows` 同源，保证总览与考勤页对得上。
  */
 export function summarizeYear(args: {
   people: Person[];
@@ -103,13 +128,15 @@ export function summarizeYear(args: {
 }): YearSummary {
   const { people, attendance, payments, year, fallbackYear } = args;
   const yearPay = paymentsInYear(payments, year, fallbackYear);
+  // 已发（本人收款）的唯一判定：lib/payments-stats.ts 的 isPaidSelf（代收不算已发，决策四）
+  const selfPay = yearPay.filter(isPaidSelf);
   const rows: YearPersonRow[] = [];
   for (const person of people) {
     const months = personMonths(person, attendance, year);
     const yearPayAmt = months.reduce((s, m) => s + m.pay, 0);
     const yearDays = months.reduce((s, m) => s + m.days, 0);
     const yearOt = months.reduce((s, m) => s + m.otHours, 0);
-    const paid = yearPay.filter((x) => x.owner === person.name && x.date).reduce((s, x) => s + x.amount, 0);
+    const paid = selfPay.filter((x) => (x.owner || "").trim() === person.name).reduce((s, x) => s + x.amount, 0);
     const worked = attendance.some((a) => a.year === year && a.name === person.name && hasContent(a));
     if (!worked) continue;
     rows.push({
@@ -121,25 +148,81 @@ export function summarizeYear(args: {
       paid,
       unpaid: yearPayAmt - paid,
       worked,
+      noAttendance: false,
+      remark: "",
     });
   }
-  const rowsPaidSum = rows.reduce((s, r) => s + r.paid, 0);
-  const paidRows = yearPay.filter((p) => p.date);
-  const paidTotal = paidRows.reduce((s, p) => s + p.amount, 0);
-  const offRows = paidRows.filter((p) => !rows.some((r) => r.person.name === p.owner));
+  // 决策二：本年没有考勤内容、却收到「本人收款」的人，补一行（全年 0、已发照实列、未发为负数）
+  const rowNames = new Set(rows.map((r) => r.person.name));
+  const orphans = new Map<string, number>();
+  for (const p of selfPay) {
+    const name = (p.owner || "").trim();
+    if (rowNames.has(name)) continue;
+    orphans.set(name, (orphans.get(name) || 0) + (p.amount || 0));
+  }
+  const zeroMonths = (): MonthCell[] => Array.from({ length: 12 }, () => ({ days: 0, pay: 0, otHours: 0, allowance: 0, deduction: 0 }));
+  const orphanRows: YearPersonRow[] = [...orphans.entries()]
+    .map(([name, amount]) => {
+      const paid = round2(amount);
+      const known = people.find((p) => p.name === name);
+      const person: Person =
+        known ?? {
+          id: `pay-only:${name}`,
+          name,
+          team: "",
+          personNo: "",
+          idCard: "",
+          gender: "",
+          age: 0,
+          birthday: "",
+          phone: "",
+          dailyWage: 0,
+          monthWage: 0,
+          payType: "day",
+          otRule: "",
+          mealAllowance: 0,
+          bank: "",
+          cardNo: "",
+          address: "",
+          idIssuer: "",
+          idValidFrom: "",
+          idValidTo: "",
+          remark: "",
+        };
+      return {
+        person,
+        months: zeroMonths(),
+        yearPayAmt: 0,
+        yearDays: 0,
+        yearOt: 0,
+        paid,
+        unpaid: -paid,
+        worked: false,
+        noAttendance: true,
+        remark: NO_ATTENDANCE_REMARK,
+      };
+    })
+    .sort((a, b) => b.paid - a.paid || a.person.name.localeCompare(b.person.name, "zh"));
+  rows.push(...orphanRows);
+  const rowsPaidSum = round2(rows.reduce((s, r) => s + r.paid, 0));
+  const paidTotal = round2(selfPay.reduce((s, p) => s + p.amount, 0));
+  // 安全网（决策二后恒为空）：本人收款没能落到任何一行的人与钱。正常不再触发，留着兜底。
+  const offRows = selfPay.filter((p) => !rows.some((r) => r.person.name === (p.owner || "").trim()));
+  const proxyRows = yearPay.filter(isProxyPaid);
   return {
     rows,
-    should: rows.reduce((s, r) => s + r.yearPayAmt, 0),
-    // 已发放 = 本年**全部**有日期的发放（换人不看有没有考勤：钱打出去了就不能从 KPI 里消失）。
-    // 年度表逐行的「已发」之和是它的子集，差额用 offRowsPaid 显式暴露，页面会提示一句。
+    should: round2(rows.reduce((s, r) => s + r.yearPayAmt, 0)),
+    // 已发放 = 本人收款合计（决策四）。代收（别人代领）单列 proxyAmt，待发单列 pendingAmt，
+    // 三者互不重叠：paid + proxyAmt + pendingAmt = 本年全部发放金额。
     paid: paidTotal,
     rowsPaidSum,
     offRowsPaid: {
       count: offRows.length,
-      amount: offRows.reduce((s, p) => s + p.amount, 0),
+      amount: round2(offRows.reduce((s, p) => s + p.amount, 0)),
     },
-    pendingAmt: yearPay.filter((p) => !p.date).reduce((s, p) => s + p.amount, 0),
-    proxyCount: yearPay.filter((p) => p.date && p.owner !== p.receiver).length,
+    proxyAmt: round2(proxyRows.reduce((s, p) => s + p.amount, 0)),
+    proxyCount: proxyRows.length,
+    pendingAmt: round2(yearPay.filter(isPending).reduce((s, p) => s + p.amount, 0)),
     filledMonths: filledMonthsOf(attendance, year),
   };
 }

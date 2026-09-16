@@ -12,9 +12,11 @@ import {
   groupTotals,
   leaderBuckets,
   leaderSummary,
+  linkedPolicyTargets,
   memberCalc,
   memberStats,
 } from "../src/lib/insurance-stats";
+import { COMBINED_POLICY_NOTE } from "../src/lib/insurance";
 import { ALL_BUCKETS } from "../src/lib/buckets";
 import type { InsuranceMember, InsurancePolicy } from "../src/lib/types";
 
@@ -124,4 +126,44 @@ test("经理/队长带空格的值与桶对齐（trim 后同一桶，不会同�
   assert.deepEqual(leaderBuckets(rows).map((b) => b.value), ["张队"], "trim 后是一桶");
   assert.equal(filterMembers(rows, { leader: "张队", status: "" }).length, 2);
   assert.deepEqual(groupTotals(leaderSummary(rows, calc)).count, 2);
+});
+
+/* ＝＝ 决策三（1.8.5）：组合险（两张互挂保单）不去重计人/计费 ＝＝ */
+
+const POLICY2: InsurancePolicy = { ...POLICY, id: "S2", policyNo: "P-2026-002", linkedPolicyId: "S1" };
+const LINKED: InsurancePolicy[] = [{ ...POLICY, linkedPolicyId: "S2" }, POLICY2];
+
+test("决策三：互挂目标的双向计算走唯一实现（页面 syncLinked 只调不算）", () => {
+  assert.deepEqual(linkedPolicyTargets(LINKED, "S1"), ["S2"], "S1 指向 S2");
+  assert.deepEqual(linkedPolicyTargets(LINKED, "S2"), ["S1"], "反向也认（双向挂钩）");
+  assert.deepEqual(linkedPolicyTargets([{ ...POLICY, linkedPolicyId: "" }], "S1"), [], "没挂钩就不动别人");
+  assert.deepEqual(
+    linkedPolicyTargets(
+      [
+        { id: "A", linkedPolicyId: "B" },
+        { id: "B", linkedPolicyId: "A" },
+        { id: "C", linkedPolicyId: "" },
+      ],
+      "A",
+    ),
+    ["B"],
+    "不相关的保单不进来",
+  );
+});
+
+test("决策三：互挂两张保单时各自人数/保费与「单张时」一致（不去重），标注文案存在", () => {
+  const calc2 = memberCalc(POLICY2);
+  // 互挂后名单被**复制**一份到另一张保单（syncLinked 的行为），同一个人同时出现在两张保单上
+  const copied = MEMBERS.map((m) => ({ ...m, id: `${m.id}-copy`, policyId: "S2" }));
+  const s1 = memberStats(MEMBERS, calc);
+  const s2 = memberStats(copied, calc2);
+  assert.deepEqual(s2, s1, "两张保单各自的人数/人天/保费与「单张时」逐项一致（不去重、不合并）");
+  assert.equal(s1.settle + s2.settle, s1.settle * 2, "合计 = 各保单分别计算后相加（不是去重后的一份）");
+  const names1 = new Set(MEMBERS.map((m) => m.name));
+  assert.equal(copied.every((m) => names1.has(m.name)), true, "同一个人同时在两张保单上");
+  assert.equal(memberStats([...MEMBERS, ...copied], calc).count, 8, "把两张保单的人员合起来数就会翻倍 —— 这正是要标注的原因");
+  // 标注文案（唯一一份，保险页与打印件都引它）
+  assert.match(COMBINED_POLICY_NOTE, /组合险（互挂保单）/);
+  assert.match(COMBINED_POLICY_NOTE, /同一个人可能同时出现在两张保单上/);
+  assert.match(COMBINED_POLICY_NOTE, /人数与保费按各保单分别计算，不合并去重/);
 });

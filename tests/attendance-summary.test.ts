@@ -1,15 +1,29 @@
 /**
- * 考勤/总览「四口径一致」专项测试（口径一致性专项 20260916）。
+ * 考勤/总览「四口径一致」专项测试（口径一致性专项 20260916；1.8.5 三条口径决策）。
  *
  * 要钉住的是同一份数据在四个地方对不上：
  * ① 总览 KPI「应发合计 / 已发放 / 待发放」 ② 考勤页年度汇总的逐行「全年/已发/未发」
  * ③ 月度卡的「已录入 / 空表」与「已录月份 X / 12」 ④ Excel 整本导出的月表与汇总表。
  * 边界：纯备注行（工伤休息）、跨年、无发放日期、代收、金额 0、未设加班规则、没填班组的人。
+ *
+ * 1.8.5 三条决策：
+ * - 决策一：无日期的待发放记录按**当前工作年**归集（不再取整本最早年）。
+ * - 决策二：本年没有考勤记录、却收到「本人收款」的人**补一行**（备注「本年无考勤记录」），
+ *   使**年度表逐行「已发」之和 == 总览「已发放」KPI**。
+ * - 决策四：「已发放」只算**本人收款**（收款人即本人）；他人代收单列 `proxyAmt`，待发放单列 `pendingAmt`，
+ *   三者互不重叠。
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
-import { fallbackPayYear, filledMonthsOf, personMonths, summarizeYear, teamRows } from "../src/lib/attendance-summary";
+import {
+  NO_ATTENDANCE_REMARK,
+  fallbackPayYear,
+  filledMonthsOf,
+  personMonths,
+  summarizeYear,
+  teamRows,
+} from "../src/lib/attendance-summary";
 import { monthStatus } from "../src/lib/dates";
 import { buildFullWorkbook } from "../src/lib/excel/full";
 import { hasContent, hasWork } from "../src/lib/work";
@@ -50,7 +64,7 @@ const PEOPLE: Person[] = [
   person({ id: "u1", name: "张三", dailyWage: 300 }),
   person({ id: "u2", name: "李四", dailyWage: 200 }),
   person({ id: "u3", name: "王五", dailyWage: 100 }),
-  person({ id: "u4", name: "赵六", dailyWage: 100, team: "" }), // 没填班组
+  person({ id: "u4", name: "赵六", dailyWage: 100, team: "" }), // 没填班组，且 2026 年一次考勤都没有
   person({ id: "u5", name: "钱七", payType: "month", monthWage: 6000, team: "二组" }),
 ];
 
@@ -63,12 +77,28 @@ const ATTENDANCE: AttendanceRow[] = [
   att({ id: "a6", name: "张三", year: 2025, month: 12, days: 5 }), // 跨年
 ];
 
+/**
+ * 三维修（2026）：
+ *   A 已发（本人）= 张三 1000 + 王五 400 + 赵六 600 + 已删的人 250 + 李四 120 = 2370
+ *   B 代发（代收）= 张三名下 500，李四代领 = 500
+ *   C 待发放     = 赵六 900
+ *   合计 = 3770
+ * 其中「赵六」「已删的人」2026 年**没有考勤记录**却收到了本人收款（决策二的补行对象）。
+ */
 const PAYMENTS: Payment[] = [
   pay({ id: "p1", owner: "张三", receiver: "张三", date: "2026-03-10", amount: 1000 }),
-  pay({ id: "p2", owner: "张三", receiver: "李四", date: "2026-03-11", amount: 500 }), // 代收
+  pay({ id: "p2", owner: "张三", receiver: "李四", date: "2026-03-11", amount: 500 }), // 代收（李四代领）
   pay({ id: "p3", owner: "赵六", receiver: "赵六", date: "", amount: 900 }), // 待发放（无日期）
   pay({ id: "p4", owner: "钱七", receiver: "钱七", date: "2025-12-31", amount: 700 }), // 跨年
+  pay({ id: "p5", owner: "王五", receiver: "王五", date: "2026-07-01", amount: 400 }),
+  pay({ id: "p6", owner: "赵六", receiver: "赵六", date: "2026-08-01", amount: 600 }), // 本年无考勤者收款
+  pay({ id: "p7", owner: "已删的人", receiver: "已删的人", date: "2026-09-01", amount: 250 }), // 已删人员收款
+  pay({ id: "p8", owner: "李四", receiver: "李四", date: "2026-10-01", amount: 120 }),
 ];
+
+const A = 2370;
+const B = 500;
+const C = 900;
 
 const y2026 = summarizeYear({ people: PEOPLE, attendance: ATTENDANCE, payments: PAYMENTS, year: 2026, fallbackYear: 2026 });
 
@@ -89,45 +119,70 @@ test("月度卡与「已录月份」：纯备注月份从「空表」变「已�
 
 test("年度汇总逐行之和 == 总览 KPI 应发合计（含纯备注的人列出但金额 0）", () => {
   const names = y2026.rows.map((r) => r.person.name);
-  assert.deepEqual(names.slice().sort(), ["张三", "李四", "王五", "钱七"], "已删人员不进；纯备注的李四要列出来");
-  const rowsSum = y2026.rows.reduce((s, r) => s + r.yearPayAmt, 0);
-  assert.equal(rowsSum, y2026.should, "KPI 应发合计 = 逐行全年之和");
+  assert.deepEqual(
+    names.slice(0, 4),
+    ["张三", "李四", "王五", "钱七"],
+    "有考勤的人按人员表顺序；纯备注的李四要列出来",
+  );
+  assert.equal(y2026.rows.reduce((s, r) => s + r.yearPayAmt, 0), y2026.should, "KPI 应发合计 = 逐行全年之和");
   // 张三 20×300=6000；李四只有备注=0；王五 10×100+100−50=1050；钱七 月薪 6000+补助 200=6200
   assert.equal(y2026.should, 6000 + 0 + 1050 + 6200);
   assert.equal(y2026.rows.find((r) => r.person.name === "李四")?.yearPayAmt, 0, "只有备注 → 0 元但人在表里");
   assert.equal(y2026.rows.find((r) => r.person.name === "钱七")?.yearPayAmt, 6200, "月薪：有出勤/补助才发月薪");
 });
 
-test("已发放只认有日期的记录；待发放单独统计；代收按笔数；发给无考勤者的钱显式暴露", () => {
-  assert.equal(y2026.paid, 1500, "本年全部有日期的发放：张三 1000 + 代收 500");
-  assert.equal(y2026.rowsPaidSum, 1500, "本年这几笔都属于有考勤的人");
-  assert.deepEqual(y2026.offRowsPaid, { count: 0, amount: 0 });
-  assert.equal(y2026.pendingAmt, 900, "无日期的 900 只进待发放");
-  assert.equal(y2026.proxyCount, 1);
-  assert.equal(
-    y2026.rows.reduce((s, r) => s + r.paid, 0),
-    y2026.rowsPaidSum,
-    "逐行已发之和 == rowsPaidSum",
+test("决策二：本年无考勤记录却收到钱的人 → 补一行（备注写清），且逐行已发之和 == KPI 已发放", () => {
+  const extra = y2026.rows.filter((r) => r.noAttendance);
+  assert.deepEqual(
+    extra.map((r) => `${r.person.name}:${r.paid}:${r.remark}`),
+    [`赵六:600:${NO_ATTENDANCE_REMARK}`, `已删的人:250:${NO_ATTENDANCE_REMARK}`],
+    "补行按金额降序：赵六 600、已删的人 250（都不在人员表里的也有行，钱不会凭空消失）",
   );
-  assert.equal(y2026.rows.find((r) => r.person.name === "张三")?.unpaid, 6000 - 1500);
+  for (const r of extra) {
+    assert.equal(r.yearPayAmt, 0, "没考勤 → 全年应发 0");
+    assert.equal(r.unpaid, -r.paid, "未发 = 0 − 已发，照实列负数（超发）");
+    assert.equal(r.worked, false);
+  }
+  assert.equal(y2026.rowsPaidSum, A, "年度表逐行「已发」之和");
+  assert.equal(y2026.rowsPaidSum, y2026.paid, "**决策二的核心等式**：逐行之和 == 总览「已发放」KPI");
+  assert.deepEqual(y2026.offRowsPaid, { count: 0, amount: 0 }, "补行之后差额为 0，不再需要「差额提示」救场");
 });
 
-test("跨年：2025 的发放/考勤不进 2026；发给「本年无考勤」的人仍然计入 KPI 已发放（不静默消失）", () => {
-  const y2025 = summarizeYear({ people: PEOPLE, attendance: ATTENDANCE, payments: PAYMENTS, year: 2025, fallbackYear: 2025 });
-  assert.equal(y2025.paid, 700, "2025-12-31 那笔算 2025（钱七 2025 年没有考勤行）");
-  assert.deepEqual(y2025.offRowsPaid, { count: 1, amount: 700 }, "差额必须显式暴露，页面会提示一行");
-  assert.equal(y2025.rowsPaidSum, 0, "年度表里没有钱七 → 逐行之和为 0");
-  assert.equal(y2025.pendingAmt, 900, "无日期那笔归 fallbackYear=2025，所以算在 2025 的待发放里");
-  const y2026b = summarizeYear({ people: PEOPLE, attendance: ATTENDANCE, payments: PAYMENTS, year: 2026, fallbackYear: 2025 });
-  assert.equal(y2026b.pendingAmt, 0, "同一笔不能既算 2025 又算 2026：fallbackYear 决定归属");
-  // 唯一实现：所有页面都用这个函数取「最早的一年」
+test("决策四：已发放只算本人收款；代收与待发放单列，三者互不重叠", () => {
+  assert.equal(y2026.paid, A, "已发（本人）：张三 1000（p2 那 500 是李四代领，不算张三已发）+ 王五 400 + 赵六 600 + 已删的人 250 + 李四 120");
+  assert.equal(y2026.proxyAmt, B, "代发（代收）：李四代领张三的 500");
+  assert.equal(y2026.proxyCount, 1);
+  assert.equal(y2026.pendingAmt, C, "待发放：赵六 900");
+  assert.equal(y2026.paid + y2026.proxyAmt + y2026.pendingAmt, A + B + C, "A + B + C");
+  // 该年发放总额（三维修相加）必须等于台账里该年每一笔的金额之和
+  const yearRows = PAYMENTS.filter((p) => (p.date || "").startsWith("2026") || !p.date);
+  assert.equal(yearRows.reduce((s, p) => s + p.amount, 0), A + B + C, "三维修不重不漏地覆盖该年全部发放");
+  assert.equal(y2026.rows.find((r) => r.person.name === "张三")?.paid, 1000, "张三行只有本人收款，不含代收的 500");
+  assert.equal(y2026.rows.find((r) => r.person.name === "张三")?.unpaid, 6000 - 1000);
+  assert.equal(y2026.proxyCount, 1);
+  assert.equal(y2026.rows.reduce((s, r) => s + r.paid, 0), y2026.rowsPaidSum, "逐行已发之和 == rowsPaidSum");
+});
+
+test("决策一：无日期的待发放记录按「当前工作年」归集（不是整本最早年）", () => {
   const store = { year: 2026, years: [2024, 2026], attendance: [{ year: 2026 }] };
-  assert.equal(fallbackPayYear(store), 2024);
-  assert.equal(
-    fallbackPayYear({ year: 2026, years: [2026], attendance: [{ year: 2026 }] }),
-    2026,
-    "旧写法在考勤页只用该年，会得到不同年份 → 同一年两处「待发放」不一样",
-  );
+  assert.equal(fallbackPayYear(store), 2026, "取当前工作年 2026，不再取整本最早年 2024");
+  assert.equal(fallbackPayYear({ years: [2024, 2026], attendance: [{ year: 2026 }] }), 2026, "没有 year 时取最近的一年");
+  assert.equal(fallbackPayYear({ year: 2026, years: [2026] }), 2026);
+  // 同一笔待发放跟着当前工作年走：2026 年看得到，2024 年看不到
+  const y2024 = summarizeYear({ people: PEOPLE, attendance: ATTENDANCE, payments: PAYMENTS, year: 2024, fallbackYear: fallbackPayYear(store) });
+  assert.equal(y2024.pendingAmt, 0, "待发放不会跑到 2024 年去");
+  const y2026b = summarizeYear({ people: PEOPLE, attendance: ATTENDANCE, payments: PAYMENTS, year: 2026, fallbackYear: fallbackPayYear(store) });
+  assert.equal(y2026b.pendingAmt, C, "2026（当前工作年）能看到全部待发放");
+});
+
+test("跨年：2025 的发放/考勤不进 2026；2025 发给无考勤者的钱也补行，逐行之和仍 == KPI", () => {
+  const y2025 = summarizeYear({ people: PEOPLE, attendance: ATTENDANCE, payments: PAYMENTS, year: 2025, fallbackYear: 2026 });
+  assert.equal(y2025.paid, 700, "2025-12-31 那笔算 2025（钱七 2025 年没有考勤行）");
+  assert.deepEqual(y2025.offRowsPaid, { count: 0, amount: 0 });
+  assert.equal(y2025.rowsPaidSum, 700, "钱七被补了一行（备注「本年无考勤记录」），逐行之和 == KPI");
+  assert.equal(y2025.rowsPaidSum, y2025.paid);
+  assert.equal(y2025.rows.filter((r) => r.noAttendance).map((r) => r.person.name).join(","), "钱七");
+  assert.equal(y2025.pendingAmt, 0, "待发放跟当前工作年（2026）走，不落在 2025（决策一）");
 });
 
 test("班组面板的分组要覆盖所有人（含「未分班组」）", () => {
@@ -145,7 +200,7 @@ test("Excel 整本导出：月表与汇总/工天加班表的人口径一致（�
   assert.equal(monthNames.includes("李四"), true, "月表里有李四（只有备注的行不能丢）");
   const sumNames = rows("汇总").slice(2).map((r) => r[1]);
   assert.equal(sumNames.includes("李四"), true, "汇总表里也要有李四（以前月表有、汇总没有）");
-  assert.equal(sumNames.includes("已删的人"), false, "不在人员表的人不进汇总");
+  assert.equal(sumNames.includes("已删的人"), false, "不在人员表的人不进汇总（Excel 是原样导出，与本页年度表口径不同）");
   const workNames = rows("工天加班").slice(2).map((r) => r[1]);
   assert.deepEqual(workNames.slice().sort(), sumNames.slice().sort(), "工天加班与汇总的人列完全一致");
 });

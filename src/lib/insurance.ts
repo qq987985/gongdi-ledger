@@ -7,6 +7,14 @@ import type { InsuranceMember, InsurancePolicy } from "./types";
 
 const today = localToday;
 
+/**
+ * 组合险（互挂保单）的展示标注（决策三，1.8.5）。
+ * 业务事实：两张互挂保单各自一份名单、各自计费 —— **不跨保单去重**（去重会改人数与保费口径）。
+ * 保险页与保险合同清单/打印件都必须带上这句，让看数的人知道人数/保费为什么会在两张保单上重复出现。
+ */
+export const COMBINED_POLICY_NOTE =
+  "组合险（互挂保单）：同一个人可能同时出现在两张保单上，人数与保费按各保单分别计算，不合并去重。";
+
 export function datePart(dt: string): string {
   return (dt || "").slice(0, 10);
 }

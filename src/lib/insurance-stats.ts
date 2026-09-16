@@ -99,3 +99,24 @@ export function groupTotals(groups: LeaderGroup[]): { count: number; days: numbe
     settle: round2(groups.reduce((s, g) => s + g.settle, 0)),
   };
 }
+
+/**
+ * 互挂保单（组合险）的目标 id（决策三 1.8.5）：从 `fromId` 出发，包含
+ * ①它自己指向的那张 ②反向指向它的那些。从页面 `syncLinked` 机械提取（§12.1），行为逐字不变。
+ *
+ * **不跨保单去重**：名单只是被**复制**到各互挂保单，各保单仍按自己的名单单独结算人数与保费
+ * （去重会改口径，业务上每张保单各自计费是事实）。
+ */
+export function linkedPolicyTargets(
+  policies: Pick<InsurancePolicy, "id" | "linkedPolicyId">[],
+  fromId: string,
+): string[] {
+  const targets = new Set<string>();
+  const from = policies.find((p) => p.id === fromId);
+  if (from?.linkedPolicyId && from.linkedPolicyId !== fromId) targets.add(from.linkedPolicyId);
+  for (const p of policies) {
+    if (p.linkedPolicyId === fromId && p.id !== fromId) targets.add(p.id);
+  }
+  return [...targets];
+}
+
