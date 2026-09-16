@@ -688,10 +688,11 @@ function printCases() {
       button: "打印对账单",
       file: "contracts-statement",
       setup: async (page) => {
-        // 对账单必须先选中合同（勾表格里的复选框，按钮才会 enable）
-        const chk = page.locator('table input[type="checkbox"]').first();
-        for (let i = 0; i < 20 && (await chk.count()) === 0; i += 1) await page.waitForTimeout(300);
-        if (await chk.count()) await chk.check().catch(() => {});
+        // 对账单要先勾合同（按钮才会 enable）；勾**前两份**，用来验证「各自独立的单据不许混在一页」
+        const boxes = page.locator('table input[type="checkbox"]');
+        for (let i = 0; i < 20 && (await boxes.count()) === 0; i += 1) await page.waitForTimeout(300);
+        const n = Math.min(await boxes.count(), Number(process.env.SEED_PRINT_CONTRACTS || 2));
+        for (let i = 0; i < n; i += 1) await boxes.nth(i).check().catch(() => {});
         await page.waitForTimeout(400);
       },
     },

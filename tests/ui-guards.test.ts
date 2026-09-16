@@ -253,8 +253,10 @@ test("约定：弹窗面板不许用裸 max-h-screen（375×667 下 100vh 高于
  * 约定（`src/styles.css` 的「打印分页协议」一处集中，`开发规范.md` §6.6 同步）：
  *  · 打印态一屏高一律清零（`.min-h-screen`/`.min-h-dvh`/`h-screen` → `min-height:0`），
  *    外壳 `.app-bg` 还要 `overflow:visible`（`overflow-x-hidden` 在打印态等于滚动容器，会裁内容）；
- *  · 「不许拆页」只下沉到**行/小单元**：`tr`、`.print-keep`（单张工资条 `.payslip` 是裁切设计的
- *    最小单元，也在这个白名单里）；**组件里不许再出现容器级 break-inside-avoid**；
+ *  · 整块不拆只允许这四种：`tr`（行）、`.print-keep`（小单元，如单据抬头）、
+ *    `.print-doc`（**一条 = 一个人 / 一份单据**：发放明细里每个人的整节、合同对账单里每份合同 ——
+ *    1.8.12 用户口径「整条放得下就并排塞满，放不下才另起一页」）、`.payslip`（裁切设计的单张工资条）；
+ *    **组件里不许再出现写死的容器级 break-inside-avoid**；
  *  · 打印表格必须 `thead { display: table-header-group }`（第二页起照样有表头）。
  */
 
@@ -288,8 +290,8 @@ function avoidSelectors(blocks: readonly string[]): string[] {
   return out;
 }
 
-/** 白名单：整块不拆只允许在「行 / 小单元」上（理由写在 styles.css 的注释里） */
-const BREAK_AVOID_ALLOW = /(^|[\s,>])(tr|\.print-keep|\.payslip)(\s|,|:|$)/;
+/** 白名单：整块不拆只允许在「行 / 一条单据 / 小单元」上（理由写在 styles.css 的注释里） */
+const BREAK_AVOID_ALLOW = /(^|[\s,>])(tr|\.print-keep|\.print-doc|\.payslip)(\s|,|:|$)/;
 
 test("约定：打印分页——打印态一屏高清零 + 打印表格表头跨页重复（styles.css）", async () => {
   const css = await readFile(repo("src/styles.css"), "utf8");
@@ -316,7 +318,7 @@ test("约定：打印分页——打印态一屏高清零 + 打印表格表头�
   assert.deepEqual(
     bad,
     [],
-    `打印件里这些选择器用了整块不拆，会把上一页留白（只允许 tr / .print-keep / .payslip）：\n${bad.join("\n")}`,
+    `打印件里这些选择器用了整块不拆，会把上一页留白（只允许 tr / .print-keep / .print-doc / .payslip）：\n${bad.join("\n")}`,
   );
   // 行级不拆必须在（否则一行会被腰斩）
   assert.match(printCss, /\.print-only\s+tr[^{}]*\{[^{}]*break-inside\s*:\s*avoid/, "打印表格的行必须 `break-inside: avoid`（不许把一行拆到两页）");
@@ -335,7 +337,7 @@ test("约定：打印件容器不许用 min-h-screen/min-h-dvh，也不许用容
         if (hit) bad.push(`${file}: 打印件用了 ${hit[1]}（打印态至少一屏高 → 提前分页）`);
       }
     }
-    // 全库：不许再出现容器级 break-inside-avoid（改由 styles.css 的 tr / .print-keep 承担）
+    // 全库：不许再出现写死的容器级 break-inside-avoid（改由 styles.css 的 tr / .print-keep / .print-doc 承担）
     for (const m of text.matchAll(/className="([^"]*break-inside-avoid[^"]*)"/g)) bad.push(`${file}: 容器级 break-inside-avoid（class）`);
     for (const m of text.matchAll(/break-inside\s*:\s*avoid|breakInside\s*:\s*["']avoid["']/g)) bad.push(`${file}: 内联 ${m[0]}`);
   }
@@ -343,7 +345,7 @@ test("约定：打印件容器不许用 min-h-screen/min-h-dvh，也不许用容
   assert.deepEqual(
     bad,
     [],
-    `打印分页协议要求「不许拆页」下沉到行/小单元（tr、.print-keep，见 styles.css）：\n${bad.join("\n")}`,
+    `打印分页协议要求「整块不拆」只出现在行/一条/小单元上（tr、.print-keep、.print-doc，见 styles.css）：\n${bad.join("\n")}`,
   );
 });
 
@@ -360,6 +362,7 @@ test("守卫自检：打印分页三条判据能抓出坏样本（改回旧写�
   const sel = avoidSelectors(blocks);
   assert.deepEqual(sel.filter((s) => !BREAK_AVOID_ALLOW.test(s)), [".print-only section"], "容器级 section 必须被白名单拦下");
   assert.equal(sel.some((s) => BREAK_AVOID_ALLOW.test(s)), true, "行/小单元白名单要能放行");
+  assert.equal(BREAK_AVOID_ALLOW.test(".print-only .print-doc"), true, "一条单据（.print-doc）要在白名单里");
   const printCss = blocks.join("\n");
   assert.equal(/\.min-h-screen[^{}]*\{[^{}]*min-height\s*:\s*0/.test(printCss), false, "旧写法（没清零一屏高）必须判不合格");
   assert.equal(/\.print-only\s+thead[^{}]*\{[^{}]*display\s*:\s*table-header-group/.test(printCss), false, "旧写法（没跨页表头）必须判不合格");
@@ -436,4 +439,30 @@ test("约定：单据抬头必须写在跨页重复的表头里（保险清单 /
   assert.equal(theadBodies(badSample).some((h) => /\{label\}/.test(h)), false, "抬头在表外时必须判不合格");
   const goodSample = `<table><thead><tr><th colSpan={4}>{label}</th></tr><tr>{heads.map((h) => <th>{h}</th>)}</tr></thead></table>`;
   assert.equal(theadBodies(goodSample).some((h) => /\{label\}/.test(h)), true, "抬头在 thead 里时必须放行");
+});
+
+test("约定：一条 = 一个人 / 一份单据，必须带 .print-doc（整条放得下就并排、放不下才另起一页）", async () => {
+  const cases: { file: string; token: RegExp; what: string }[] = [
+    { file: "src/components/payment-sheets.tsx", token: /className="[^"]*\bprint-doc\b[^"]*"/, what: "发放明细里每个人的一整节" },
+    { file: "src/routes/contracts.tsx", token: /className="[^"]*\bprint-doc\b[^"]*"/, what: "每份合同的对账单" },
+  ];
+  const bad: string[] = [];
+  for (const c of cases) {
+    const text = stripComments(await readFile(repo(c.file), "utf8"));
+    if (!c.token.test(text)) bad.push(`${c.file}: ${c.what}没有 .print-doc —— 会被劈到两页/与别的单据混在一起`);
+  }
+  assert.deepEqual(bad, [], `用户口径「整条放得下就并排、放不下才另起一页」需要 .print-doc：\n${bad.join("\n")}`);
+  const css = await readFile(repo("src/styles.css"), "utf8");
+  const printCss = printMediaBlocks(css).join("\n");
+  assert.match(printCss, /\.print-only\s+\.print-doc[^{}]*\{[^{}]*break-inside\s*:\s*avoid/, "打印态 .print-doc 必须 break-inside:avoid（整条不拆）");
+  assert.equal(
+    /\.print-doc[^{}]*\{[^{}]*break-before\s*:\s*page/.test(printCss),
+    false,
+    "不许给 .print-doc 用 break-before:page —— 那是「宁可留白也不并排」，与用户口径相反",
+  );
+  // 坏样本自检
+  const goodCss = "@media print { .print-only .print-doc { break-inside: avoid; } }";
+  const badCss = "@media print { .print-only .print-doc { break-before: page; } }";
+  assert.equal(/\.print-only\s+\.print-doc[^{}]*\{[^{}]*break-inside\s*:\s*avoid/.test(goodCss), true);
+  assert.equal(/\.print-doc[^{}]*\{[^{}]*break-before\s*:\s*page/.test(badCss), true, "坏样本（强制换页）必须能被抓到");
 });

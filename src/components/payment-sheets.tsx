@@ -83,13 +83,18 @@ export function PaymentSheets({
         </header>
         {mode === "detail" ? (
           sections.map((s) => (
-            /* 1.8.10：这里原来有容器级 `break-inside-avoid`（整节不许拆页）——
-               页底放不下时整节被推到下一页，上一页留一大片空白（用户实测 26 笔就分页）。
-               现在改成「允许在人与人之间分页、允许节内跨页」：整块不拆下沉到行（tr，见
-               styles.css 打印分页协议）。节标题**故意不加** `print-title`：实测
-               `break-after: avoid` 会让浏览器把「标题+表」当一组，每页反而多留 5~15mm 空白
-               （60 笔 / 6 人：21.8/22.1 → 14.7/5.4 的差别）。 */
-            <section key={s.owner || "__empty__"} className="mt-3">
+            /* 1.8.10：删掉了这里的容器级 `break-inside-avoid`（当时整节被推到下一页、上一页
+               留一大片空白，用户实测 26 笔就分页）；同时修掉另外两个「无缘无故提前断页」的根因
+               （外壳 min-h-screen 撑满一屏、没有跨页表头）。
+               1.8.12（用户口径）：「如果第一页有空白，第二条能全部打到第一页就 2 条打到一起，
+               反之就另开一页」——**一个人就是一整条**，所以把「整条不拆」加回来（`.print-doc`，
+               规则在 styles.css 打印分页协议）：整节放得下就与上一条并排塞满、放不下才整节去下一页，
+               绝不把一个人的记录劈到两页。整节比一整页还高时允许它自己跨页续排。
+               实测（3 人 × 9 笔 / 2 人 26 笔 / 45 人 45 笔三组数据）：页数与 1.8.11 完全一样，
+               第 1 页依旧填满（留白 0.1mm），而每个人的记录不再被拆页。
+               节标题**故意不加** `print-title`：实测 `break-after: avoid` 会让浏览器把
+               「标题+表」当一组，每页反而多留 5~15mm 空白（60 笔 / 6 人：21.8/22.1 → 14.7/5.4）。 */
+            <section key={s.owner || "__empty__"} className="mt-3 print-doc">
               <div className="text-sm font-semibold">{sectionTitle(s)}</div>
               <table className="mt-1 w-full border-collapse text-center text-xs">
                 <thead>

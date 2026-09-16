@@ -114,7 +114,7 @@ function ContractStatementSheets({ items }: { items: { contract: ContractRecord;
           /* 1.8.10：整张对账单不再用容器级 `break-inside-avoid`（一张单放不进当前页时
              整张跳页，上一页留一大片空白；多张单也无法同页）。跨页可读性靠
              thead 每页重复 + 行/小单元不拆（styles.css 打印分页协议） */
-          <article key={c.id} className="statement border border-black p-4">
+          <article key={c.id} className="statement print-doc border border-black p-4">
             {/* 单据抬头是很小的「小单元」：允许用 print-keep 整体不拆（最多推十几毫米），
                 单据正文则照常跨页 */}
             <header className="print-keep border-b border-black pb-2 text-center">

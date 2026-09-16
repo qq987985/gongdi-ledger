@@ -57,7 +57,7 @@
   **`check.yml` 已于 2026-09-16 建到 GitHub（1.8.10 起生效，推送 main / PR 都会跑 typecheck → test →
   test:roundtrip → build + `app/VERSION.txt` 一致性）**；本地 `git log origin/main` 里能看到它
   （本地 `git pull` 之前看不到文件，属正常）。
-- 1.8.11 起覆盖 **389 个用例（389 pass + 0 todo）**（1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.12 起覆盖 **390 个用例（390 pass + 0 todo）**（1.8.11 时是 389、1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源；
   1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外；
@@ -65,7 +65,9 @@
   `overflow:visible`）、打印表格必须有 `thead { display: table-header-group }`、
   **不许出现容器级 `break-inside-avoid`**（白名单只有 `tr` / `.print-keep` / `.payslip`）；
   **1.8.11 再加两条**：`tfoot` 必须 `display: table-row-group`（合计只在最后一页印一次）、
-  保险 / 合同 / 报销三个打印件的单据抬头必须在 `<thead>` 里（跨页重复、拆开也认得出），
+  保险 / 合同 / 报销三个打印件的单据抬头必须在 `<thead>` 里（跨页重复、拆开也认得出）；
+  **1.8.12 再加一条**：「一条 = 一个人 / 一份单据」（发放明细里每个人的整节、合同对账单里每份合同）
+  必须带 `.print-doc`（整条放得下就并排塞满、放不下才整条另起一页，**不许** `break-before: page`），
   见 tests/ui-guards.test.ts 与 `src/styles.css` 的「打印分页协议」）/
   工具函数与版本日志解析（1.7.19 起：tests/utils.test.ts、changelog.test.ts、xlsx-center.test.ts）/
   保险结算口径（1.7.20 起：tests/insurance.test.ts，函数在 src/lib/insurance.ts，勿在页面重写）/
