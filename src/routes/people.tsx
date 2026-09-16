@@ -16,6 +16,7 @@ import { parseDateYmd } from "~/lib/dates";
 import { wageLabel, parseOtRule } from "~/lib/wage";
 import { confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { useGuardedClose } from "~/lib/confirm-close";
+import { ALL_BUCKETS, groupBuckets } from "~/lib/buckets";
 import { useApp } from "~/lib/store";
 import type { Person, WageHistory } from "~/lib/types";
 
@@ -65,16 +66,18 @@ function PeoplePage() {
   const addPerson = useApp((s) => s.addPerson);
   const removePeople = useApp((s) => s.removePeople);
   const [q, setQ] = React.useState("");
-  const [team, setTeam] = React.useState("全部");
+  const [team, setTeam] = React.useState(ALL_BUCKETS);
   const [editing, setEditing] = React.useState<Person | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [selected, setSelected] = React.useState<string[]>([]);
   const [photoTick, setPhotoTick] = React.useState(0);
   const names = React.useMemo(() => people.map((p) => p.name), [people]);
   const flags = usePhotoFlags(names, photoTick);
-  const teams = React.useMemo(() => ["全部", ...new Set(people.map((p) => p.team).filter(Boolean))], [people]);
+  // 班组下拉：当前人员表里真实存在的桶 + 「未分班组」（班组是必填，但历史/导入数据可能为空；
+  // 以前 filter(Boolean) 把这一桶删掉，这些人在「按班组筛选」里选不到）
+  const teams = React.useMemo(() => groupBuckets(people.map((p) => p.team), "未分班组"), [people]);
   const filtered = people.filter((p) => {
-    if (team !== "全部" && p.team !== team) return false;
+    if (team !== ALL_BUCKETS && String(p.team ?? "").trim() !== team) return false;
     if (!q.trim()) return true;
     const s = q.trim();
     return [p.name, p.team, p.idCard, p.phone, p.personNo].some((x) => String(x).includes(s));
@@ -126,8 +129,11 @@ function PeoplePage() {
             onChange={(e) => setQ(e.target.value)}
           />
           <select className="field-select" value={team} onChange={(e) => setTeam(e.target.value)}>
-            {teams.map((t) => (
-              <option key={t}>{t}</option>
+            <option value={ALL_BUCKETS}>全部</option>
+            {teams.map((b) => (
+              <option key={b.value || "__empty__"} value={b.value}>
+                {b.label}
+              </option>
             ))}
           </select>
           {selected.length > 0 ? (

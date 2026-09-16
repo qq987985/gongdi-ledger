@@ -93,7 +93,7 @@ export function dateYearOf(value: unknown): number | null {
   return y >= 2e3 && y <= 2100 ? y : null;
 }
 
-interface YearSources {
+export interface YearSources {
   year?: number;
   years?: number[];
   attendance?: { year: number }[];

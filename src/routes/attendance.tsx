@@ -10,9 +10,9 @@ import { FilePick } from "~/components/file-pick";
 import { AttendanceImport, TplLink } from "~/components/excel-import";
 import { DocActions, prepareNamedFile, setDoc, attendanceBase } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
-import { derivedYears, monthStatus, nextYear, paymentsInYear } from "~/lib/dates";
+import { derivedYears, monthStatus, nextYear } from "~/lib/dates";
+import { fallbackPayYear, summarizeYear } from "~/lib/attendance-summary";
 import { monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
-import { hasWork } from "~/lib/work";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import type { AttendanceDoc } from "~/lib/types";
 
@@ -92,26 +92,18 @@ function YearOverview({
   onAddYear: () => void;
   upcoming: number;
 }) {
-  const { year, people, attendance, attendanceDocs = [], payments } = useApp();
-  const fallbackYear = derivedYears({ year, years: [year], attendance })[0] || year;
-  const yearPay = paymentsInYear(payments, year, fallbackYear);
-  const personRows = people
-    .map((p) => {
-      const months = Array.from({ length: 12 }, (_, i) => {
-        const a = attendance.find((x) => x.year === year && x.month === i + 1 && x.name === p.name);
-        const wage = getWageAt(p, year, i + 1);
-        const calc = monthPay(a, wage);
-        return { days: calc.days, pay: calc.pay, otHours: calc.otHours, allowance: calc.allowance, deduction: calc.deduction };
-      });
-      const yearPayAmt = months.reduce((s, m) => s + m.pay, 0);
-      const yearDays = months.reduce((s, m) => s + m.days, 0);
-      const yearOt = months.reduce((s, m) => s + m.otHours, 0);
-      const paid = yearPay.filter((x) => x.owner === p.name && x.date).reduce((s, x) => s + x.amount, 0);
-      const worked = months.some((m) => hasWork(m));
-      return { p, months, yearPayAmt, yearDays, yearOt, paid, unpaid: yearPayAmt - paid, worked };
-    })
-    .filter((r) => r.worked);
-  const filledMonths = Array.from({ length: 12 }, (_, i) => monthStatus(attendance, year, i + 1).filled > 0).filter(Boolean).length;
+  const store = useApp();
+  const { year, people, attendance, attendanceDocs = [], payments } = store;
+  // 年度汇总与总览 KPI 走同一个纯函数（lib/attendance-summary.ts）：应发/已发/未发、
+  // 「有内容」判定（含纯备注行）、无日期旧发放的归属年份都只有一套口径。
+  const { rows, filledMonths, offRowsPaid } = summarizeYear({
+    people,
+    attendance,
+    payments,
+    year,
+    fallbackYear: fallbackPayYear(store),
+  });
+  const personRows = rows.map((r) => ({ p: r.person, ...r }));
   const [sumTab, setSumTab] = React.useState<"pay" | "work">("pay");
   return (
     <div className="space-y-6">
@@ -133,6 +125,11 @@ function YearOverview({
       <p className="text-sm text-muted">
         已录入 {filledMonths} / 12 个月 · 在册 {people.length} 人
       </p>
+      {offRowsPaid.count > 0 ? (
+        <p className="text-xs text-warn">
+          另有 {offRowsPaid.count} 笔 ¥{money(offRowsPaid.amount)} 发给本年没有考勤记录的人（不列入下表；总览「已发放」含这部分，别对着差额找错账）。
+        </p>
+      ) : null}
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
           const st = monthStatus(attendance, year, m);

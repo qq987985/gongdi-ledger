@@ -1,10 +1,10 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useApp } from "~/lib/store";
-import { derivedYears, monthStatus, paymentsInYear } from "~/lib/dates";
-import { monthPay, getWageAt } from "~/lib/wage";
+import { derivedYears } from "~/lib/dates";
+import { fallbackPayYear, summarizeYear, teamRows } from "~/lib/attendance-summary";
 import { overAgeLabel } from "~/lib/idcard";
-import { contractRollup } from "~/lib/contracts";
+import { contractPayable } from "~/lib/contracts-totals";
 import { money, cn } from "~/lib/utils";
 import type { Person } from "~/lib/types";
 
@@ -13,28 +13,19 @@ function Home() {
   const { year, people, attendance, payments, contracts, contractEntries, setYear } = store;
   const uiStyle = useApp((s) => s.uiStyle);
   const years = derivedYears(store);
-  const fallbackYear = years[0] || year;
-  const yearAtt = attendance.filter((a) => a.year === year);
-  const yearPays = paymentsInYear(payments, year, fallbackYear);
-  const map = Object.fromEntries(people.map((p) => [p.name, p]));
-  let should = 0;
-  for (const a of yearAtt) {
-    const p = map[a.name];
-    if (!p) continue; // 已删除人员不参与应发合计，与考勤汇总口径一致
-    const wage = getWageAt(p, a.year, a.month);
-    should += monthPay(a, wage).pay;
-  }
-  const paid = yearPays.filter((p) => p.date).reduce((s, p) => s + p.amount, 0);
-  const pendingAmt = yearPays.filter((p) => !p.date).reduce((s, p) => s + p.amount, 0);
-  const proxy = yearPays.filter((p) => p.date && p.owner !== p.receiver).length;
+  // 应发合计/已发/待发/代收/已录月份与考勤页年度汇总走同一个纯函数（见 lib/attendance-summary.ts）：
+  // 以前这里各写一段循环，无日期旧发放的归属年份与「有内容」判定都和考勤页不同，数字会对不上。
+  const summary = summarizeYear({ people, attendance, payments, year, fallbackYear: fallbackPayYear(store) });
+  const { should, paid, pendingAmt, proxyCount: proxy, filledMonths: monthsFilled } = summary;
   const teams = [...new Set(people.map((p) => p.team).filter(Boolean))];
+  const rows = teamRows(people);
   const overPeople = people.filter((p) => overAgeLabel(p.age, p.gender) === "超龄");
   const over = overPeople.length;
   const noWage = people.filter((p) => p.payType === "month" && !p.monthWage).length;
-  const monthsFilled = Array.from({ length: 12 }, (_, i) => monthStatus(attendance, year, i + 1).filled > 0).filter(Boolean).length;
-  const contractPay = contracts
-    .filter((c) => c.year === year)
-    .reduce((s, c) => s + contractRollup(c, contractEntries).payable, 0);
+  const contractPay = contractPayable(
+    contracts.filter((c) => c.year === year),
+    contractEntries,
+  );
 
   return uiStyle === "classic" ? (
     <ClassicHome
@@ -49,9 +40,7 @@ function Home() {
       pendingAmt={pendingAmt}
       proxy={proxy}
       contractPay={contractPay}
-      teamRows={teams
-        .map((t) => ({ team: t, count: people.filter((p) => p.team === t).length }))
-        .sort((a, b) => b.count - a.count)}
+      teamRows={rows}
       over={over}
       overPeople={overPeople}
       onYear={setYear}
@@ -69,10 +58,8 @@ function Home() {
       pendingAmt={pendingAmt}
       proxy={proxy}
       contractPay={contractPay}
-      maxTeam={Math.max(1, ...teams.map((t) => people.filter((p) => p.team === t).length))}
-      teamRows={teams
-        .map((t) => ({ team: t, count: people.filter((p) => p.team === t).length }))
-        .sort((a, b) => b.count - a.count)}
+      maxTeam={Math.max(1, ...rows.map((r) => r.count))}
+      teamRows={rows}
       over={over}
       overPeople={overPeople}
       onYear={setYear}

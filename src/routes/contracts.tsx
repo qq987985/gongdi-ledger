@@ -12,6 +12,7 @@ import { ContractImport } from "~/components/excel-import";
 import { ContractEditor } from "~/components/contract-editor";
 import { useApp } from "~/lib/store";
 import { contractRollup, emptyContract, CONTRACT_STATUSES } from "~/lib/contracts";
+import { sumContractRollups } from "~/lib/contracts-totals";
 
 /** 完成类状态（绿） */
 const CONTRACT_DONE = new Set(["完工", "结算完成", "结算已开票", "退质保金", "完成"]);
@@ -172,38 +173,9 @@ function ContractsPage() {
   const pager = usePager("contracts", list, [scope, status, q, year].join("|"));
   const pageRows = pager.rows;
   const allChecked = pageRows.length > 0 && pageRows.every((c) => selected.includes(c.id));
-  const totals = list.reduce(
-    (acc, c) => {
-      const r = contractRollup(c, contractEntries);
-      acc.amount += c.contractAmount || 0;
-      acc.report += r.report;
-      acc.reportIncl += r.reportIncl;
-      acc.reportExcl += r.reportExcl;
-      acc.invoice += r.invoice;
-      acc.invoiceExcl += r.invoiceExcl;
-      acc.receipt += r.receipt;
-      acc.workerPay += r.workerPay;
-      acc.subPay += r.subPay;
-      acc.remain += r.remain;
-      acc.payable += r.payable;
-      acc.dueRemain += r.dueRemain;
-      return acc;
-    },
-    {
-      amount: 0,
-      report: 0,
-      reportIncl: 0,
-      reportExcl: 0,
-      invoice: 0,
-      invoiceExcl: 0,
-      receipt: 0,
-      workerPay: 0,
-      subPay: 0,
-      remain: 0,
-      payable: 0,
-      dueRemain: 0,
-    },
-  );
+  // 合计走 lib/contracts-totals.ts：与表格里逐行的 contractRollup 同一个算法，
+  // 总览 KPI「应收」也用同一份实现（不再各写一遍加总）
+  const totals = React.useMemo(() => sumContractRollups(list, contractEntries), [list, contractEntries]);
   function dropIds(ids: string[]) {
     if (!ids.length) return;
     if (!confirmBatchDelete("合同", ids.length, "会同时删掉这些合同的报量、开票、收款流水。考勤人员不受影响。")) return;

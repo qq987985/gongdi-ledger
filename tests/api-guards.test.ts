@@ -107,14 +107,20 @@ test("约定：savePhoto 必须先 rename 就位再清旧（与 saveDoc 同一�
   );
 });
 
-test("约定：整本导出「全部」范围的月份识别要含纯备注行（与 hasAttContent 同口径）", async () => {
+test("约定：整本导出「全部」范围的月份识别走 hasContent 唯一实现（纯备注行不算空）", async () => {
   const s = stripComments(await src("src/routes/api/file/$kind.ts"));
   const start = s.indexOf("function monthsFromAttendance");
   assert.equal(start > 0, true);
   const body = s.slice(start, start + 600);
   assert.match(
     body,
-    /hasWork\(a\)\s*&&\s*!\s*String\(a\.remark/,
+    /hasContent\(a\)/,
     "monthsFromAttendance 只认 hasWork 时，纯备注月份（如整月工伤休息）不会生成 sheet，这些行导出即丢",
+  );
+  // 反例守卫：这里不许再出现「hasWork(a) && !remark」这种就地判断（第二套口径）
+  assert.equal(
+    /hasWork\(a\)\s*&&\s*!\s*String\(a\.remark/.test(body),
+    false,
+    "「备注也算有内容」只能由 work.ts 的 hasContent 定义，不许在页面/接口里就地再写一遍",
   );
 });

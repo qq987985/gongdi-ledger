@@ -9,12 +9,12 @@ import { DocActions } from "~/components/doc-actions";
 import { localToday } from "~/lib/dates";
 import { round2 } from "~/lib/wage";
 
-export const PAY_METHODS = ["现金", "转账", "微信", "支付宝", "对公", "其他"];
+// PAY_METHODS / needsVoucher 的唯一实现在 src/lib/expense-rules.ts（统计模块也要用，
+// 组件不许被 lib 反向依赖）；这里 re-export，页面的导入路径保持不变。
+export { PAY_METHODS, needsVoucher } from "~/lib/expense-rules";
+
 export function safeBase(s: string) {
   return (s || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "").trim() || "未命名";
-}
-export function needsVoucher(method: string) {
-  return (method || "现金") !== "现金";
 }
 export function amountTag(n: number) {
   const x = Number(n) || 0;

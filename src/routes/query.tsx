@@ -11,7 +11,8 @@ import { DocActions } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
 import { derivedYears } from "~/lib/dates";
 import { monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
-import { hasWork } from "~/lib/work";
+import { hasContent } from "~/lib/work";
+import { groupBuckets } from "~/lib/buckets";
 import { overAgeLabel } from "~/lib/idcard";
 import { money, copyText } from "~/lib/utils";
 import type { Person, Payment, AttendanceRow } from "~/lib/types";
@@ -76,7 +77,9 @@ function buildSlips({
       const months: any[] = [];
       for (const { year, month } of span) {
         const a = attendance.find((x) => x.year === year && x.month === month && x.name === name);
-        if (!hasWork(a)) continue;
+        // 「有内容」= 有工天/加班/补助/扣款，或只有备注（如整月「工伤休息」）：
+        // 与月度表/年度汇总/Excel 同口径，只填备注的人不再从工资条里消失
+        if (!hasContent(a)) continue;
         const wage = getWageAt(p, year, month);
         const calc = monthPay(a as MonthAttendance, wage);
         months.push({
@@ -355,7 +358,11 @@ function QueryPage() {
     if (printMode === "wage") return slips.filter((s: any) => s.months.length > 0);
     return slips;
   }, [slips, printMode]);
-  const teams = [...new Set(people.map((x) => x.team).filter(Boolean))];
+  // 按班组快捷勾选：含「未分班组」（没填班组的人也要能被一次选中，不再被 filter(Boolean) 漏掉）
+  const teams = groupBuckets(
+    people.map((x) => x.team),
+    "未分班组",
+  );
   return (
     <Need perm="query.view">
       <div className="space-y-6">
@@ -456,9 +463,15 @@ function QueryPage() {
                   <Button variant="ghost" size="sm" type="button" onClick={() => setPrintNames([])}>
                     清空
                   </Button>
-                  {teams.map((t) => (
-                    <Button key={t} variant="ghost" size="sm" type="button" onClick={() => setPrintNames(people.filter((x) => x.team === t).map((x) => x.name))}>
-                      {t}
+                  {teams.map((b) => (
+                    <Button
+                      key={b.value || "__empty__"}
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      onClick={() => setPrintNames(people.filter((x) => String(x.team ?? "").trim() === b.value).map((x) => x.name))}
+                    >
+                      {b.label}
                     </Button>
                   ))}
                 </div>

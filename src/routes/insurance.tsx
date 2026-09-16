@@ -14,6 +14,15 @@ import { DocActions, setDoc, renameFile } from "~/components/doc-actions";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { InsuranceMember, InsurancePolicy } from "~/lib/types";
 import { datePart, emptyMember, emptyPolicy, isActive, memberDays, prevDayEnd } from "~/lib/insurance";
+import { ALL_BUCKETS } from "~/lib/buckets";
+import {
+  filterMembers,
+  groupTotals,
+  leaderBuckets,
+  leaderSummary as leaderSummaryOf,
+  memberCalc,
+  memberStats,
+} from "~/lib/insurance-stats";
 
 // 统一用 dates.ts 的 localToday()，不再各自手写当天日期
 const today = localToday;
@@ -130,7 +139,7 @@ function InsurancePage() {
   }
 
   const [selectedId, setSelectedId] = React.useState("");
-  const [leader, setLeader] = React.useState("");
+  const [leader, setLeader] = React.useState(ALL_BUCKETS);
   const [statusFilter, setStatusFilter] = React.useState("");
   const [policyEdit, setPolicyEdit] = React.useState<InsurancePolicy | null>(null);
   const [memberEdit, setMemberEdit] = React.useState<InsuranceMember | null>(null);
@@ -140,17 +149,12 @@ function InsurancePage() {
   const selId = selected?.id || "";
 
   const policyMembers = React.useMemo(() => members.filter((m) => m.policyId === selId), [members, selId]);
-  const leaders = React.useMemo(
-    () => [...new Set(members.map((m) => m.leader).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh")),
-    [members],
+  // 下拉来自**当前保单**的真实分组（含「未分班组」），不再从所有保单里取非空队长
+  const leaders = React.useMemo(() => leaderBuckets(policyMembers), [policyMembers]);
+  const shownMembers = React.useMemo(
+    () => filterMembers(policyMembers, { leader, status: statusFilter }),
+    [policyMembers, leader, statusFilter],
   );
-  const shownMembers = React.useMemo(() => {
-    let list = policyMembers;
-    if (leader) list = list.filter((m) => m.leader === leader);
-    if (statusFilter === "active") list = list.filter((m) => isActive(m));
-    if (statusFilter === "ended") list = list.filter((m) => !isActive(m));
-    return list;
-  }, [policyMembers, leader, statusFilter]);
   const memberPager = usePager("insurance-members", shownMembers, [selId, leader, statusFilter].join("|"));
 
   const periodDays = selected ? daysBetween(selected.periodStart, selected.periodEnd) : 0;
@@ -159,33 +163,22 @@ function InsurancePage() {
   const coverage = selected?.coverage || 0;
   const totalPremium = premiumPerPerson * headcount;
   const perPersonDaily = periodDays > 0 ? premiumPerPerson / periodDays : 0;
-  // 使用天数统一夹紧到保单期，手填越界不参与结算
-  const clamp = { start: selected?.periodStart || "", end: selected?.periodEnd || "" };
-  const md = (m: InsuranceMember) => memberDays(m, clamp);
-  const settleOf = (m: InsuranceMember) => round2(perPersonDaily * md(m));
-  const activeCount = policyMembers.filter((m) => isActive(m)).length;
-  const shownPersonDays = shownMembers.reduce((s, m) => s + md(m), 0);
-  const shownSettle = shownMembers.reduce((s, m) => s + settleOf(m), 0);
+  // 使用天数统一夹紧到保单期，手填越界不参与结算（唯一实现在 lib/insurance.ts）
+  const calc = React.useMemo(() => memberCalc(selected), [selected?.id, selected?.periodStart, selected?.periodEnd, premiumPerPerson]);
+  const md = calc.days;
+  const settleOf = calc.settle;
+  // 人数/人天/保费全部按**当前筛选后的名单**统计（以前在保人数是全量、人天是筛选后，同一行里两个口径），
+  // 与下面的表格、打印件同源
+  const stats = React.useMemo(() => memberStats(shownMembers, calc), [shownMembers, calc]);
+  const shownPersonDays = stats.personDays;
+  const shownSettle = stats.settle;
+  const activeCount = stats.activeCount;
+  const endedCount = stats.endedCount;
 
   // 打印清单下边的按班组（队长）汇总：人数 / 累计人天 / 保费金额
-  const leaderSummary = (() => {
-    const map = new Map<string, { count: number; days: number; settle: number }>();
-    for (const m of shownMembers) {
-      const k = (m.leader || "").trim() || "未分班组";
-      const cur = map.get(k) ?? { count: 0, days: 0, settle: 0 };
-      cur.count += 1;
-      cur.days += md(m);
-      cur.settle += settleOf(m);
-      map.set(k, cur);
-    }
-    return [...map.entries()]
-      .map(([leader, v]) => ({ leader, ...v }))
-      .sort((a, b) => {
-        if (a.leader === "未分班组") return 1;
-        if (b.leader === "未分班组") return -1;
-        return a.leader.localeCompare(b.leader, "zh");
-      });
-  })();
+  const leaderSummary = React.useMemo(() => leaderSummaryOf(shownMembers, calc), [shownMembers, calc]);
+  // 分组表表尾合计 = 分组各行之和（同一个数组算出来的，不会与明细/屏幕对不上）
+  const grouped = React.useMemo(() => groupTotals(leaderSummary), [leaderSummary]);
 
   function savePolicy() {
     if (!policyEdit) return;
@@ -381,7 +374,7 @@ function InsurancePage() {
                 <span>保额/人 <b className="tabular-nums text-ink">{money(coverage)}</b> 元</span>
                 <span>总保费 <b className="tabular-nums text-ink">{money(totalPremium)}</b> 元</span>
                 <span>每人每天 <b className="tabular-nums text-ink">{money(round2(perPersonDaily))}</b> 元</span>
-                <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> 人 · 已结束 <b className="tabular-nums text-ink">{policyMembers.length - activeCount}</b> 人</span>
+                <span>在保 <b className="tabular-nums text-ink">{activeCount}</b> 人 · 已结束 <b className="tabular-nums text-ink">{endedCount}</b> 人</span>
                 <span>累计人天 <b className="tabular-nums text-ink">{round2(shownPersonDays)}</b></span>
                 <span>保费合计 <b className="tabular-nums text-ink">{money(round2(shownSettle))}</b> 元</span>
               </div>
@@ -393,10 +386,10 @@ function InsurancePage() {
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <select className="field-select h-9 w-auto" value={leader} onChange={(e) => setLeader(e.target.value)} aria-label="按队长筛选">
-                  <option value="">全部队长</option>
-                  {leaders.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
+                  <option value={ALL_BUCKETS}>全部队长</option>
+                  {leaders.map((b) => (
+                    <option key={b.value || "__empty__"} value={b.value}>
+                      {b.label}
                     </option>
                   ))}
                 </select>
@@ -477,7 +470,7 @@ function InsurancePage() {
                     {!shownMembers.length ? (
                       <tr>
                         <td colSpan={canEdit ? 9 : 8} className="py-8 text-center text-sm text-muted">
-                          {leader ? "这个队长下面还没有人" : "还没有被保人。点「新增人员」或「导入人员」。"}
+                          {leader !== ALL_BUCKETS ? "这个队长下面还没有人" : "还没有被保人。点「新增人员」或「导入人员」。"}
                         </td>
                       </tr>
                     ) : null}
@@ -609,9 +602,11 @@ function InsurancePage() {
               <Field label="队长">
                 <Input list="ins-leader-list" value={memberEdit.leader} onChange={(e) => setMemberEdit({ ...memberEdit, leader: e.target.value })} />
                 <datalist id="ins-leader-list">
-                  {leaders.map((l) => (
-                    <option key={l} value={l} />
-                  ))}
+                  {leaders
+                    .filter((b) => !b.empty)
+                    .map((b) => (
+                      <option key={b.value} value={b.label} />
+                    ))}
                 </datalist>
               </Field>
               <DateTimeField
@@ -652,9 +647,11 @@ function InsurancePage() {
               <Field label="队长">
                 <Input list="ins-leader-list" value={replaceState.leader} onChange={(e) => setReplaceState({ ...replaceState, leader: e.target.value })} />
                 <datalist id="ins-leader-list">
-                  {leaders.map((l) => (
-                    <option key={l} value={l} />
-                  ))}
+                  {leaders
+                    .filter((b) => !b.empty)
+                    .map((b) => (
+                      <option key={b.value} value={b.label} />
+                    ))}
                 </datalist>
               </Field>
               <Field label="替换生效日期（当天 00:00 起）" required>
@@ -686,7 +683,7 @@ function InsurancePage() {
               <div className="mt-1 text-sm">
                 {selected.policyNo}
                 {selected.name ? ` · ${selected.name}` : ""}
-                {leader ? ` · 队长：${leader}` : ""}
+                {leader !== ALL_BUCKETS ? ` · 队长：${leader || "未分班组"}` : ""}
                 {statusFilter === "active" ? " · 在保" : statusFilter === "ended" ? " · 已结束" : ""}
               </div>
             </header>
@@ -751,9 +748,9 @@ function InsurancePage() {
                 <tfoot>
                   <tr className="font-semibold">
                     <td className="border border-black px-2 py-0.5 text-right">合计</td>
-                    <td className="border border-black px-2 py-0.5">{leaderSummary.reduce((s, g) => s + g.count, 0)}</td>
-                    <td className="border border-black px-2 py-0.5">{round2(shownPersonDays)}</td>
-                    <td className="border border-black px-2 py-0.5">{money(round2(shownSettle))}</td>
+                    <td className="border border-black px-2 py-0.5">{grouped.count}</td>
+                    <td className="border border-black px-2 py-0.5">{round2(grouped.days)}</td>
+                    <td className="border border-black px-2 py-0.5">{money(round2(grouped.settle))}</td>
                   </tr>
                 </tfoot>
               </table>

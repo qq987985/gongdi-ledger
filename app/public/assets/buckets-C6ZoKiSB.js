@@ -1,0 +1,1 @@
+const e=`__all__`;function t(e,t){let n=new Set,r=!1;for(let t of e){let e=String(t??``).trim();e?n.add(e):r=!0}let i=[...n].sort((e,t)=>e.localeCompare(t,`zh`)).map(e=>({value:e,label:e,empty:!1}));return r&&i.push({value:``,label:t,empty:!0}),i}function n(e,t){return t===`__all__`?!0:String(e??``).trim()===t}export{t as n,n as r,e as t};

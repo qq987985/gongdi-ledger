@@ -26,6 +26,8 @@ import { useApp } from "~/lib/store";
 import { money, formatCardNo, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
 import { round2 } from "~/lib/wage";
+import { ALL_BUCKETS } from "~/lib/buckets";
+import { claimantBuckets, expensePrintRows, expenseTotals, filterExpenses } from "~/lib/expenses-stats";
 import { useGuardedClose } from "~/lib/confirm-close";
 
 function emptyExpense(year: number): any {
@@ -106,7 +108,7 @@ function ExpensesPage() {
   const payees = listPayees(list);
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState("all");
-  const [claimant, setClaimant] = React.useState("all");
+  const [claimant, setClaimant] = React.useState(ALL_BUCKETS);
   const [scope, setScope] = React.useState("year");
   const [selected, setSelected] = React.useState<string[]>([]);
   const [editing, setEditing] = React.useState<any | null>(null);
@@ -143,62 +145,27 @@ function ExpensesPage() {
       payoutFileName: same("payoutId") && first.payoutId ? first.payoutFileName || "" : "",
     }));
   }, [selected.join(","), list.length]);
-  const shown = React.useMemo(() => {
-    let rows = list;
-    if (scope === "year") rows = rows.filter((e: any) => e.year === year);
-    if (status !== "all") rows = rows.filter((e: any) => e.status === status);
-    if (claimant !== "all") rows = rows.filter((e: any) => (e.claimant || "") === claimant);
-    if (q.trim()) {
-      const s = q.trim();
-      rows = rows.filter((e: any) =>
-        [
-          e.name,
-          e.period,
-          e.remark,
-          e.payMethod,
-          e.claimant,
-          e.forWhom,
-          e.payAccount,
-          e.payBank,
-          e.payCardNo,
-          e.payoutFileName,
-          e.voucherFileName,
-        ].some((x) => (x || "").includes(s)),
-      );
-    }
-    return rows.slice().sort((a: any, b: any) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id));
-  }, [list, year, scope, status, claimant, q]);
+  const shown = React.useMemo(
+    () => filterExpenses(list, { scope: scope as "year" | "all", year, status, claimant, q }),
+    [list, year, scope, status, claimant, q],
+  );
   const pager = usePager("expenses", shown, [scope, status, claimant, q, year].join("|"));
   const pageRows = pager.rows;
-  const claimantOpts = [...new Set((list || []).map((e: any) => e.claimant).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, "zh"),
+  // 报销人下拉 = 当前范围（年份/状态/搜索）里真实存在的桶 + 「未填报销人」；
+  // 以前从所有年份取且丢掉空值桶：既会出现选了 0 行的死选项，又选不到没填报销人的记录
+  const claimantOpts = React.useMemo(
+    () => claimantBuckets(filterExpenses(list, { scope: scope as "year" | "all", year, status, claimant: ALL_BUCKETS, q })),
+    [list, scope, year, status, q],
   );
   const allChecked = pageRows.length > 0 && pageRows.every((e: any) => selected.includes(e.id));
   const picked = shown.filter((e: any) => selected.includes(e.id));
   const sumRows = picked.length ? picked : shown;
-  const totals = sumRows.reduce(
-    (s: any, e: any) => {
-      s.amount += e.amount || 0;
-      s.count += 1;
-      if (e.status === "未报销") s.open += e.amount || 0;
-      else s.done += e.amount || 0;
-      if (needsVoucher(e.payMethod) && !e.voucherFileName) s.missing += 1;
-      if (e.status === "已报销" && needsVoucher(e.payoutMethod || "转账") && !e.payoutFileName) s.missPay += 1;
-      return s;
-    },
-    { amount: 0, count: 0, open: 0, done: 0, missing: 0, missPay: 0 },
-  );
+  const totals = expenseTotals(sumRows);
   const sumTip = picked.length ? `已选 ${picked.length} 笔` : `本表 ${shown.length} 笔`;
-  const printRows = React.useMemo(() => {
-    let rows: any[] = selected.length ? list.filter((e: any) => selected.includes(e.id)) : shown;
-    if (printStatus !== "all") rows = rows.filter((e: any) => e.status === printStatus);
-    return rows
-      .slice()
-      .sort(
-        (a: any, b: any) =>
-          (a.date || "").localeCompare(b.date || "") || (a.period || "").localeCompare(b.period || ""),
-      );
-  }, [selected, list, shown, printStatus]);
+  const printRows = React.useMemo(
+    () => expensePrintRows({ list, selected, shown, printStatus }),
+    [list, selected, shown, printStatus],
+  );
   const batchRows = list.filter((e: any) => selected.includes(e.id));
   const batchTotal = round2(batchRows.reduce((s, e: any) => s + (e.amount || 0), 0));
   const anyHung = batchRows.some((e: any) => e.payoutId);
@@ -377,10 +344,10 @@ function ExpensesPage() {
               <option value="已报销">已报销</option>
             </select>
             <select className="field-select w-auto" value={claimant} onChange={(e) => setClaimant(e.target.value)}>
-              <option value="all">全部报销人</option>
-              {claimantOpts.map((n) => (
-                <option value={n} key={n}>
-                  {n}
+              <option value={ALL_BUCKETS}>全部报销人</option>
+              {claimantOpts.map((b) => (
+                <option value={b.value} key={b.value || "__empty__"}>
+                  {b.label}
                 </option>
               ))}
             </select>

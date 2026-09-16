@@ -12,7 +12,7 @@ import {
   peopleTemplateWb,
   insuranceMemberTemplateWb,
 } from "~/lib/excel";
-import { hasWork } from "~/lib/work";
+import { hasContent } from "~/lib/work";
 import { writeCenteredXlsx } from "~/lib/xlsx-center";
 import { persistOn } from "~/lib/paths.server";
 import { ledgerUnreadable, readLedger } from "~/lib/nas-fs.server";
@@ -78,9 +78,9 @@ function monthsFromAttendance(attendance: any[]) {
   const seen = new Set<number>();
   const out: { year: number; month: number; k: number }[] = [];
   for (const a of attendance || []) {
-    // 口径必须与 buildFullWorkbook 的 hasAttContent 一致：只有备注（如「工伤休息」）也算有内容。
+    // 口径唯一实现在 work.ts 的 hasContent（有工天/加班/补助/扣款，或只有备注如「工伤休息」）。
     // 否则「全部」范围导出时，一个纯备注的月份不会生成 sheet，这些行导出即丢。
-    if (!hasWork(a) && !String(a.remark || "").trim()) continue;
+    if (!hasContent(a)) continue;
     const y = a.year;
     const m = a.month;
     if (!(y >= 2e3 && y <= 2100) || !(m >= 1 && m <= 12)) continue;

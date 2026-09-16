@@ -1,7 +1,7 @@
 import type * as XLSX from "xlsx";
 import { uid } from "../utils";
 import { getWageAt, monthPay } from "../wage";
-import { hasWork } from "../work";
+import { hasContent } from "../work";
 import { daysBetween, paymentsInYear } from "../dates";
 import type {
   AttendanceRow,
@@ -160,11 +160,13 @@ function dpart(dt: string): string {
 }
 
 /**
- * 整本导出用：有工天/加班/补助/扣款算有内容，只有备注（如「工伤休息」）也算，
- * 否则这一行导出即丢。故意不动 wage.ts 的 hasWork —— 工资计算口径不能受影响。
+ * 整本导出用：有没有内容走 work.ts 的 hasContent 唯一实现
+ * （有工天/加班/补助/扣款，或只有备注如「工伤休息」也算），否则这一行导出即丢。
+ * 工资计算继续用 hasWork。1.8.2 起月度卡/年度汇总/工资条也改用 hasContent，
+ * 不再各留一份「备注算不算」的判断。
  */
 function hasAttContent(a: AttendanceRow): boolean {
-  return hasWork(a) || Boolean((a.remark || "").trim());
+  return hasContent(a);
 }
 export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
   const { year, people, attendance, payments, expenses = [], insurancePolicies = [], insuranceMembers = [], months: monthArg, skipPeople = false, skipPay = false, skipExp = false } = args;
@@ -238,8 +240,10 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
         "9月", "10月", "11月", "12月", "全年合计", "已发放金额", "未发放金额", "发放状态",
       ],
     ];
+    // 汇总/工天加班的人列必须与月表同口径（hasAttContent）：只填备注的人
+    // 在月表里有这一行，汇总表里也得有他，否则同一个工作簿里两处对不上
     const workers = people.filter((p) =>
-      attendance.some((a) => a.year === y && a.name === p.name && hasWork(a)),
+      attendance.some((a) => a.year === y && a.name === p.name && hasAttContent(a)),
     );
     workers.forEach((p, i) => {
       const months: (number | string)[] = [];
