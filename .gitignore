@@ -15,3 +15,6 @@ dist/
 .idea/
 scripts/seed-test-data.mjs
 browser-screenshots/
+
+# 视觉工具（dsh-vision-router）在本仓产生的临时件
+.dsh-vision-router/
