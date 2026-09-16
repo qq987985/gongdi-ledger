@@ -1,4 +1,58 @@
-1.8.3
+1.8.4
+
+
+[1.8.4] 2026-09-16
+- 修一个用户实测报的打印缺陷 + 清掉上一轮优化留下的 4 条小尾巴。
+- **打印缺陷（用户实测）**：发放记录页「打印明细 / 打印汇总」把**整个页面**都印出来了
+  （左侧导航、台账/年份切换、筛选栏、统计行、明细表格）。
+  根因：`window.print()` 与打印件都在，但屏幕内容没有套 `no-print`，而打印规则只有
+  `@media print { .no-print { display:none } }`（用户实测：`src/routes/payments.tsx` 的屏幕块缺 no-print）。
+  修法：**照个人查询页的既有范本**（`src/routes/query.tsx`：屏幕内容 `<div className="no-print …">` +
+  打印件 `print-only` 放在包裹之外）把发放页改齐；报销单 / 合同对账单 / 保险合同清单 / 个人查询工资条
+  用同一把尺子复查，本来就是对的（打印件在屏幕态 `display:none`，打印态只剩清单）。
+  打印媒体验证（`emulateMedia("print")`）：发放明细、发放汇总各一张截图
+  （`browser-screenshots/print/payments-明细-全部人.png` / `payments-汇总-全部人.png`，另附同页 A4 PDF），
+  断言「`.no-print` 可见数 = 0、打印件可见、`.print-only` 之外无可见文字」成立。
+  回归护栏进 `tests/ui-guards.test.ts`：含 `window.print()` 的页面必须有 no-print 包裹、打印件在包裹外，
+  并自带坏样本自检（这条守卫能抓出本次的缺陷）。
+- **台账上传的解压炸弹防护**（`src/routes/api/ledger.ts` + 新模块 `src/lib/ledger-transfer.ts`）：
+  · 解压前用 `content-length` 粗筛，解压时用 zlib 的 `maxOutputLength` 限制**解压后**大小；
+  · 上限默认 **32MB**，可用 `LEDGER_MAX_MB` 覆盖（非法值回落默认，封顶 4096MB）；
+  · 超限 → **413**（格式错仍是 400），两种都给可读中文原因、**绝不写盘**、记一条 `logServer("warn", …)`。
+    E2E 实测：100MB 全零压成 100KB 上传 → 413，且 `books/default/ledger.json` 的 sha256 前后一致
+    （拒绝的写入一个字节都没落地）；正常 ~1MB 台账 gzip 上传 → 200 且落盘内容与提交一致。
+  · 测试：`tests/ledger-transfer.test.ts` +4（炸弹 413 / 上限覆盖 / 1MB 正常 / content-length 粗筛）。
+- **`LEDGER_GZIP=off` 开关**：下行 GET 不再压缩；上行**客户端**也不压缩（`/api/health` 回
+  `ledgerGzip:false`，客户端据此跳过 CompressionStream，见 `src/lib/ledger-gzip-flag.ts`）。
+  **服务端仍然接受 gzip 请求体** —— 新老客户端互通，老客户端（缓存了旧 JS）继续压缩上传照样能存；
+  开关只影响我们自己发出去的字节。E2E 实测：off 时 GET 无 `content-encoding`、未压缩 PUT 200、
+  gzip PUT 仍 200；`LEDGER_GZIP` 不设时照旧压缩下发。测试 +3。
+- **`/api/backup` 空 body 不再「回 ok 却写空备份」**：0 字节（或没有 body）以前会一路走到
+  `saveBackup()`，把 `data/backups/考勤表.xlsx` 这个「最新备份」固定名覆盖成 0 字节。
+  现在路由在写盘前 **400** 拒绝（`saveBackup()` 里再兜一层：0 字节直接不写），
+  并且 `saveBackup()` 改成原子写（temp + rename，先落时间戳那份再更新固定名）。
+  E2E 实测：空 body → 400，`考勤表.xlsx` 的 sha256 前后一致；正常 xlsx → 200 且两份都落盘。
+  测试：新增 `tests/backup-guard.test.ts`（4 条，含「目录内容逐字节不变」断言）。
+- **日志超限改为滚动，不再停写**（`src/lib/log.server.ts`）：
+  · 当天 `YYYY-MM-DD.log` 达到 `LOG_MAX_MB`（默认 8MB）时滚动到 `YYYY-MM-DD.log.1`，
+    已有 `.1` 就写 `.2`，依次递增（编号取目录里最大编号 +1，封顶 999）；**当天现场不再被丢掉**；
+  · `.log.N` 已纳入保留策略（`isManagedLogFile` 认这个形状），过期一起删 ——
+    当初选「停写」正是因为滚动件没人清会永久堆积，这次两件事一起解决；
+  · 保留策略照旧只删过期的 `YYYY-MM-DD.log*`，**`update.log` 永不删**（含 `update.log.1`）；
+    清理时机不变（进程启动后首次写 + 每日首次写，不在每次写的热路径上扫目录）；
+  · 单行就超上限时不会无限滚动（宁可这一份超一点，也不丢这一行）。
+  E2E 实测（临时 DATA_DIR + `LOG_MAX_MB=0.0004`）：主文件 252B、生成 `.log.1`–`.log.5`、
+  15 行一条不丢；重启后清理把 `2026-08-01.log`/`2026-08-01.log.9`/`2026-08-02.log.3` 删掉，
+  `update.log` 与 `update.log.1` 保留。测试 +4（滚动 / 保留清理 .log.N / 单行超限 / 编号规则）。
+- **手机端两处布局修补**（顺手修，只动尺寸不动信息架构）：
+  · `src/components/shell.tsx`：主内容区缺底部内边距，底部固定导航（`min-h-12` + 安全区）会压住
+    最后一行内容（实测「上一页/下一页」、行内「编辑/删除」被导航遮住点不到）→ 改
+    `px-3 pt-4 pb-20 md:px-8 md:pt-6 md:pb-6`；
+  · 设置页卡片在网格里被内容撑到 408px（列宽只有 366px），外层 `overflow-x-hidden` 一裁右边的字被切掉
+    → `settings.tsx` / `members-card.tsx` 的网格补显式 `grid-cols-1`（手机单列的隐式 auto 轨道按
+    max-content 撑开）、`accounts-card.tsx` 的 section 加 `min-w-0`。
+- 自动测试 291 → **307**（307 通过 / 0 todo），70 个「导出→导入」对拍全过。
+- 四道闸：`pnpm run typecheck` 0 错误；`pnpm test` 307/307；`pnpm run test:roundtrip` 70/70；`pnpm build` 成功。
 
 
 

@@ -14,3 +14,4 @@ dist/
 .vscode/
 .idea/
 scripts/seed-test-data.mjs
+browser-screenshots/

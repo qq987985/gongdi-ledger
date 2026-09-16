@@ -1,10 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { gzipSync } from "node:zlib";
 import { persistOn } from "~/lib/paths.server";
 import { ledgerRevisionValue, ledgerUnreadable, readLedger, writeLedger } from "~/lib/nas-fs.server";
 import { ledgerPayloadSummary, validateLedgerPayload } from "~/lib/ledger-schema.server";
 import { logServer } from "~/lib/log.server";
 import { withTenant } from "~/lib/accounts.server";
+import {
+  acceptsGzip,
+  decodeRequestBody,
+  encodingTokens,
+  GZIP_ENCODINGS,
+  ledgerGzipEnabled,
+  ledgerMaxBytes,
+} from "~/lib/ledger-transfer";
 
 const CORRUPT_MSG = "服务器上的台账文件读取失败，已拒绝读写。请从 data/backups 恢复或联系管理员（不要手动清空 data）。";
 
@@ -15,41 +23,20 @@ const CORRUPT_MSG = "服务器上的台账文件读取失败，已拒绝读写�
  * - 上行：PUT 接受 `content-encoding: gzip`（浏览器 CompressionStream 压出来的），先解压再 JSON.parse。
  * - 兼容：不认识的编码 → 400（可读原因，不 500）；多重 gzip 头（反代重复追加 content-encoding）→
  *   多解一层失败就回退到上一层结果，绝不因为反代行为把用户的保存请求打挂。
+ *
+ * 1.8.4 补两件事（上限/开关的纯逻辑在 `~/lib/ledger-transfer`，可脱离 Request 单测）：
+ * - **解压炸弹防护**：content-length 粗筛 + 解压时 `maxOutputLength` 限制*解压后*大小
+ *   （`LEDGER_MAX_MB`，默认 32MB）。超限 → 413、**绝不写盘**、记 `logServer("warn", …)`。
+ * - **`LEDGER_GZIP=off`**：下行不再压缩；上行客户端不压缩。
+ *   服务端**仍然接受** gzip 请求体 —— 开关只影响我们自己发出去的字节，旧的压缩客户端照常能存。
  */
 
-/** content-encoding / accept-encoding 里允许出现的 gzip 写法（identity 由解析层过滤掉） */
-const GZIP_ENCODINGS = new Set(["gzip", "x-gzip"]);
-
-/** 按逗号拆 content-encoding，去空去 identity，统一小写 */
-function encodingTokens(header: string | null): string[] {
-  return (header || "")
-    .split(",")
-    .map((t) => t.trim().toLowerCase())
-    .filter((t) => t && t !== "identity");
-}
-
-/** 客户端是否接受 gzip：显式 q=0 视为不接受（* 也算接受） */
-function acceptsGzip(header: string | null): boolean {
-  for (const part of (header || "").split(",")) {
-    const [rawToken, ...params] = part.split(";");
-    const token = rawToken.trim().toLowerCase();
-    if (token !== "gzip" && token !== "*") continue;
-    const q = params.map((p) => p.trim().toLowerCase()).find((p) => p.startsWith("q="));
-    if (q) {
-      const val = Number.parseFloat(q.slice(2));
-      if (Number.isFinite(val) && val <= 0) continue;
-    }
-    return true;
-  }
-  return false;
-}
-
-/** JSON 响应：客户端接受 gzip 就压；压缩自身失败也退回未压缩，绝不让一次读取变成错误 */
+/** JSON 响应：客户端接受 gzip 就压（LEDGER_GZIP=off 时一律不压）；压缩自身失败也退回未压缩 */
 function jsonResponse(body: unknown, init: { acceptEncoding: string | null; status?: number }): Response {
   const bytes = Buffer.from(JSON.stringify(body), "utf8");
   const headers = new Headers({ "content-type": "application/json; charset=utf-8", vary: "Accept-Encoding" });
   const status = init.status ?? 200;
-  if (acceptsGzip(init.acceptEncoding)) {
+  if (ledgerGzipEnabled() && acceptsGzip(init.acceptEncoding)) {
     try {
       const gz = gzipSync(bytes);
       headers.set("content-encoding", "gzip");
@@ -61,26 +48,6 @@ function jsonResponse(body: unknown, init: { acceptEncoding: string | null; stat
   }
   headers.set("content-length", String(bytes.length));
   return new Response(bytes, { status, headers });
-}
-
-/** 解 PUT 的请求体：返回文本，或一句可直接回给用户的错误（结构校验/CAS 语义不受影响） */
-function decodeRequestBody(buf: Buffer, header: string | null): { text: string } | { error: string } {
-  const tokens = encodingTokens(header);
-  if (!tokens.length) return { text: buf.toString("utf8") };
-  const unknown = [...new Set(tokens.filter((t) => !GZIP_ENCODINGS.has(t)))];
-  if (unknown.length) return { error: `不支持的请求压缩格式（content-encoding: ${unknown.join(", ")}）` };
-  let cur = buf;
-  for (let i = 0; i < tokens.length; i += 1) {
-    try {
-      cur = gunzipSync(cur);
-    } catch {
-      if (i === 0) return { error: "请求体不是合法的 gzip 数据" };
-      // 头里有多个 gzip 但实际只压了一层（某些反代会重复追加 content-encoding）：
-      // 用上一层已解开的结果继续，不要因为代理行为拒绝一次正常保存
-      break;
-    }
-  }
-  return { text: cur.toString("utf8") };
 }
 
 export const Route = createFileRoute("/api/ledger")({
@@ -119,21 +86,43 @@ export const Route = createFileRoute("/api/ledger")({
           );
         }
         let buf: Buffer;
+        // content-length 粗筛：压缩后的字节数已经超过上限时（gzip 不可能把数据压得比原样还大多少），
+        // 连 body 都不用读进来 —— 先挡住「客户端老实报了大体积」的情况
+        const maxBytes = ledgerMaxBytes();
+        const declared = Number(request.headers.get("content-length") || 0);
+        if (Number.isFinite(declared) && declared > maxBytes) {
+          await logServer("warn", "台账写入被拒：content-length 超过上限", {
+            contentLength: declared,
+            maxMb: Math.floor(maxBytes / 1024 / 1024),
+          });
+          return Response.json(
+            { error: `请求体超过服务器上限（${Math.floor(maxBytes / 1024 / 1024)}MB），已拒绝保存`, invalid: true },
+            { status: 413 },
+          );
+        }
         try {
           buf = Buffer.from(await request.arrayBuffer());
         } catch {
           return Response.json({ error: "读取请求体失败", invalid: true }, { status: 400 });
         }
-        const decoded = decodeRequestBody(buf, encoding);
-        if ("error" in decoded) {
-          // 解压失败是客户端发错了（或链路坏了），400 而不是 500
-          await logServer("warn", "台账写入被拒：请求体解压失败", { encoding, error: decoded.error });
-          return Response.json({ error: `请求体解压失败：${decoded.error}`, invalid: true }, { status: 400 });
-        }
+        // 解压时用 maxOutputLength 限制**解压后**大小：100MB 全零压成 ~100KB 也进不来（解压炸弹）
+        const decoded = decodeRequestBody(buf, encoding, maxBytes);
+        if (!decoded.ok) {
+          // 超限是「内容太大」（413），格式错是「客户端发错了」（400）—— 两种都带可读原因、都不写盘
+          await logServer("warn", `台账写入被拒：${decoded.reason === "too-large" ? "解压/解析后超过上限" : "请求体解压失败"}`, {
+            encoding,
+            status: decoded.status,
+            maxMb: Math.floor(maxBytes / 1024 / 1024),
+            receivedBytes: buf.length,
+          });
+          return Response.json({ error: decoded.error, invalid: true, tooLarge: decoded.reason === "too-large" }, {
+            status: decoded.status,
+          });        }
         // 非 JSON / 空 body 以前会直接抛到框架层变成 500；这里是"客户端发错了"，应该 400
+        const text = decoded.text;
         let body: Record<string, unknown> & Partial<import("~/lib/types").LedgerState>;
         try {
-          body = JSON.parse(decoded.text) as Record<string, unknown> & Partial<import("~/lib/types").LedgerState>;
+          body = JSON.parse(text) as Record<string, unknown> & Partial<import("~/lib/types").LedgerState>;
         } catch {
           return Response.json({ error: "请求体不是合法 JSON", invalid: true }, { status: 400 });
         }

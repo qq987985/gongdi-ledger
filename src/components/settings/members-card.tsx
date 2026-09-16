@@ -102,7 +102,9 @@ export function MembersCard() {
           </li>
         ))}
       </ul>
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      {/* grid-cols-1：手机单列时用显式 1fr 轨道，否则隐式 auto 轨道按 max-content 撑开、
+          右侧被外层 overflow-x-hidden 裁掉（1.8.4 手机实测） */}
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
         <select className="field-select h-10" value={pick} onChange={(e) => setPick(e.target.value)}>
           <option value="">选择用户加入</option>
           {others.map((u) => (

@@ -246,7 +246,9 @@ export function AppShell() {
               ) : null}
             </nav>
           ) : null}
-          <main className="mx-auto w-full max-w-7xl px-3 py-4 md:px-8 md:py-6">
+          {/* 手机端底部有一条 fixed 导航（min-h-12 + 安全区）：主内容必须留出等高下内边距，
+              否则最后一行内容会永久压在导航下面点不到（1.8.4 移动端复测实测） */}
+          <main className="mx-auto w-full max-w-7xl px-3 pt-4 pb-20 md:px-8 md:pt-6 md:pb-6">
             <Outlet />
             <div className="no-print mt-10 md:hidden">
               <VersionLog />

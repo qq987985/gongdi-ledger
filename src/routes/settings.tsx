@@ -46,7 +46,9 @@ function SettingsPage() {
         <h1 className="font-display text-2xl font-semibold">设置</h1>
         <p className="mt-1 text-sm text-muted">年度、访问密码、批量工资。反代到公网请先设密码。</p>
       </header>
-      <div className="grid gap-5 lg:grid-cols-2">
+      {/* grid-cols-1：不写的话手机（单列）用的是隐式 auto 轨道，按 max-content 撑开 ——
+          卡片比列宽还宽 30px，外层 overflow-x-hidden 一裁右边的字就看不见了（1.8.4 手机实测） */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <AccountsCard />
         <UiStyleCard />
         <MembersCard />

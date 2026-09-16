@@ -229,8 +229,16 @@ export async function saveBackup(buf: Buffer, filename: string): Promise<string>
   const safe = filename.replace(/[\\/]/g, "") || "backup.xlsx";
   const dest = join(root, "backups", safe);
   await mkdir(join(root, "backups"), { recursive: true });
-  await writeFile(dest, buf);
-  await writeFile(join(root, "backups", "考勤表.xlsx"), buf);
+  // 0 字节不是备份：它会把「最新备份」固定名覆盖成空文件（路由已先 400，这里再兜一层 ——
+  // 函数是唯一的写入口，将来多一个调用方也不会漏）。
+  if (buf.length === 0) {
+    await logServer("warn", "备份写入被拒：内容为 0 字节", { dest });
+    return "";
+  }
+  // 原子写：temp + rename。先落带时间戳的那份，再更新固定名「考勤表.xlsx」——
+  // 顺序反了的话，中途崩溃会留下「最新备份指向一份不存在/半截的文件」。
+  await atomicWriteFile(dest, buf);
+  await atomicWriteFile(join(root, "backups", "考勤表.xlsx"), buf);
   return dest;
 }
 export async function listBookIds(): Promise<string[]> {

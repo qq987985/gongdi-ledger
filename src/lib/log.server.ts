@@ -11,14 +11,19 @@
  *
  * 1.8.1 补齐四个可观测性开关（全部走环境变量，都有安全默认值）：
  * - `LOG_LEVEL=debug|info|warn|error`（默认 `info`）：低于该级别的事件**既不写文件也不打 stdout**；
- * - `LOG_KEEP_DAYS`（默认 `14`）：`data/logs/` 只保留最近 N 天，且只删 `YYYY-MM-DD.log`，
+ * - `LOG_KEEP_DAYS`（默认 `14`）：`data/logs/` 只保留最近 N 天，且只删 `YYYY-MM-DD.log` 系列，
  *   **绝不删 `update.log`**（更新日志是用户排查「一键更新失败」的入口）；
- * - `LOG_MAX_MB`（默认 `8`）：某天日志超过上限就停止写当天文件，并打一条 stdout 提示（防撑爆 NAS）；
+ * - `LOG_MAX_MB`（默认 `8`）：某天日志超过上限就**滚动**到 `YYYY-MM-DD.log.1`
+ *   （已有 `.1` 就写 `.2`，依次递增 —— 见 1.8.4），不再「停写当天文件」：停写会把当天的现场直接丢掉；
  * - 清理**不在每次写的热路径上扫目录**：每进程首次写（等价「启动时一次」）+ 每天首次写各跑一次。
  *
- * 级别 / 保留期 / 该不该清理 / 哪些文件名可删，全部抽成纯函数并导出，见 tests/log-server.test.ts。
+ * 1.8.4：滚动出来的 `YYYY-MM-DD.log.N` **纳入保留策略管辖**（`isManagedLogFile` 认这个形状）——
+ * 当初选「停写」正是因为 `.log.1` 不受保留策略管辖、会在 NAS 上永久堆积；这两件事必须一起解决。
+ *
+ * 级别 / 保留期 / 该不该清理 / 哪些文件名可删 / 下一个滚动编号，全部抽成纯函数并导出，
+ * 见 tests/log-server.test.ts。
  */
-import { appendFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
+import { appendFile, mkdir, readdir, rename, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -30,8 +35,11 @@ export const DEFAULT_LOG_LEVEL: LogLevel = "info";
 export const DEFAULT_LOG_KEEP_DAYS = 14;
 export const DEFAULT_LOG_MAX_MB = 8;
 
-/** 受管日志文件名：只认 `YYYY-MM-DD.log`。`update.log`、`x.log.1`、`2026-9-1.log` 都不算。 */
-const DATED_LOG_RE = /^\d{4}-\d{2}-\d{2}\.log$/;
+/**
+ * 受管日志文件名：`YYYY-MM-DD.log` 与滚动出来的 `YYYY-MM-DD.log.N`（1.8.4 起）。
+ * `update.log`、`x.log.1`（日期段不是日期）、`2026-9-1.log` 都不算。
+ */
+const DATED_LOG_RE = /^\d{4}-\d{2}-\d{2}\.log(\.\d+)?$/;
 /** 永不删除的日志文件（更新日志是用户排查「一键更新失败」的入口，不能被保留策略清掉）。 */
 export const PROTECTED_LOG_FILES: readonly string[] = ["update.log"];
 
@@ -131,6 +139,29 @@ export function needsDailyCleanup(lastCleanupDay: string | null | undefined, tod
   return lastCleanupDay !== today;
 }
 
+/** 滚动编号上限：一天的日志滚动到 999 份已经远超任何正常场景，封顶防病态目录拖慢扫描 */
+const MAX_ROTATION_INDEX = 999;
+
+/**
+ * 滚动目标文件名（纯函数）：`YYYY-MM-DD.log` → `YYYY-MM-DD.log.<下一个空闲编号>`。
+ *
+ * 编号规则：取目录里**已有的最大编号 + 1**（第一次滚动就是 `.1`；已有 `.1` 就写 `.2`，
+ * 依次递增）。不搬移已有文件 —— 把 `.1` 改名成 `.2` 的链式搬移在一次崩溃后就可能丢文件，
+ * 而「编号越大越新」对排查日志的人一样直观。
+ */
+export function nextRotationName(day: string, existingNames: readonly unknown[] | undefined): string {
+  const base = `${day}.log`;
+  let max = 0;
+  for (const n of existingNames ?? []) {
+    if (typeof n !== "string") continue;
+    const m = /^(\d{4}-\d{2}-\d{2})\.log\.(\d+)$/.exec(n);
+    if (!m || m[1] !== day) continue;
+    const idx = Number.parseInt(m[2], 10);
+    if (Number.isFinite(idx) && idx > max) max = idx;
+  }
+  return `${base}.${Math.min(max + 1, MAX_ROTATION_INDEX)}`;
+}
+
 // ───────────────────────────── 落盘实现（非纯） ─────────────────────────────
 
 function logsDir(): string {
@@ -144,15 +175,14 @@ type DirDayState = {
   day: string;
   bytes: number;
   lastCleanupDay: string | null;
-  cappedNotified: boolean;
 };
 
-let state: DirDayState = { dir: "", day: "", bytes: -1, lastCleanupDay: null, cappedNotified: false };
+let state: DirDayState = { dir: "", day: "", bytes: -1, lastCleanupDay: null };
 
 function stateFor(dir: string, today: string): DirDayState {
   if (state.dir !== dir || state.day !== today) {
     // 换目录（等价「进程启动」）或跨天：重置缓存，顺带让首次写入触发一次清理
-    state = { dir, day: today, bytes: -1, lastCleanupDay: null, cappedNotified: false };
+    state = { dir, day: today, bytes: -1, lastCleanupDay: null };
   }
   return state;
 }
@@ -167,7 +197,7 @@ function currentMaxBytes(): number {
   return Math.floor(parseMaxMb(process.env.LOG_MAX_MB) * 1024 * 1024);
 }
 
-/** 删掉过期的 `YYYY-MM-DD.log`。只删文件（目录/软链不算），单个失败不影响其它。 */
+/** 删掉过期的 `YYYY-MM-DD.log` 与滚动出来的 `YYYY-MM-DD.log.N`。只删文件（目录/软链不算），单个失败不影响其它。 */
 async function pruneOldLogs(dir: string): Promise<void> {
   try {
     const entries = await readdir(dir, { withFileTypes: true });
@@ -204,26 +234,38 @@ async function writeLine(dir: string, line: string): Promise<void> {
       st.bytes = 0;
     }
   }
-  if (st.bytes + size > max) {
-    // 单文件上限：停止写当天文件（不轮转出 .log.1——那会在 NAS 上再堆一份没人清的日志）
-    // 这条提示是保险丝，不随 LOG_LEVEL 静音（否则文件被撑满时一点痕迹都没有）
-    if (!st.cappedNotified) {
-      st.cappedNotified = true;
+  // 达到上限 → 滚动到 `.log.N`（1.8.4）。`st.bytes > 0` 保证「单行就超过上限」时不会无限滚动。
+  if (st.bytes > 0 && st.bytes + size > max) {
+    try {
+      const names = (await readdir(dir, { withFileTypes: true })).filter((e) => e.isFile()).map((e) => e.name);
+      const target = join(dir, nextRotationName(today, names));
+      await rename(file, target);
+      st.bytes = 0;
+      // 这条提示是保险丝，不随 LOG_LEVEL 静音（否则文件被滚动时一点痕迹都没有）
       try {
         console.warn(
           JSON.stringify({
             at: now.toISOString(),
             level: "warn",
-            event: "当天日志已达上限，今天不再写文件",
-            file,
+            event: "当天日志已达上限，已滚动到下一份",
+            file: target,
             maxMb: parseMaxMb(process.env.LOG_MAX_MB),
           }),
         );
       } catch {
         /* stdout 不可用也不影响 */
       }
+    } catch {
+      // 滚动失败（权限/被占用）：退回「停写」而不是抛错 —— 日志不能拖垮业务
+      try {
+        console.warn(
+          JSON.stringify({ at: now.toISOString(), level: "warn", event: "日志滚动失败，本次不写文件", file }),
+        );
+      } catch {
+        /* stdout 不可用也不影响 */
+      }
+      return;
     }
-    return;
   }
   await appendFile(file, `${line}\n`, "utf8");
   st.bytes += size;

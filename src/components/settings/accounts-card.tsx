@@ -48,7 +48,9 @@ export function AccountsCard() {
   }, []);
   if (!ready || !persist || !me) return null;
   return (
-    <section className="space-y-5">
+    // min-w-0：网格/弹性子项的默认 min-width:auto 会让「台账名 + 一排按钮」把卡片撑到
+    // 比列宽还宽（手机端外框 overflow-x-hidden 一裁，右边的字就看不见了）
+    <section className="min-w-0 space-y-5">
       <div className="rounded-xl border border-line bg-surface p-5">
         <h2 className="font-semibold">{me.role === "admin" ? "全部台账" : "我的台账"}</h2>
         <p className="mt-1 text-sm text-muted">

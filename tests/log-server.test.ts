@@ -145,16 +145,39 @@ test("logRetentionCutoff：默认窗口 14 天，今天算第 1 天", () => {
   assert.equal(L.logRetentionCutoff(now, 14), "2026-09-03");
 });
 
-test("isManagedLogFile：只认 YYYY-MM-DD.log，update.log 与其它名字都不算", () => {
+test("isManagedLogFile：认 YYYY-MM-DD.log 与滚动件 .log.N，update.log 与其它名字都不算", () => {
   assert.equal(L.isManagedLogFile("2026-09-16.log"), true);
   assert.equal(L.isManagedLogFile("update.log"), false, "更新日志不在保留策略的管辖范围内");
   assert.equal(L.PROTECTED_LOG_FILES.includes("update.log"), true);
-  assert.equal(L.isManagedLogFile("2026-09-16.log.1"), false);
+  assert.equal(L.isManagedLogFile("2026-09-16.log.1"), true, "1.8.4：滚动件必须受保留策略管辖，否则永久堆积");
+  assert.equal(L.isManagedLogFile("2026-09-16.log.2"), true);
   assert.equal(L.isManagedLogFile("2026-9-1.log"), false);
   assert.equal(L.isManagedLogFile("20260916.log"), false);
   assert.equal(L.isManagedLogFile("2026-09-16.log.bak"), false);
+  assert.equal(L.isManagedLogFile("update.log.1"), false, "更新日志的滚动件也不在管辖范围");
   assert.equal(L.isManagedLogFile("notes.txt"), false);
   assert.equal(L.isManagedLogFile(undefined), false);
+});
+
+test("nextRotationName：第一次滚动是 .1，已有 .1 就 .2，编号取最大+1", () => {
+  assert.equal(L.nextRotationName("2026-09-16", []), "2026-09-16.log.1");
+  assert.equal(L.nextRotationName("2026-09-16", ["2026-09-16.log.1"]), "2026-09-16.log.2");
+  assert.equal(L.nextRotationName("2026-09-16", ["2026-09-16.log", "2026-09-16.log.2"]), "2026-09-16.log.3");
+  assert.equal(
+    L.nextRotationName("2026-09-16", ["2026-09-15.log.9", "2026-09-16.log.1", "notes.txt", undefined]),
+    "2026-09-16.log.2",
+    "只看当天的编号，别的日期的文件不影响",
+  );
+  assert.equal(L.nextRotationName("2026-09-16", ["2026-09-16.log.999"]), "2026-09-16.log.999", "编号封顶不失控");
+});
+
+test("isExpiredLogFile：滚动件按同一天算，过期一起过期", () => {
+  const now = new Date("2026-09-16T00:00:00.000Z");
+  assert.equal(L.isExpiredLogFile("2026-09-16.log.1", now), false, "今天的滚动件保留");
+  assert.equal(L.isExpiredLogFile("2026-09-03.log.2", now), false, "窗口第一天仍保留");
+  assert.equal(L.isExpiredLogFile("2026-09-02.log.1", now), true, "过期日期的滚动件要删");
+  assert.equal(L.isExpiredLogFile("2024-12-31.log.7", now), true);
+  assert.equal(L.isExpiredLogFile("update.log.1", now), false, "update.log 的滚动件不受管辖（保住用户排查入口）");
 });
 
 test("isExpiredLogFile：边界——窗口内第 1 天保留，再早一天才算过期", () => {
@@ -192,12 +215,13 @@ test("selectExpiredLogs：混合目录只挑该删的，且不返回受保护文
     "2024-12-31.log",
     "update.log",
     "2026-09-16.log.1",
+    "2026-09-02.log.3",
     "2026-9-1.log",
     "notes.txt",
     undefined,
   ];
   const dead = L.selectExpiredLogs(names, now, 14);
-  assert.deepEqual(dead, ["2026-09-02.log", "2024-12-31.log"]);
+  assert.deepEqual(dead, ["2026-09-02.log", "2024-12-31.log", "2026-09-02.log.3"]);
   assert.equal(dead.includes("update.log"), false);
   assert.equal(L.selectExpiredLogs(names, now, 3650).length, 0, "保留期放到 10 年就一个都不删");
 });
@@ -424,7 +448,7 @@ test("LOG_KEEP_DAYS 非法值走默认：30 天前的日志在默认 14 天下�
   restoreEnv();
 });
 
-test("单文件上限：超过 LOG_MAX_MB 就停写当天文件，并只提示一次", async () => {
+test("单文件上限：超过 LOG_MAX_MB 就滚动到 .log.1/.log.2…（不再停写当天文件）", async () => {
   const dir = await freshDir("cap");
   restoreEnv();
   process.env.DATA_DIR = dir;
@@ -437,14 +461,25 @@ test("单文件上限：超过 LOG_MAX_MB 就停写当天文件，并只提示�
   } finally {
     cap.restore();
   }
-  const rows = await readToday(dir);
-  assert.ok(rows.length >= 1, "上限内至少要先写进去一条");
-  assert.ok(rows.length < 30, `超过上限后必须停止写当天文件（实际写了 ${rows.length} 行）`);
-  const hinted = cap.lines.filter((l) => l.includes("当天日志已达上限"));
-  assert.equal(hinted.length, 1, "上限提示只打一条，别刷屏");
-  assert.match(hinted[0], /"level":"warn"/);
-  const size = Buffer.byteLength(rows.join("\n"), "utf8");
-  assert.ok(size <= 524, `文件不该超过上限（实际 ${size} 字节）`);
+  const logs = join(dir, "logs");
+  const day = shiftDay(0);
+  const names = (await readdir(logs)).sort();
+  assert.equal(names.includes(`${day}.log`), true, "主文件要在（滚动后重新开始写）");
+  assert.equal(names.includes(`${day}.log.1`), true, "第一次滚动必须产出 .1");
+  // 上限内每份都不该超（单行超上限的极端情况另有用例）
+  for (const n of names) {
+    const bytes = (await readFile(join(logs, n))).byteLength;
+    assert.ok(bytes <= 524, `${n} 不该超过上限（实际 ${bytes} 字节）`);
+  }
+  // 30 条都要在盘上：滚动意味着"内容不丢"，这正是从"停写"改成"滚动"的理由
+  const total = (await Promise.all(names.map(async (n) => readFile(join(logs, n), "utf8")))).join("");
+  const lines = total.trimEnd().split("\n");
+  assert.equal(lines.length, 30, `滚动不能丢日志（实际落了 ${lines.length} 条）`);
+  const rotated = cap.lines.filter((l) => l.includes("已滚动到下一份"));
+  assert.ok(rotated.length >= 1, "滚动时要留一条 stdout 痕迹");
+  // 主文件是被滚动后重开的那个：它的行数一定少于全部行数
+  const mainLines = (await readFile(join(logs, `${day}.log`), "utf8")).trimEnd().split("\n");
+  assert.ok(mainLines.length < 30, "主文件行数必须小于总数（说明确实滚动了）");
 
   // 恢复默认上限后不再受这个目录的历史状态影响（新目录 → 重新探测）
   restoreEnv();
@@ -459,6 +494,57 @@ test("单文件上限：超过 LOG_MAX_MB 就停写当天文件，并只提示�
     cap2.restore();
   }
   assert.equal((await readToday(dir2)).length, 1);
+  assert.equal((await readdir(join(dir2, "logs"))).length, 1, "没超上限就不该滚动");
+  restoreEnv();
+});
+
+test("滚动后保留策略会清理过期的 .log.N，update.log（含其滚动件）永不动", async () => {
+  const dir = await freshDir("prune-rotated");
+  restoreEnv();
+  process.env.DATA_DIR = dir;
+  const logs = join(dir, "logs");
+  await mkdir(logs, { recursive: true });
+  const old = shiftDay(-30);
+  const fresh = shiftDay(0);
+  await writeFile(join(logs, `${old}.log`), "旧主文件\n", "utf8");
+  await writeFile(join(logs, `${old}.log.1`), "旧滚动件 1\n", "utf8");
+  await writeFile(join(logs, `${old}.log.2`), "旧滚动件 2\n", "utf8");
+  await writeFile(join(logs, `${fresh}.log.1`), "今天的滚动件\n", "utf8");
+  await writeFile(join(logs, "update.log"), "更新日志\n", "utf8");
+  await writeFile(join(logs, "update.log.1"), "更新日志滚动件\n", "utf8");
+  const cap = captureConsole();
+  try {
+    // 新目录的首次写入 = 「进程启动时一次」清理
+    await L.logServer("info", "触发一次清理", {});
+  } finally {
+    cap.restore();
+  }
+  const names = (await readdir(logs)).sort();
+  assert.equal(names.includes(`${old}.log`), false, "过期主文件要删");
+  assert.equal(names.includes(`${old}.log.1`), false, "过期滚动件也要删（1.8.4 的重点）");
+  assert.equal(names.includes(`${old}.log.2`), false);
+  assert.equal(names.includes("update.log"), true, "更新日志永不删");
+  assert.equal(names.includes("update.log.1"), true, "更新日志的滚动件也不删");
+  assert.equal(names.includes(`${fresh}.log.1`), true, "窗口内的滚动件保留");
+  restoreEnv();
+});
+
+test("单行就超过上限时不会无限滚动（宁可这一份超一点，也不能把行丢掉）", async () => {
+  const dir = await freshDir("cap-huge-line");
+  restoreEnv();
+  process.env.DATA_DIR = dir;
+  setEnv("LOG_MAX_MB", "0.0005");
+  const cap = captureConsole();
+  try {
+    await L.logServer("warn", "一条超长日志", { pad: "y".repeat(2000) });
+    await L.logServer("warn", "又一条超长日志", { pad: "y".repeat(2000) });
+  } finally {
+    cap.restore();
+  }
+  const names = (await readdir(join(dir, "logs"))).sort();
+  assert.equal(names.length, 2, `滚动件不该无限增长（实际 ${names.join("、")}）`);
+  const total = (await Promise.all(names.map(async (n) => readFile(join(dir, "logs", n), "utf8")))).join("");
+  assert.equal(total.trimEnd().split("\n").length, 2, "两行都不能丢");
   restoreEnv();
 });
 

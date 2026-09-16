@@ -127,8 +127,10 @@ function PaymentsPage() {
   }
   return (
     <Need perm="payments.view">
-      <div className="space-y-5">
-        <header className="flex flex-wrap items-end justify-between gap-3">
+      <>
+        {/* 屏幕内容全部 no-print：打印只能出下面的 PaymentSheets，不能把导航/筛选/明细表格印出来 */}
+        <div className="no-print space-y-5">
+          <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold">发放记录</h1>
             <p className="mt-1 max-w-xl text-sm text-muted">点「编辑」弹出编辑。点一行是勾选。点遮罩或 Esc 关闭。</p>
@@ -385,6 +387,7 @@ function PaymentsPage() {
             </table>
           </div>
         ) : null}
+        </div>
         <PaymentSheets
           mode={printMode}
           label={label}
@@ -394,7 +397,7 @@ function PaymentsPage() {
           totals={printMode === "detail" ? detailTotal : summaryTotal}
           printOwner={printOwner}
         />
-      </div>
+      </>
     </Need>
   );
 }

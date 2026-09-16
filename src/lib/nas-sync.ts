@@ -3,6 +3,7 @@ import { emptyState, useApp } from "./store";
 import { buildFullWorkbook } from "./excel";
 import { toast } from "sonner";
 import { nasEnabled, setNasEnabled } from "./nas-flag";
+import { ledgerGzipOn, setLedgerGzip } from "./ledger-gzip-flag";
 import type { LedgerState } from "./types";
 import { LEDGER_SCHEMA_VERSION } from "./types";
 
@@ -39,6 +40,8 @@ export async function detectNas(): Promise<boolean> {
   try {
     const j = await (await timeoutFetch("/api/health", 2500)).json();
     on = Boolean(j.persist);
+    // 服务端 LEDGER_GZIP=off 时上行不压缩（下行由服务端自己决定，客户端无感）
+    setLedgerGzip(j.ledgerGzip);
   } catch {
     on = false;
   }
@@ -167,7 +170,8 @@ async function gzipJson(text: string): Promise<ArrayBuffer | null> {
 async function putLedger(revision: string): Promise<Response> {
   const body = sliceState(useApp.getState());
   const json = JSON.stringify(body);
-  const gz = await gzipJson(json);
+  // LEDGER_GZIP=off：上行不压缩（服务端照旧接受 gzip，老客户端不受影响）
+  const gz = ledgerGzipOn() ? await gzipJson(json) : null;
   // gz 为 null = 未压缩：不带 content-encoding，服务端按原样解析（向后兼容老客户端/老浏览器）
   const headers: Record<string, string> = { ...PUT_HEADERS(revision) };
   if (gz) headers["content-encoding"] = "gzip";

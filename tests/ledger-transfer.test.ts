@@ -11,7 +11,8 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { registerHooks } from "node:module";
@@ -289,4 +290,160 @@ test("坏台账文件：GET 仍 503（压缩不影响坏文件保护），且不
   } finally {
     await writeFile(ledgerFile, JSON.stringify(payload, null, 2), "utf8");
   }
+});
+
+// ─────────────────────── 1.8.4：解压炸弹防护 / LEDGER_MAX_MB ───────────────────────
+
+/** 当前台账文件（books/{id}/ledger.json）的字节数与内容指纹 */
+async function ledgerFileSnapshot(): Promise<{ path: string; bytes: number; hash: string }> {
+  const bookId = (await readdir(join(root, "books")))[0];
+  const path = join(root, "books", bookId, "ledger.json");
+  const buf = await readFile(path);
+  return { path, bytes: buf.byteLength, hash: createHash("sha256").update(buf).digest("hex") };
+}
+
+async function todayLogText(): Promise<string> {
+  const day = new Date().toISOString().slice(0, 10);
+  try {
+    return await readFile(join(root, "logs", `${day}.log`), "utf8");
+  } catch {
+    return "";
+  }
+}
+
+test("解压炸弹：压缩后的 100MB 全零数据 → 413，且 books/*/ledger.json 一个字节都没动", async () => {
+  delete process.env.LEDGER_MAX_MB;
+  const before = await ledgerFileSnapshot();
+  // 100MB 全零压成 ~100KB：content-length 粗筛挡不住，必须靠解压时的 maxOutputLength
+  const bomb = gzipSync(Buffer.alloc(100 * 1024 * 1024));
+  console.log(`[解压炸弹实测] 100MB 全零 → gzip ${bomb.length} B（${(bomb.length / 1024).toFixed(0)} KB）`);
+  assert.ok(bomb.length < 1024 * 1024, "构造前提：压缩后必须远小于 32MB，否则测的就不是解压路径");
+
+  const r = await call("PUT", {
+    body: bomb,
+    headers: { "content-encoding": "gzip", "if-match": await currentRevision() },
+  });
+  assert.equal(r.status, 413, "解压后超过上限必须是 413（不是 500，也不是静默成功）");
+  const j = (await r.json()) as { error?: string; tooLarge?: boolean };
+  assert.match(String(j.error), /超过服务器上限/, "要给用户可读原因");
+  assert.equal(j.tooLarge, true);
+
+  const after = await ledgerFileSnapshot();
+  assert.equal(after.bytes, before.bytes, "被拒的写入绝不能改台账文件大小");
+  assert.equal(after.hash, before.hash, "被拒的写入绝不能改台账内容");
+  assert.match(await todayLogText(), /解压\/解析后超过上限/, "拒绝要留 warn 日志（可事后查）");
+});
+
+test("上限可用 LEDGER_MAX_MB 覆盖：设 1MB 时 2MB 的未压缩台账 → 413，且不写盘", async () => {
+  process.env.LEDGER_MAX_MB = "1";
+  try {
+    const before = await ledgerFileSnapshot();
+    const big = { ...payload, pad: "x".repeat(2 * 1024 * 1024) };
+    const body = Buffer.from(JSON.stringify(big), "utf8");
+    assert.ok(body.byteLength > 1024 * 1024, `构造数据应超过 1MB 上限，实际 ${body.byteLength} B`);
+    const r = await call("PUT", {
+      body,
+      headers: { "content-type": "application/json", "if-match": await currentRevision() },
+    });
+    assert.equal(r.status, 413);
+    const after = await ledgerFileSnapshot();
+    assert.equal(after.hash, before.hash, "超限请求不得写盘");
+  } finally {
+    delete process.env.LEDGER_MAX_MB;
+  }
+});
+
+test("正常量级（~1MB）走 gzip 上行 → 200，落盘内容与提交的一致", async () => {
+  delete process.env.LEDGER_MAX_MB;
+  const pad = "正".repeat(340_000); // 3 字节/字 → ~1MB，加上其余字段略超 1MB
+  const body = { ...payload, people: payload.people.slice(0, 5), attendance: [], payments: [], pad };
+  const raw = JSON.stringify(body);
+  const rawBytes = Buffer.byteLength(raw, "utf8");
+  assert.ok(rawBytes > 900 * 1024, `构造数据应接近 1MB，实际 ${rawBytes} B`);
+  const put = await call("PUT", {
+    body: gzipSync(Buffer.from(raw, "utf8")),
+    headers: { "content-encoding": "gzip", "if-match": await currentRevision() },
+  });
+  assert.equal(put.status, 200, await put.clone().text());
+
+  const onDisk = JSON.parse(await readFile((await ledgerFileSnapshot()).path, "utf8")) as {
+    pad?: string;
+    people?: unknown[];
+  };
+  assert.equal(onDisk.pad, pad, "1MB 级内容必须原样落盘（不是被截断/改写）");
+  assert.equal(onDisk.people?.length, 5);
+});
+
+// ─────────────────────── 1.8.4：LEDGER_GZIP=off 开关 ───────────────────────
+
+test("内置开关解析：只有 off/0/false/no（大小写容忍）关压缩，其余（含乱写）保持默认开", async () => {
+  const T = await import("../src/lib/ledger-transfer");
+  for (const raw of [undefined, "", "  ", "on", "true", "yes", "随便写"]) {
+    assert.equal(T.parseGzipSwitch(raw), true, `${String(raw)} 应保持默认开`);
+  }
+  for (const raw of ["off", "OFF", " off ", "0", "false", "False", "no", "disable"]) {
+    assert.equal(T.parseGzipSwitch(raw), false, `${String(raw)} 应关压缩`);
+  }
+  assert.equal(T.DEFAULT_LEDGER_MAX_MB, 32, "解压上限默认 32MB");
+  assert.equal(T.parseLedgerMaxMb(undefined), 32);
+  assert.equal(T.parseLedgerMaxMb("64"), 64);
+  assert.equal(T.parseLedgerMaxMb("abc"), 32);
+  assert.equal(T.parseLedgerMaxMb("-1"), 32);
+  assert.equal(T.parseLedgerMaxMb("999999"), 4096, "上限封顶");
+  assert.equal(T.ledgerMaxBytes("32"), 32 * 1024 * 1024);
+});
+
+test("LEDGER_GZIP=off：GET 不压缩下发；上行不压缩照常 200；服务端仍接受 gzip 老客户端", async () => {
+  const H = await import("../src/routes/api/health");
+  type HealthHandler = () => Promise<Response>;
+  const health = (H.Route.options.server!.handlers as unknown as { GET: HealthHandler }).GET;
+  process.env.LEDGER_GZIP = "off";
+  try {
+    // 1) health 告诉客户端「上行别压」
+    const h = (await (await health()).json()) as { persist?: boolean; ledgerGzip?: boolean };
+    assert.equal(h.ledgerGzip, false, "LEDGER_GZIP=off 要如实告诉客户端");
+
+    // 2) 下行：客户端明明接受 gzip，也不压
+    const get = await call("GET", { headers: { "accept-encoding": "gzip" } });
+    assert.equal(get.status, 200);
+    assert.equal(get.headers.get("content-encoding"), null, "off 时下行不得压缩");
+    const j = (await get.json()) as { people?: unknown[] };
+    assert.ok((j.people?.length ?? 0) > 0, "不压缩也要能正常解析");
+
+    // 3) 上行未压缩：200
+    const rev = await currentRevision();
+    const plain = await call("PUT", {
+      body: JSON.stringify({ ...payload, people: payload.people.slice(0, 4), attendance: [], payments: [] }),
+      headers: { "content-type": "application/json", "if-match": rev },
+    });
+    assert.equal(plain.status, 200, "off 时未压缩上传必须正常");
+
+    // 4) 上行仍带 gzip（老客户端/缓存了旧 JS 的浏览器）：照样 200 —— 开关不能把老客户端打挂
+    const gz = await call("PUT", {
+      body: gzipSync(Buffer.from(JSON.stringify({ ...payload, people: payload.people.slice(0, 2) }), "utf8")),
+      headers: { "content-encoding": "gzip", "if-match": await currentRevision() },
+    });
+    assert.equal(gz.status, 200, "服务端必须仍然接受 gzip 请求体（新旧客户端互通）");
+  } finally {
+    delete process.env.LEDGER_GZIP;
+  }
+  // 恢复默认后立刻又压缩下发（开关是每次调用读环境变量）
+  const back = await call("GET", { headers: { "accept-encoding": "gzip" } });
+  assert.equal(back.headers.get("content-encoding"), "gzip");
+  assert.equal(((await (await health()).json()) as { ledgerGzip?: boolean }).ledgerGzip, true);
+});
+
+test("content-length 粗筛：老实报了大体积的请求在读音之前就被挡掉（413）", async () => {
+  delete process.env.LEDGER_MAX_MB;
+  const before = await ledgerFileSnapshot();
+  // 手工指定 content-length（Node 的 fetch 会按真实 body 覆盖，所以这里直接构 Request 的 header 不生效，
+  // 改用真实的 33MB 未压缩 body —— 超过默认 32MB 上限）
+  const big = Buffer.from(JSON.stringify({ ...payload, pad: "y".repeat(33 * 1024 * 1024) }), "utf8");
+  const r = await call("PUT", {
+    body: big,
+    headers: { "content-type": "application/json", "if-match": await currentRevision() },
+  });
+  assert.equal(r.status, 413);
+  assert.match(String(((await r.json()) as { error?: string }).error), /超过服务器上限/);
+  assert.equal((await ledgerFileSnapshot()).hash, before.hash, "超限请求不得写盘");
 });
