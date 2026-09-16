@@ -115,15 +115,20 @@ export function BookSwitcher({ compact }: { compact?: boolean }) {
               if (!name.trim()) return;
               // 先把当前台账还没保存的改动推上去，再新建（否则这批改动会落到新台账）
               await flushPendingLedger();
-              const r = await authOp("createBook", { name: name.trim() });
-              setName("");
-              setAdding(false);
-              await load();
-              // 让其它台账下拉实例也立刻刷新（原来只有整页刷新才出现新台账）
-              window.dispatchEvent(new Event("gongdi-books"));
-              if (r.bookId) {
-                await pullNasLedger();
-                toast.success("已新建空台账");
+              try {
+                const r = await authOp("createBook", { name: name.trim() });
+                setName("");
+                setAdding(false);
+                await load();
+                // 让其它台账下拉实例也立刻刷新（原来只有整页刷新才出现新台账）
+                window.dispatchEvent(new Event("gongdi-books"));
+                if (r.bookId) {
+                  await pullNasLedger();
+                  toast.success("已新建空台账");
+                }
+              } catch (err) {
+                // 普通成员自建台账有数量上限：服务端 400 的文案要**原样**显示（1.8.9）
+                toast.error(err instanceof Error ? err.message : "新建台账失败");
               }
             }}
           >

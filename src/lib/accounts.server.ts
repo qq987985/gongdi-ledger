@@ -10,6 +10,7 @@ import {
 } from "./nas-fs.server";
 import { dataDir, persistOn, runWithBook } from "./paths.server";
 import { ALL_PERMS, PRESETS, canWriteLedger, canManageLedger, hasPerm, type NeedId } from "./perms";
+import { maxOwnedBooks, ownedBookCount, ownedBooksLimitMessage } from "./book-quota";
 import { logServer } from "./log.server";
 import { uid } from "./utils";
 
@@ -473,6 +474,15 @@ export async function handleAuthPost(request: Request): Promise<Response> {
   if (op === "createBook") {
     const name = (body.name || "").trim();
     if (!name) return Response.json({ error: "请填写台账名称" }, { status: 400 });
+    // 成员可以自建（有自己的数据空间，也看不到别人的），但普通成员限数量：
+    // 最多 N 本「自己作为 owner」的台账（默认 5，MAX_OWNED_BOOKS 覆盖）；管理员/超管不受限。
+    // 只统计 owner —— 被管理员加为成员的台账不算他创建的（1.8.9，口径见 src/lib/book-quota.ts）。
+    if (me.role !== "admin") {
+      const limit = maxOwnedBooks();
+      const owned = ownedBookCount(data.books, me.id);
+      if (owned >= limit)
+        return Response.json({ error: ownedBooksLimitMessage(limit), limit, owned }, { status: 400 });
+    }
     const book: BookRecord = { id: uid(), name, ownerId: me.id, members: [{ userId: me.id, perms: ["*"] }] };
     data.books.push(book);
     await writeFileShape(data);
