@@ -6,12 +6,14 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { WideTable, usePager } from "~/components/wide-table";
-import { Need } from "~/components/can";
+import { Need, ReadonlyNotice, useCanSave } from "~/components/can";
 import { PaymentImport, TplLink } from "~/components/excel-import";
 import { YmPick, ymKey, monthsInRange, rangeLabel } from "~/components/ym-pick";
 import { useApp } from "~/lib/store";
 import { dateYear, derivedYears, parseDateYmd, localToday } from "~/lib/dates";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
+import { permLabel } from "~/lib/perms";
+import { blockedWrite } from "~/lib/readonly";
 import { useGuardedClose } from "~/lib/confirm-close";
 import { ALL_BUCKETS } from "~/lib/buckets";
 import {
@@ -54,6 +56,8 @@ function PaymentsPage() {
   const [editing, setEditing] = React.useState<Payment | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [fillDate, setFillDate] = React.useState(() => localToday());
+  // 只读账号：编辑/新增/删除/保存入口一律拦在入口（A 组报告第 17 项同源）
+  const canEditPay = useCanSave("payments.edit");
   const yearOpts = React.useMemo(() => {
     const set = new Set([...years, year, fromY, toY]);
     for (const p of payments) {
@@ -107,6 +111,7 @@ function PaymentsPage() {
   }
   function dropIds(ids: string[], hint: string) {
     if (!ids.length) return;
+    if (blockedWrite("payments.delete", permLabel("payments.delete"))) return;
     if (!confirmBatchDelete("发放记录", ids.length, "只删发放流水。人员档案和考勤不动。")) return;
     removePayments(ids);
     setSelected((s) => s.filter((id) => !ids.includes(id)));
@@ -114,6 +119,7 @@ function PaymentsPage() {
   }
   function applyDate(ids: string[], raw: string) {
     if (!ids.length) return;
+    if (blockedWrite("payments.edit", permLabel("payments.edit"))) return;
     const d = parseDateYmd(raw) || raw.trim();
     if (!d) {
       toast.error("请选择或填写发放日期");
@@ -135,6 +141,7 @@ function PaymentsPage() {
       <>
         {/* 屏幕内容全部 no-print：打印只能出下面的 PaymentSheets，不能把导航/筛选/明细表格印出来 */}
         <div className="no-print space-y-5">
+          <ReadonlyNotice perm="payments.edit" />
           <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold">发放记录</h1>
@@ -148,7 +155,10 @@ function PaymentsPage() {
             <PaymentImport />
             <Button
               type="button"
+              disabled={!canEditPay}
+              title={canEditPay ? undefined : `你是只读账号（缺「${permLabel("payments.edit")}」权限），改动不会保存。`}
               onClick={() => {
+                if (blockedWrite("payments.edit", permLabel("payments.edit"))) return;
                 setCreating(true);
                 setEditing(emptyPayment());
               }}
@@ -284,7 +294,10 @@ function PaymentsPage() {
                       variant="outline"
                       size="sm"
                       type="button"
+                      disabled={!canEditPay}
+                      title={canEditPay ? undefined : `你是只读账号（缺「${permLabel("payments.edit")}」权限），改动不会保存。`}
                       onClick={() => {
+                        if (blockedWrite("payments.edit", permLabel("payments.edit"))) return;
                         setCreating(false);
                         setEditing(p);
                       }}
@@ -325,6 +338,7 @@ function PaymentsPage() {
               setCreating(false);
             }}
             onSave={(row) => {
+              if (blockedWrite("payments.edit", permLabel("payments.edit"))) return;
               if (creating) {
                 addPayment({
                   owner: row.owner,

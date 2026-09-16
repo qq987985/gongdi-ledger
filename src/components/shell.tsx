@@ -79,7 +79,14 @@ export function AppShell() {
       else {
         setGate("app");
         try {
-          const { detectNas, pullNasLedger } = await import("~/lib/nas-sync");
+          const { detectNas, pullNasLedger, checkCacheOwner, setCacheOwner, dropLocalLedger } = await import("~/lib/nas-sync");
+          // 换过账号 / 换过台账：本机还留着上一份，必须先丢掉再拉 —— 否则没有 people.view 的
+          // 账号会在总览看到上一个账号的在册人数与工资（A 组报告第 30 项）。
+          const owner = String(s.user.id || s.user.username || "");
+          if (checkCacheOwner(owner, String(s.bookId || "")) === "changed") {
+            dropLocalLedger(`账号或台账变了（${owner}::${s.bookId}）`);
+          }
+          setCacheOwner(owner, String(s.bookId || ""));
           await detectNas();
           // 登录后第一次进当前台账：允许把本机旧数据升级上去（空台账时）
           await pullNasLedger({ seed: true });
@@ -117,6 +124,9 @@ export function AppShell() {
     if (acct) {
       authOp("logout").finally(() => {
         lockGate();
+        // 退出登录就把本机这份台账清掉：下一个在这台机器上登录的账号
+        // 不能看到上一个账号的人员/工资数字（A 组报告第 30 项）
+        void import("~/lib/nas-sync").then((m) => m.dropLocalLedger("退出登录"));
         setGate("login");
         toast.success("已退出登录");
       });

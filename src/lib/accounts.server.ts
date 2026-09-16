@@ -726,12 +726,19 @@ function checkNeed(perms: string[] | undefined, need: string): boolean {
   return hasPerm(perms, need);
 }
 
+/**
+ * 权限门禁 + 台账上下文。
+ *
+ * `fn` 会拿到解析好的 tenant（1.8.7 起）：导出这类「先鉴权、再写操作记录」的路由
+ * 需要知道是谁在导（原来只能再 resolveTenant 一次，白读一遍 accounts.json）。
+ * 老调用点写 `async () => …` 依然合法（参数少写不影响类型）。
+ */
 export async function withTenant(
   request: Request,
-  fn: () => Response | Promise<Response>,
+  fn: (tenant: Tenant) => Response | Promise<Response>,
   need?: NeedSpec,
 ): Promise<Response> {
-  if (!persistOn()) return fn();
+  if (!persistOn()) return fn({} as Tenant);
   const t = await resolveTenant(request);
   if (t.broken) return Response.json({ error: ACCOUNTS_BROKEN_MSG, broken: true }, { status: 503 });
   if (t.needSetup) return Response.json({ error: "need setup", needSetup: true }, { status: 401 });
@@ -751,7 +758,7 @@ export async function withTenant(
     const msg = n === "ledger.manage" ? "没有修改整本台账的权限" : n === "ledger.write" ? "没有修改权限" : "没有权限";
     return Response.json({ error: msg, need: n }, { status: 403 });
   }
-  return runWithBook(t.bookId, fn);
+  return runWithBook(t.bookId, () => fn(t));
 }
 
 export function memberList(book: BookRecord | null, users: UserRecord[]) {

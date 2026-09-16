@@ -5,7 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { WideTable } from "~/components/wide-table";
-import { Need } from "~/components/can";
+import { Can, Need, ReadonlyNotice, useCanSave } from "~/components/can";
 import { FilePick } from "~/components/file-pick";
 import { AttendanceImport, TplLink } from "~/components/excel-import";
 import { DocActions, prepareNamedFile, setDoc, attendanceBase } from "~/components/doc-actions";
@@ -13,6 +13,8 @@ import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear } from "~/lib/dates";
 import { fallbackPayYear, summarizeYear } from "~/lib/attendance-summary";
 import { monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
+import { permLabel } from "~/lib/perms";
+import { blockedWrite } from "~/lib/readonly";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import type { AttendanceDoc } from "~/lib/types";
 
@@ -43,6 +45,7 @@ function AttendancePage() {
   return (
     <Need perm="attendance.view">
       <div className="space-y-5">
+        <ReadonlyNotice perm="attendance.edit" />
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <button type="button" className="mb-2 inline-flex items-center gap-1 text-xs text-muted hover:text-ink" onClick={() => leaveMonth(() => setMonth(null))}>
@@ -73,6 +76,8 @@ function AttendancePage() {
             monthDirtyRef.current = d;
           }}
           onSave={(rows) => {
+            // 只读账号不落盘、也不弹「已保存」（A 组报告第 17 项同源）
+            if (blockedWrite("attendance.edit", permLabel("attendance.edit"))) return;
             saveAttendanceMonth(year, month, rows);
             toast.success("本月考勤已保存");
           }}
@@ -118,10 +123,14 @@ function YearOverview({
         </div>
         <div className="flex flex-wrap gap-2">
           <TplLink href={`/api/file/attendance-template?year=${year}`} filename={`${year}年考勤导入模板.xlsx`} />
-          <AttendanceImport />
-          <Button variant="outline" type="button" onClick={onAddYear}>
-            <Plus className="size-4" /> 新增 {upcoming} 年
-          </Button>
+          <Can perm="import.use">
+            <AttendanceImport />
+          </Can>
+          <Can perm="settings.year">
+            <Button variant="outline" type="button" onClick={onAddYear}>
+              <Plus className="size-4" /> 新增 {upcoming} 年
+            </Button>
+          </Can>
         </div>
       </header>
       <p className="text-sm text-muted">
@@ -320,6 +329,8 @@ function MonthTable({
   onSave: (rows: MonthRow[]) => void;
 }) {
   const byName = Object.fromEntries(existing.map((a) => [a.name, a]));
+  // 只读账号：月表里的一切写入入口（保存/加人/删人/上传影像）都不出现
+  const canEditMonth = useCanSave("attendance.edit");
   // 初始快照：与保存后的 store 数据同序同字段，保存成功后 dirty 会自动回到 false
   const initialRows: MonthRow[] = existing
     .filter((a) => a.name.trim())
@@ -366,6 +377,7 @@ function MonthTable({
   function removeAt(i: number) {
     const name = rows[i]?.name;
     if (!name) return;
+    if (blockedWrite("attendance.edit", permLabel("attendance.edit"))) return;
     // 与「删除所选」口径一致：确认后立即保存本月（避免行已消失但实际未删除）
     if (!confirm(`从本月考勤里去掉「${name}」？\n\n人员档案和发放记录不动，本月会立即保存。`)) return;
     const keep = rows.filter((_, idx) => idx !== i);
@@ -376,6 +388,7 @@ function MonthTable({
   }
   function removeSelected() {
     if (!selected.length) return;
+    if (blockedWrite("attendance.edit", permLabel("attendance.edit"))) return;
     if (!confirmBatchDelete("本月考勤", selected.length, "只从本月名单里去掉这些人。人员档案和发放记录不动。保存后生效。")) return;
     const keep = rows.filter((r) => !selected.includes(r.name));
     setRows(keep);
@@ -484,7 +497,7 @@ function MonthTable({
           ) : null}
         </div>
         {dirty ? <span className="text-xs text-warn">有未保存的修改</span> : null}
-        <Button onClick={() => onSave(rows)}>保存本月</Button>
+        {canEditMonth ? <Button onClick={() => onSave(rows)}>保存本月</Button> : null}
       </div>
       <WideTable id="attendance-month">
         <table className="wide-table text-sm">
@@ -590,15 +603,21 @@ function MonthFiles({ year, month }: { year: number; month: number }) {
   const [remark, setRemark] = React.useState("");
   // 一批文件是逐份 await 上传的：请求期间禁用按钮，否则用户等不及再点一次会重复上传（1.8.1）
   const [uploading, setUploading] = React.useState(false);
+  // 上传影像也要写台账（attendanceDocs）：只读账号不给上传入口
+  const canUpload = useCanSave("attendance.edit");
+  // 自动命名跟随**当前正在编辑的年月**（原提示写死「2026年3月」，
+  // 编辑 2025-12 时也这么说 —— A 组报告第 64 项）
+  const autoName = `考勤-${year}年${month}月`;
   return (
     <section className="rounded-xl border border-line bg-surface p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">本月考勤影像资料</h2>
           <p className="mt-1 text-xs text-muted">
-            可上传多份。自动命名为「考勤-2026年3月」。文件落在 data/photos/考勤影像。删除、替换前会确认。
+            可上传多份。自动命名为「{autoName}」。文件落在 data/photos/考勤影像。删除、替换前会确认。
           </p>
         </div>
+        {canUpload ? (
         <FilePick
           kind="file"
           compact
@@ -609,6 +628,7 @@ function MonthFiles({ year, month }: { year: number; month: number }) {
           hint="点击选择，或把文件拖到这里，可一次多份"
           onFiles={async (files) => {
             if (!files.length || uploading) return;
+            if (blockedWrite("attendance.edit", permLabel("attendance.edit"))) return;
             setUploading(true);
             try {
               const taken = docs.map((d: AttendanceDoc) => d.fileName);
@@ -629,6 +649,7 @@ function MonthFiles({ year, month }: { year: number; month: number }) {
             }
           }}
         />
+        ) : null}
       </div>
       <Input className="mt-3" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="备注（选填，会写在接下来上传的文件上）" />
       {list.length === 0 ? <p className="mt-3 text-sm text-muted">还没有影像资料。</p> : null}
@@ -648,6 +669,7 @@ function MonthFiles({ year, month }: { year: number; month: number }) {
               fileName={d.fileName}
               suggest={attendanceBase(year, month)}
               taken={docs.map((x: AttendanceDoc) => x.fileName)}
+              readOnly={!canUpload}
               onReplaced={(name) => patch(d.id, { fileName: name })}
               onDeleted={() => remove([d.id])}
             />

@@ -3,12 +3,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
-import { Need } from "~/components/can";
+import { Need, Can, ReadonlyNotice, useCanSave } from "~/components/can";
 import { PhotoSlot, PhotoFlag, ScanPhotosButton, usePhotoFlags } from "~/components/photo-slot";
+import { permLabel } from "~/lib/perms";
+import { blockedWrite } from "~/lib/readonly";
 import { useApp } from "~/lib/store";
 
 function PhotosPage() {
   const people = useApp((s) => s.people);
+  // 只读账号：照片页不给「编辑/上传」入口（照片写入同样要落台账）
+  const canEditPhoto = useCanSave("photos.edit");
   const [q, setQ] = React.useState("");
   const [filter, setFilter] = React.useState("all");
   const [picked, setPicked] = React.useState<string | null>(null);
@@ -29,6 +33,7 @@ function PhotosPage() {
   return (
     <Need perm="photos.view">
       <div className="space-y-5">
+        <ReadonlyNotice perm="photos.edit" />
         <header>
           <h1 className="font-display text-2xl font-semibold">照片管理</h1>
           <p className="mt-1 text-sm text-muted">
@@ -37,7 +42,9 @@ function PhotosPage() {
         </header>
         <div className="flex flex-wrap gap-2">
           <Input className="max-w-sm" placeholder="筛选姓名或班组" value={q} onChange={(e) => setQ(e.target.value)} />
-          <ScanPhotosButton names={names} onDone={() => setTick((n) => n + 1)} />
+          <Can perm="photos.edit">
+            <ScanPhotosButton names={names} onDone={() => setTick((n) => n + 1)} />
+          </Can>
           {[
             ["all", "全部"],
             ["missing", "缺任意"],
@@ -89,7 +96,17 @@ function PhotosPage() {
                 return (
                   <tr key={p.id} className={`border-b border-line last:border-0 hover:bg-accent-soft ${on ? "bg-accent-soft" : ""}`}>
                     <td className="p-3">
-                      <Button variant="outline" size="sm" type="button" onClick={() => setPicked(p.name)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        disabled={!canEditPhoto}
+                        title={canEditPhoto ? undefined : `你是只读账号（缺「${permLabel("photos.edit")}」权限），改动不会保存。`}
+                        onClick={() => {
+                          if (blockedWrite("photos.edit", permLabel("photos.edit"))) return;
+                          setPicked(p.name);
+                        }}
+                      >
                         编辑
                       </Button>
                     </td>

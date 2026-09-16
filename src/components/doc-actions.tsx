@@ -286,6 +286,7 @@ export function DocActions({
   taken = [],
   onDeleted,
   onReplaced,
+  readOnly = false,
 }: {
   id: string;
   kind: string;
@@ -294,6 +295,8 @@ export function DocActions({
   taken?: string[];
   onDeleted?: () => void;
   onReplaced?: (saved: string) => void;
+  /** true = 只读账号：只留查看/下载/复制，隐藏「替换 / 上传 / 删除」（1.8.7） */
+  readOnly?: boolean;
 }) {
   const ref = React.useRef<HTMLInputElement>(null);
   const [preview, setPreview] = React.useState<PreviewTarget | null>(null);
@@ -361,7 +364,7 @@ export function DocActions({
       ) : (
         <span className="self-center text-[11px] text-subtle">未上传</span>
       )}
-      {onReplaced ? (
+      {onReplaced && !readOnly ? (
         <>
           <input
             ref={ref}
@@ -399,7 +402,7 @@ export function DocActions({
           </button>
         </>
       ) : null}
-      {onDeleted && fileName ? (
+      {onDeleted && fileName && !readOnly ? (
         <button
           type="button"
           className="rounded-sm border border-line px-1.5 py-0.5 text-[11px] text-muted hover:text-danger"

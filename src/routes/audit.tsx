@@ -47,9 +47,14 @@ function AuditPage() {
   const [admin, setAdmin] = React.useState(false);
   const [note, setNote] = React.useState("");
   const [edit, setEdit] = React.useState<AuditEntry | null>(null);
+  /** 批量删除的勾选（管理员）：接口早支持 ?ids=，界面一直没入口（A 组报告第 41 项） */
+  const [selected, setSelected] = React.useState<string[]>([]);
   const canView = useCan("audit.view");
   async function load() {
-    setRows(await fetchAudit());
+    const next = await fetchAudit();
+    setRows(next);
+    // 记录被删/被筛掉后，勾选里不能留着不存在的 id
+    setSelected((s) => s.filter((id) => next.some((e) => e.id === id)));
     const s = await authStatus();
     setAdmin(s.user?.role === "admin");
   }
@@ -127,12 +132,55 @@ function AuditPage() {
             >
               补记
             </Button>
+            {/* 批量删：接口 DELETE /api/audit?ids=a,b 早就支持（实测 76→74），界面上一直没有入口 */}
+            <Button
+              variant="danger"
+              type="button"
+              disabled={!selected.length}
+              onClick={async () => {
+                if (!selected.length) return;
+                if (
+                  !confirm(
+                    `删除选中的 ${selected.length} 条操作记录？\n\n删除后无法恢复，之后查不到这些操作。`,
+                  )
+                )
+                  return;
+                const r = await fetch(`/api/audit?ids=${encodeURIComponent(selected.join(","))}`, {
+                  method: "DELETE",
+                  credentials: "include",
+                });
+                if (!r.ok) {
+                  toast.error(`删除失败（${r.status}）`);
+                  return;
+                }
+                const n = selected.length;
+                setSelected([]);
+                await load();
+                toast.success(`已删除 ${n} 条操作记录`);
+              }}
+            >
+              删除所选（{selected.length}）
+            </Button>
           </div>
         ) : null}
         <WideTable id="audit" pager={pager as any}>
           <table className="wide-table text-sm">
             <thead className="border-b border-line text-xs text-muted">
               <tr>
+                {admin ? (
+                  <th className="w-10 p-3">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      aria-label="全选本页操作记录"
+                      checked={pageRows.length > 0 && pageRows.every((e) => selected.includes(e.id))}
+                      onChange={(ev) => {
+                        const ids = pageRows.map((e) => e.id);
+                        setSelected((s) => (ev.target.checked ? [...new Set([...s, ...ids])] : s.filter((id) => !ids.includes(id))));
+                      }}
+                    />
+                  </th>
+                ) : null}
                 <th className="p-3">时间</th>
                 <th className="p-3">操作人</th>
                 <th className="p-3">模块</th>
@@ -144,6 +192,19 @@ function AuditPage() {
             <tbody>
               {pageRows.map((e) => (
                 <tr key={e.id} className="border-b border-line last:border-0">
+                  {admin ? (
+                    <td className="p-3">
+                      <input
+                        type="checkbox"
+                        className="size-4"
+                        aria-label={`选择 ${fmt(e.at)} 的操作记录`}
+                        checked={selected.includes(e.id)}
+                        onChange={(ev) =>
+                          setSelected((s) => (ev.target.checked ? [...s, e.id] : s.filter((id) => id !== e.id)))
+                        }
+                      />
+                    </td>
+                  ) : null}
                   <td className="whitespace-nowrap p-3">{fmt(e.at)}</td>
                   <td className="p-3">{e.userName}</td>
                   <td className="p-3">{e.module}</td>

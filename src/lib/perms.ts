@@ -207,6 +207,16 @@ export const PRESETS: PermPreset[] = [
   },
 ];
 
+/** 权限的中文名（如「人员 新增/修改」）：只读提示、禁用按钮的 title 都用它，查不到就回原 id */
+export function permLabel(id: string): string {
+  for (const g of PERM_TABLE) {
+    for (const item of g.items) {
+      if (item.id === id) return `${g.label} ${item.label}`;
+    }
+  }
+  return id;
+}
+
 export function hasPerm(perms: string[] | undefined | null, id: string): boolean {
   const list = perms || [];
   if (!list.length) return false;

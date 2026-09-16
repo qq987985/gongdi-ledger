@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { authOp, authStatus } from "~/lib/auth";
 import { setLivePerms } from "~/lib/perms";
-import { flushPendingLedger, pullNasLedger } from "~/lib/nas-sync";
+import { dropLocalLedger, flushPendingLedger, pullNasLedger, setCacheOwner } from "~/lib/nas-sync";
 
 export function BookSwitcher({ compact }: { compact?: boolean }) {
   const [books, setBooks] = React.useState<{ id: string; name: string }[]>([]);
@@ -45,6 +45,9 @@ export function BookSwitcher({ compact }: { compact?: boolean }) {
     window.dispatchEvent(new CustomEvent("gongdi-book", { detail: n }));
     const s = await authStatus();
     setLivePerms(s.persist ? s.perms || [] : ["*"]);
+    // 换台账先丢掉上一本的残留：拉到新数据前屏幕上是空的，不是上一本的
+    dropLocalLedger(`切换到台账 ${id}`);
+    setCacheOwner(String(s.user?.id || ""), id);
     await pullNasLedger();
     toast.success(`已切换到「${n}」`);
   }
@@ -92,6 +95,7 @@ export function BookSwitcher({ compact }: { compact?: boolean }) {
                 setRenaming(false);
                 await load();
                 window.dispatchEvent(new CustomEvent("gongdi-book", { detail: n }));
+                window.dispatchEvent(new Event("gongdi-books"));
                 toast.success(`已改成「${n}」`);
               } catch (err) {
                 toast.error(err instanceof Error ? err.message : "改名失败");
@@ -115,6 +119,8 @@ export function BookSwitcher({ compact }: { compact?: boolean }) {
               setName("");
               setAdding(false);
               await load();
+              // 让其它台账下拉实例也立刻刷新（原来只有整页刷新才出现新台账）
+              window.dispatchEvent(new Event("gongdi-books"));
               if (r.bookId) {
                 await pullNasLedger();
                 toast.success("已新建空台账");

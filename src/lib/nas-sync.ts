@@ -4,6 +4,7 @@ import { buildFullWorkbook } from "./excel";
 import { toast } from "sonner";
 import { nasEnabled, setNasEnabled } from "./nas-flag";
 import { ledgerGzipOn, setLedgerGzip } from "./ledger-gzip-flag";
+import { setBackupKeep } from "./backup-keep";
 import type { LedgerState } from "./types";
 import { LEDGER_SCHEMA_VERSION } from "./types";
 
@@ -42,6 +43,8 @@ export async function detectNas(): Promise<boolean> {
     on = Boolean(j.persist);
     // 服务端 LEDGER_GZIP=off 时上行不压缩（下行由服务端自己决定，客户端无感）
     setLedgerGzip(j.ledgerGzip);
+    // 备份保留份数（BACKUP_KEEP）：设置页提示用
+    setBackupKeep(j.backupKeep);
   } catch {
     on = false;
   }
@@ -82,6 +85,50 @@ async function reportPullFailure(r: Response): Promise<void> {
   else toast.error(`读取台账失败（${r.status}），请检查网络`);
 }
 
+/**
+ * 清掉本机这份台账（内存 + localStorage 持久化）。
+ *
+ * 用于「换账号 / 退出登录 / 切换台账」：内存里留着上一份时，一个**没有 people.view 的账号**
+ * 打开总览仍会看到上一个账号的在册人数、应发/已发工资（A 组报告第 30 项，实测复现）。
+ * 清空后由调用方重新 `pullNasLedger()` 拉本账号该看的（拉不到就是 0，绝不拿别人的数字充数）。
+ */
+export function dropLocalLedger(reason: string): void {
+  const uiStyle = useApp.getState().uiStyle;
+  const accessHash = useApp.getState().accessHash;
+  applyRemote(() => useApp.getState().setAll({ ...emptyState(), accessHash, uiStyle }));
+  dirty = false;
+  pushFailed = false;
+  ledgerRevision = "";
+  console.warn(`已清空本机台账缓存：${reason}`);
+}
+
+/** 本机缓存归属哪个「账号::台账」。只记一个字符串，用来判断缓存是不是当前会话的。 */
+const CACHE_OWNER_KEY = "gongdi-ledger-v5-owner";
+
+export type CacheOwnerState = "same" | "absent" | "changed";
+
+/**
+ * 本机缓存的归属检查。
+ * - `same`：还是同一个账号 + 同一本台账，别动它；
+ * - `absent`：没记过归属（老版本升级上来 / 首次运行）—— 保留本机数据，让 `seed` 路径能把它升级上去；
+ * - `changed`：换过账号或换过台账，**必须先清空**再拉。
+ */
+export function checkCacheOwner(userId: string, bookId: string): CacheOwnerState {
+  const next = `${userId}::${bookId}`;
+  let prev = "";
+  try {
+    prev = localStorage.getItem(CACHE_OWNER_KEY) || "";
+  } catch {}
+  if (!prev) return "absent";
+  return prev === next ? "same" : "changed";
+}
+
+export function setCacheOwner(userId: string, bookId: string): void {
+  try {
+    localStorage.setItem(CACHE_OWNER_KEY, `${userId}::${bookId}`);
+  } catch {}
+}
+
 export async function pullNasLedger(opts: PullNasLedgerOptions = {}): Promise<void> {
   if (!nasEnabled()) return;
   pullDepth += 1;
@@ -89,6 +136,9 @@ export async function pullNasLedger(opts: PullNasLedgerOptions = {}): Promise<vo
     const r = await timeoutFetch("/api/ledger", 4e3);
     if (!r.ok) {
       await reportPullFailure(r);
+      // 401/403 = 这个账号本来就不该看到这本台账的数据。这时候留着上一份，
+      // 屏幕上就还是上一个账号的工资数字（第 30 项），所以必须清掉。
+      if (r.status === 401 || r.status === 403) dropLocalLedger(`读取台账被拒（${r.status}）`);
       return;
     }
     ledgerRevision = r.headers.get("x-ledger-revision") || "";

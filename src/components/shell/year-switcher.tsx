@@ -5,7 +5,10 @@ import { Button } from "~/components/ui/button";
 import { confirmRemoveYear, monthStatus, nextYear } from "~/lib/dates";
 import { nasEnabled } from "~/lib/nas-flag";
 import { pullNasLedger } from "~/lib/nas-sync";
+import { permLabel } from "~/lib/perms";
+import { blockedWrite } from "~/lib/readonly";
 import { useApp } from "~/lib/store";
+import { Can } from "~/components/can";
 
 export function YearSwitcher({ compact }: { compact?: boolean }) {
   const year = useApp((s) => s.year);
@@ -20,10 +23,14 @@ export function YearSwitcher({ compact }: { compact?: boolean }) {
   const nxt = list[idx + 1];
   const upcoming = nextYear(list);
   function addNext() {
+    // 只读账号不该出现「新增年度」：服务端 /api/year 要 settings.year，
+    // 本机改了也只留在本机（A 组报告 30b）
+    if (blockedWrite("settings.year", permLabel("settings.year"))) return;
     const created = addYear(upcoming);
     toast.success(`${created} 年已展开`);
   }
   async function dropYear(y: number) {
+    if (blockedWrite("settings.year", permLabel("settings.year"))) return;
     if (list.length <= 1) {
       toast.error("至少保留一年，不能删光");
       return;
@@ -73,22 +80,24 @@ export function YearSwitcher({ compact }: { compact?: boolean }) {
           <ChevronRight className="size-4" />
         </Button>
       </div>
-      <button
-        type="button"
-        className="flex h-9 w-full items-center justify-center gap-1 rounded-sm border border-dashed border-line px-2 text-xs text-muted hover:border-accent hover:text-ink"
-        onClick={addNext}
-      >
-        <Plus className="size-3.5" /> 新增 {upcoming} 年
-      </button>
-      {list.length > 1 ? (
+      <Can perm="settings.year">
         <button
           type="button"
-          className="flex h-9 w-full items-center justify-center gap-1 rounded-sm border border-dashed border-line px-2 text-xs text-muted hover:border-danger hover:text-danger"
-          onClick={() => dropYear(year)}
+          className="flex h-9 w-full items-center justify-center gap-1 rounded-sm border border-dashed border-line px-2 text-xs text-muted hover:border-accent hover:text-ink"
+          onClick={addNext}
         >
-          <Trash2 className="size-3.5" /> 删除 {year} 年
+          <Plus className="size-3.5" /> 新增 {upcoming} 年
         </button>
-      ) : null}
+        {list.length > 1 ? (
+          <button
+            type="button"
+            className="flex h-9 w-full items-center justify-center gap-1 rounded-sm border border-dashed border-line px-2 text-xs text-muted hover:border-danger hover:text-danger"
+            onClick={() => dropYear(year)}
+          >
+            <Trash2 className="size-3.5" /> 删除 {year} 年
+          </button>
+        ) : null}
+      </Can>
     </div>
   );
 }

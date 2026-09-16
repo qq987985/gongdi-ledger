@@ -15,8 +15,9 @@ import {
 import { hasContent } from "~/lib/work";
 import { writeCenteredXlsx } from "~/lib/xlsx-center";
 import { persistOn } from "~/lib/paths.server";
-import { ledgerUnreadable, readLedger } from "~/lib/nas-fs.server";
+import { ledgerUnreadable, readLedger, appendAudit } from "~/lib/nas-fs.server";
 import { withTenant, type NeedSpec } from "~/lib/accounts.server";
+import { logServer } from "~/lib/log.server";
 import { parseDateYmd, dateYear, nextYear } from "~/lib/dates";
 
 function ymKey(y: number, m: number): number {
@@ -189,7 +190,31 @@ export const Route = createFileRoute("/api/file/$kind")({
         // 模板下载需导入权限；导出需导出权限 + 对应模块的查看权限（防止只给 export.use 就能导出身份证/银行卡）
         const viewPerm = EXPORT_VIEW_PERM[kind];
         const need: NeedSpec = kind.endsWith("-template") ? "import.use" : viewPerm ? ["export.use", viewPerm] : "export.use";
-        const handle = async (): Promise<Response> => {
+        /**
+         * 导出留痕（1.8.7）：以前导出没人记，连导两次操作记录条数一动不动（A 组报告第 37 项）。
+         * 记「谁 / 什么时候 / 导出了哪份表」，与其它模块同格式（module + action + detail=文件名）。
+         * 先出文件再记：记完才返回。审计写失败不影响用户拿到文件，但必须落日志。
+         */
+        const auditExport = async (tenant: any, action: string, filename: string): Promise<void> => {
+          if (!tenant?.user) return;
+          try {
+            await appendAudit({
+              userId: tenant.user.id,
+              userName: tenant.user.name || tenant.user.username,
+              action,
+              detail: filename,
+              module: "导出",
+            });
+          } catch (err) {
+            await logServer("error", "导出操作记录写入失败", { action, filename, error: String(err) });
+          }
+        };
+        const handle = async (tenant?: any): Promise<Response> => {
+          const saveXlsx = async (wb: unknown, filename: string, action: string): Promise<Response> => {
+            const resp = await xlsxFile(wb, filename);
+            await auditExport(tenant, action, filename);
+            return resp;
+          };
           if (kind === "people-template") return xlsxFile(peopleTemplateWb(), "人员导入模板.xlsx");
           if (kind === "attendance-template") return xlsxFile(attendanceTemplateWb(year), `${year}年考勤导入模板.xlsx`);
           if (kind === "payment-template") return xlsxFile(paymentTemplateWb(), "发放记录导入模板.xlsx");
@@ -212,19 +237,19 @@ export const Route = createFileRoute("/api/file/$kind")({
             const rec = "empty" in data && data.empty ? {} : data;
             if (kind === "contract-export") {
               const { contracts, entries } = filterContractsExport(rec.contracts || [], rec.contractEntries || [], range);
-              return xlsxFile(buildContractWorkbook({ contracts, entries }), fileStamp(range, "con"));
+              return saveXlsx(buildContractWorkbook({ contracts, entries }), fileStamp(range, "con"), "导出合同明细");
             }
-            if (kind === "people-export") return xlsxFile(buildPeopleWorkbook(rec.people || []), fileStamp(range, "people"));
+            if (kind === "people-export") return saveXlsx(buildPeopleWorkbook(rec.people || []), fileStamp(range, "people"), "导出人员名单");
             const people = rec.people || [];
             const attendance = filterAttendanceExport(rec.attendance || [], range);
             const payments = filterPaymentsExport(rec.payments || [], range);
             const expenses = filterExpensesExport(rec.expenses || [], range);
-            if (kind === "payment-export") return xlsxFile(buildPaymentWorkbook(payments), fileStamp(range, "pay"));
-            if (kind === "expense-export") return xlsxFile(buildExpenseWorkbook(expenses), fileStamp(range, "exp"));
+            if (kind === "payment-export") return saveXlsx(buildPaymentWorkbook(payments), fileStamp(range, "pay"), "导出发放记录");
+            if (kind === "expense-export") return saveXlsx(buildExpenseWorkbook(expenses), fileStamp(range, "exp"), "导出报销单");
             let months = range.scope === "all" ? monthsFromAttendance(attendance) : monthsOfRange(range);
             if (!months.length) months = Array.from({ length: 12 }, (_, i) => ({ year: range.year, month: i + 1 }));
             const skip = kind === "attendance-export";
-            return xlsxFile(
+            return saveXlsx(
               buildFullWorkbook({
                 year: range.year,
                 people,
@@ -239,6 +264,7 @@ export const Route = createFileRoute("/api/file/$kind")({
                 skipExp: skip,
               }),
               fileStamp(range, skip ? "att" : "full"),
+              skip ? "导出考勤" : "导出总台账",
             );
           }
           return new Response("not found", { status: 404 });

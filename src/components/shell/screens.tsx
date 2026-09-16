@@ -188,7 +188,11 @@ export function NoBookScreen({ onOut }: { onOut: () => void }) {
           type="button"
           variant="outline"
           onClick={() => {
-            authOp("logout").finally(() => onOut());
+            authOp("logout").finally(() => {
+              // 退出登录清掉本机台账：下一个账号不能看到上一个账号的数字（A 组报告第 30 项）
+              void import("~/lib/nas-sync").then((m) => m.dropLocalLedger("退出登录"));
+              onOut();
+            });
           }}
         >
           退出登录

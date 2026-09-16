@@ -7,7 +7,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { WideTable, usePager } from "~/components/wide-table";
-import { Need } from "~/components/can";
+import { Need, ReadonlyNotice, useCanSave } from "~/components/can";
 import { ExpenseImport, TplLink } from "~/components/excel-import";
 import { DocActions, prepareNamedFile, setDoc } from "~/components/doc-actions";
 import { ExpenseEditor } from "~/components/expense-editor";
@@ -26,6 +26,8 @@ import { useApp } from "~/lib/store";
 import { money, formatCardNo, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
 import { round2 } from "~/lib/wage";
+import { permLabel } from "~/lib/perms";
+import { blockedWrite } from "~/lib/readonly";
 import { ALL_BUCKETS } from "~/lib/buckets";
 import { claimantBuckets, expensePrintRows, expenseTotals, filterExpenses } from "~/lib/expenses-stats";
 import { useGuardedClose } from "~/lib/confirm-close";
@@ -113,6 +115,8 @@ function ExpensesPage() {
   const [selected, setSelected] = React.useState<string[]>([]);
   const [editing, setEditing] = React.useState<any | null>(null);
   const [creating, setCreating] = React.useState(false);
+  // 只读账号：新增/编辑/保存/删除/批量挂账入口一律拦（A 组报告第 17 项同源）
+  const canEditExpense = useCanSave("expenses.edit");
   const [printStatus, setPrintStatus] = React.useState("未报销");
   const [printVoucher, setPrintVoucher] = React.useState(false);
   const [printSingle, setPrintSingle] = React.useState<any | null>(null);
@@ -172,6 +176,7 @@ function ExpensesPage() {
   const anyDone = batchRows.some((e: any) => e.status === "已报销");
   function del(ids: string[]) {
     if (!ids.length) return;
+    if (blockedWrite("expenses.delete", permLabel("expenses.delete"))) return;
     if (!confirmBatchDelete("报销", ids.length, "会同时去掉这些报销记录。凭证文件还在目录里，可到「影像资料」里清。")) return;
     removeExpenses(ids);
     setSelected((s) => s.filter((id) => !ids.includes(id)));
@@ -201,6 +206,7 @@ function ExpensesPage() {
       toast.error("先勾选要一起报销的几笔");
       return;
     }
+    if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
     if (!batch.claimant.trim()) {
       toast.error("报销人必填：这几笔是谁来报的");
       return;
@@ -248,6 +254,7 @@ function ExpensesPage() {
       toast.error("先勾选要取消挂账的几笔");
       return;
     }
+    if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
     if (!confirm(`取消这 ${batchRows.length} 笔的挂账？打款凭证不再共用，报销人账户还留着。`)) return;
     for (const e of batchRows) saveOne(e, { payoutId: "", payoutFileName: "" });
     setBatch((b: any) => ({ ...b, payoutId: "", payoutFileName: "" }));
@@ -258,6 +265,7 @@ function ExpensesPage() {
       toast.error("先勾选要改回未报销的几笔");
       return;
     }
+    if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
     if (!confirm(`把这 ${batchRows.length} 笔标为未报销？\n\n会同时取消打款挂账和打款日期。`)) return;
     for (const e of batchRows) saveOne(e, { status: "未报销", payoutDate: "", reimbursedAt: "", payoutId: "", payoutFileName: "" });
     toast.success(`已把 ${batchRows.length} 笔标为未报销`);
@@ -268,6 +276,7 @@ function ExpensesPage() {
       toast.error("先勾选要一起报销的几笔");
       return;
     }
+    if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
     if (!(batch.claimant || "").trim() || !(batch.forWhom || "").trim() || !(batch.payBank || "").trim() || !(batch.payCardNo || "").trim()) {
       toast.error("先填报销人、收款人、开户行和打款账户，打款凭证按这个命名");
       return;
@@ -309,6 +318,7 @@ function ExpensesPage() {
     <Need perm="expenses.view">
       <>
         <div className="no-print space-y-5">
+          <ReadonlyNotice perm="expenses.edit" />
           <header className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h1 className="font-display text-2xl font-semibold">报销单</h1>
@@ -324,7 +334,10 @@ function ExpensesPage() {
               </a>
               <Button
                 type="button"
+                disabled={!canEditExpense}
+                title={canEditExpense ? undefined : `你是只读账号（缺「${permLabel("expenses.edit")}」权限），改动不会保存。`}
                 onClick={() => {
+                  if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
                   setCreating(true);
                   setEditing(emptyExpense(year));
                 }}
@@ -485,6 +498,7 @@ function ExpensesPage() {
                 setCreating(false);
               }}
               onSave={(row: any) => {
+                if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
                 upsertExpense(row);
                 setEditing(row);
                 setCreating(false);
@@ -560,7 +574,10 @@ function ExpensesPage() {
                           size="sm"
                           type="button"
                           className="h-7 px-2 text-[11px]"
+                          disabled={!canEditExpense}
+                          title={canEditExpense ? undefined : `你是只读账号（缺「${permLabel("expenses.edit")}」权限），改动不会保存。`}
                           onClick={() => {
+                            if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
                             setCreating(false);
                             setEditing(e);
                           }}

@@ -6,6 +6,8 @@ import { fallbackPayYear, summarizeYear, teamRows } from "~/lib/attendance-summa
 import { overAgeLabel } from "~/lib/idcard";
 import { contractPayable } from "~/lib/contracts-totals";
 import { money, cn } from "~/lib/utils";
+import { can, subscribePerms } from "~/lib/perms";
+import { useCan } from "~/components/can";
 import type { Person } from "~/lib/types";
 
 function Home() {
@@ -183,13 +185,14 @@ function NewHome(p: HomeProps) {  const unavailable = p.monthsFilled < 12 ? `${1
         <div className="rounded-xl border border-line bg-surface p-5 shadow-panel lg:col-span-2">
           <h2 className="text-sm font-semibold">快捷入口</h2>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <Quick to="/people" title="人员管理" desc="增减人员、设工资规则、上传证件照" />
-            <Quick to="/attendance" title="月度考勤" desc="12 个月格子，点进去录入" />
-            <Quick to="/payments" title="发放记录" desc="实际收款人入账，收款人只是代收" />
-            <Quick to="/contracts" title="合同管理" desc="报量、开票、收款分开记，保证金独立" />
-            <Quick to="/expenses" title="报销单" desc="未报销可勾选打印，现金不用传凭证" />
-            <Quick to="/export" title="导出" desc="按年导出整本 Excel，WPS 可打开" />
+            <Quick to="/people" title="人员管理" desc="增减人员、设工资规则、上传证件照" perm="people.view" />
+            <Quick to="/attendance" title="月度考勤" desc="12 个月格子，点进去录入" perm="attendance.view" />
+            <Quick to="/payments" title="发放记录" desc="实际收款人入账，收款人只是代收" perm="payments.view" />
+            <Quick to="/contracts" title="合同管理" desc="报量、开票、收款分开记，保证金独立" perm="contracts.view" />
+            <Quick to="/expenses" title="报销单" desc="未报销可勾选打印，现金不用传凭证" perm="expenses.view" />
+            <Quick to="/export" title="导出" desc="按年导出整本 Excel，WPS 可打开" perm="export.use" />
           </div>
+          <QuickHiddenNote />
           {p.over > 0 ? (
             <OverAges className="mt-4 rounded-lg bg-warn-bg px-3 py-2 text-xs text-warn" count={p.over} people={p.overPeople} />
           ) : null}
@@ -256,13 +259,14 @@ function ClassicHome(p: HomeProps) {
         <div className="rounded-xl border border-line bg-surface p-5 shadow-panel">
           <h2 className="text-sm font-semibold">快捷入口</h2>
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <Quick to="/people" title="人员管理" desc="增减人员、设工资规则、上传证件照" />
-            <Quick to="/attendance" title="月度考勤" desc="12 个月格子，点进去录入" />
-            <Quick to="/payments" title="发放记录" desc="实际收款人入账，收款人只是代收" />
-            <Quick to="/contracts" title="合同管理" desc="报量、开票、收款分开记，保证金独立" />
-            <Quick to="/expenses" title="报销单" desc="未报销可勾选打印，现金不用传凭证" />
-            <Quick to="/export" title="导出" desc="按年导出整本 Excel，WPS 可打开" />
+            <Quick to="/people" title="人员管理" desc="增减人员、设工资规则、上传证件照" perm="people.view" />
+            <Quick to="/attendance" title="月度考勤" desc="12 个月格子，点进去录入" perm="attendance.view" />
+            <Quick to="/payments" title="发放记录" desc="实际收款人入账，收款人只是代收" perm="payments.view" />
+            <Quick to="/contracts" title="合同管理" desc="报量、开票、收款分开记，保证金独立" perm="contracts.view" />
+            <Quick to="/expenses" title="报销单" desc="未报销可勾选打印，现金不用传凭证" perm="expenses.view" />
+            <Quick to="/export" title="导出" desc="按年导出整本 Excel，WPS 可打开" perm="export.use" />
           </div>
+          <QuickHiddenNote />
           {p.over > 0 ? <OverAges className="mt-4 text-xs text-warn" count={p.over} people={p.overPeople} /> : null}
         </div>
       </section>
@@ -293,7 +297,13 @@ function Stat({ label, value, hint }: { label: string; value: string; hint: stri
   );
 }
 
-function Quick({ to, title, desc }: { to: string; title: string; desc: string }) {
+/**
+ * 首页快捷入口。只显示当前账号有权限进的模块 —— 以前对 u_hr / u_contract / u_min 也照渲染
+ * 「人员管理 / 合同管理 / 导出」等入口，点进去只有一句「没有此项权限」（A 组报告第 29 项）。
+ */
+function Quick({ to, title, desc, perm }: { to: string; title: string; desc: string; perm: string }) {
+  const ok = useCan(perm as any);
+  if (!ok) return null;
   return (
     <Link
       to={to as any}
@@ -304,6 +314,17 @@ function Quick({ to, title, desc }: { to: string; title: string; desc: string })
     </Link>
   );
 }
+
+/** 有几个入口因为没权限被隐藏了：明确说一句，别让用户以为功能没了 */
+function QuickHiddenNote() {
+  const [, bump] = React.useState(0);
+  React.useEffect(() => subscribePerms(() => bump((n) => n + 1)), []);
+  const hidden = QUICK_PERMS.filter((p) => !can(p)).length;
+  if (!hidden) return null;
+  return <p className="mt-3 text-xs text-subtle">另有 {hidden} 个入口因为当前账号没有权限，已隐藏。</p>;
+}
+
+const QUICK_PERMS = ["people.view", "attendance.view", "payments.view", "contracts.view", "expenses.view", "export.use"];
 
 function maskIdCard(id: string): string {
   const s = (id || "").trim();

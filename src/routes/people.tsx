@@ -7,13 +7,15 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { WideTable, usePager } from "~/components/wide-table";
-import { Can, Need } from "~/components/can";
+import { Can, Need, ReadonlyNotice, useCan, useCanSave } from "~/components/can";
 import { PeopleImport, TplLink } from "~/components/excel-import";
 import { PhotoSlot, ScanPhotosButton, usePhotoFlags } from "~/components/photo-slot";
 import { PayTypePick, OtRulePick } from "~/components/pay-fields";
 import { parseIdCard, validateIdCard, normalizeIdDate, overAgeLabel } from "~/lib/idcard";
 import { parseDateYmd } from "~/lib/dates";
 import { wageLabel, parseOtRule } from "~/lib/wage";
+import { permLabel } from "~/lib/perms";
+import { blockedWrite } from "~/lib/readonly";
 import { confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { useGuardedClose } from "~/lib/confirm-close";
 import { ALL_BUCKETS, groupBuckets } from "~/lib/buckets";
@@ -71,6 +73,9 @@ function PeoplePage() {
   const [creating, setCreating] = React.useState(false);
   const [selected, setSelected] = React.useState<string[]>([]);
   const [photoTick, setPhotoTick] = React.useState(0);
+  // 编辑入口就按权限拦：没有 people.edit（或整本台账写不了）的账号，编辑框点不开、
+  // 也不会再出现「已保存」的假象（A 组报告第 17 项）
+  const canEditPeople = useCan("people.edit");
   const names = React.useMemo(() => people.map((p) => p.name), [people]);
   const flags = usePhotoFlags(names, photoTick);
   // 班组下拉：当前人员表里真实存在的桶 + 「未分班组」（班组是必填，但历史/导入数据可能为空；
@@ -92,13 +97,16 @@ function PeoplePage() {
   return (
     <Need perm="people.view">
       <div className="space-y-5">
+        <ReadonlyNotice perm="people.edit" />
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold">人员管理</h1>
             <p className="mt-1 text-sm text-muted">带 * 的必须填：姓名、班组。日工资可以填 0。按月计薪才必须填月工资。</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <ScanPhotosButton names={people.map((p) => p.name)} onDone={() => setPhotoTick((n) => n + 1)} />
+            <Can perm="photos.edit">
+              <ScanPhotosButton names={people.map((p) => p.name)} onDone={() => setPhotoTick((n) => n + 1)} />
+            </Can>
             <TplLink href="/api/file/people-template" filename="人员导入模板.xlsx" />
             <a
               className="btn inline-flex items-center rounded-sm border border-line text-xs hover:bg-accent-soft"
@@ -141,6 +149,7 @@ function PeoplePage() {
               <Button
                 variant="danger"
                 onClick={() => {
+                  if (blockedWrite("people.delete", permLabel("people.delete"))) return;
                   if (!confirmBatchDelete("人员", selected.length, "只删人员档案。考勤、发放记录里的名字还在，照片文件仍在目录里。")) return;
                   removePeople(selected);
                   setSelected([]);
@@ -215,7 +224,17 @@ function PeoplePage() {
                       />
                     </td>
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="outline" size="sm" type="button" onClick={() => setEditing(p)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        disabled={!canEditPeople}
+                        title={canEditPeople ? undefined : `你是只读账号（缺「${permLabel("people.edit")}」权限），改动不会保存。`}
+                        onClick={() => {
+                          if (blockedWrite("people.edit", permLabel("people.edit"))) return;
+                          setEditing(p);
+                        }}
+                      >
                         编辑
                       </Button>
                     </td>
@@ -235,7 +254,15 @@ function PeoplePage() {
                     </td>
                     <td className="p-3 tabular-nums">{p.phone || "—"}</td>
                     <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                      <button className="text-left text-xs text-accent" type="button" onClick={() => setEditing(p)}>
+                      <button
+                        className="text-left text-xs text-accent disabled:cursor-not-allowed disabled:text-muted"
+                        type="button"
+                        disabled={!canEditPeople}
+                        onClick={() => {
+                          if (blockedWrite("people.edit", permLabel("people.edit"))) return;
+                          setEditing(p);
+                        }}
+                      >
                         {n}/4 已上传
                       </button>
                     </td>
@@ -253,6 +280,9 @@ function PeoplePage() {
             onClose={closeEditor}
             onChanged={() => setPhotoTick((n) => n + 1)}
             onSave={(p) => {
+              // 只读账号在入口就被拦（编辑按钮已禁用），这里再兜一层：
+              // 宁可什么都不做 + 明确提示，也绝不弹「已保存」（A 组报告第 17 项）
+              if (blockedWrite("people.edit", permLabel("people.edit"))) return;
               // 同名统一口径（总览/Excel/考勤都按姓名匹配）：新增与改名都拦截，避免一人多档
               const dupName = people.some((x) => x.name === p.name && (!editing || x.id !== editing.id));
               if (dupName) {
@@ -269,6 +299,7 @@ function PeoplePage() {
               closeEditor();
             }}
             onDelete={() => {
+              if (blockedWrite("people.delete", permLabel("people.delete"))) return;
               if (!confirmBatchDelete("人员", 1, `将删除 ${editing.name} 的档案。考勤和发放记录里的名字还在。`)) return;
               removePeople([editing.id]);
               setSelected((s) => s.filter((id) => id !== editing.id));
@@ -334,6 +365,8 @@ function PersonEditor({
   }));
   const [tried, setTried] = React.useState(false);
   const [idErr, setIdErr] = React.useState("");
+  // 编辑框里的「保存 / 删除」也要按权限禁用：只读账号连点都不该点得动
+  const canEditSelf = useCanSave("people.edit");
   const { markDirty, requestClose } = useGuardedClose(onClose);
   function set<K extends keyof Person>(k: K, v: Person[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -413,14 +446,14 @@ function PersonEditor({
           <h2 className="font-display text-lg font-semibold">{creating ? "新增人员" : form.name}</h2>
           <div className="flex items-center gap-2">
             {!creating ? (
-              <Button variant="danger" size="sm" onClick={() => onDelete?.()}>
+              <Button variant="danger" size="sm" disabled={!canEditSelf} onClick={() => onDelete?.()}>
                 删除
               </Button>
             ) : null}
             <Button variant="outline" size="sm" onClick={requestClose}>
               取消
             </Button>
-            <Button size="sm" onClick={save}>
+            <Button size="sm" disabled={!canEditSelf} onClick={save}>
               保存
             </Button>
             <button

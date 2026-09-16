@@ -1,7 +1,7 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Input } from "~/components/ui/input";
-import { Need } from "~/components/can";
+import { Need, useCanSave } from "~/components/can";
 import {
   DocActions,
   DOC_KIND_LABEL,
@@ -19,6 +19,8 @@ function safeBase(s: string) {
 }
 
 function FilesPage() {
+  // 只读账号：影像资料页只留查看/下载/复制，替换与删除按钮隐藏（1.8.7）
+  const canEditFile = useCanSave("files.edit");
   const {
     year,
     attendanceDocs,
@@ -208,6 +210,7 @@ function FilesPage() {
                       fileName={r.fileName}
                       suggest={r.suggest}
                       taken={taken}
+                      readOnly={!canEditFile}
                       onReplaced={(name) => {
                         if (r.source === "attendance") patchAttendanceDoc(r.id, { fileName: name });
                         else if (r.source === "scan") {

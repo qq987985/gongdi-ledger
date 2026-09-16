@@ -222,6 +222,54 @@ export function appendAudit(row: Partial<AuditEntry>): Promise<AuditEntry> {
   auditQueue = next.catch(() => {});
   return next;
 }
+/**
+ * 备份保留策略（1.8.7）。
+ *
+ * 背景（A 组逐项测试报告第 46 项，实测复现）：`data/backups/` 只增不减 —— 日志有
+ * `LOG_KEEP_DAYS`、操作记录有 2 万条上限，备份什么策略都没有，点几次「立即备份 Excel」
+ * 就多几份，长期运行会把数据盘写满。
+ *
+ * 规则：带时间戳的备份文件最多留最近 N 份（默认 **30**，`BACKUP_KEEP` 可覆盖，1–1000，非法回落默认）；
+ * 固定名「考勤表.xlsx」（最新备份入口）**永不删**。
+ * 删除范围用 `isManagedBackupFile` 卡死 —— 只删这个程序自己生成的名字形状，
+ * 用户手放进 backups 目录的其它文件（自己的对账表等）一个都不动。
+ */
+export const DEFAULT_BACKUP_KEEP = 30;
+
+export function backupKeepCount(): number {
+  const raw = Number(process.env.BACKUP_KEEP);
+  if (!Number.isFinite(raw) || raw < 1) return DEFAULT_BACKUP_KEEP;
+  return Math.min(Math.floor(raw), 1000);
+}
+
+/** 本程序生成的备份文件名：`YYYYMMDD_HHMMSS_考勤表.xlsx` 或固定名「考勤表.xlsx」 */
+export function isManagedBackupFile(name: string): boolean {
+  if (name === "考勤表.xlsx") return true;
+  return /^\d{8}_\d{6}_考勤表\.xlsx$/.test(name);
+}
+
+/** 按保留份数清理旧备份，返回删掉的份数。只删自己生成的时间戳备份，固定名不动。 */
+export async function pruneBackups(keep = backupKeepCount()): Promise<number> {
+  if (!persistOn()) return 0;
+  const dir = join(dataDir(), "backups");
+  const files = (await listDirSafe(dir)).filter((f) => isManagedBackupFile(f) && f !== "考勤表.xlsx");
+  if (files.length <= keep) return 0;
+  // 文件名前缀就是 YYYYMMDD_HHMMSS，字典序 = 时间序（同一秒内会互相覆盖，不会重复）
+  files.sort();
+  const doomed = files.slice(0, files.length - keep);
+  let removed = 0;
+  for (const f of doomed) {
+    try {
+      await rm(join(dir, f), { force: true });
+      removed += 1;
+    } catch (err) {
+      await logServer("warn", "旧备份删除失败", { file: f, error: String(err) });
+    }
+  }
+  if (removed) await logServer("info", "备份保留策略：清理旧备份", { removed, keep });
+  return removed;
+}
+
 export async function saveBackup(buf: Buffer, filename: string): Promise<string> {
   if (!persistOn()) return "";
   await ensureDirs();
@@ -239,6 +287,8 @@ export async function saveBackup(buf: Buffer, filename: string): Promise<string>
   // 顺序反了的话，中途崩溃会留下「最新备份指向一份不存在/半截的文件」。
   await atomicWriteFile(dest, buf);
   await atomicWriteFile(join(root, "backups", "考勤表.xlsx"), buf);
+  // 写完再清理：新备份一定在保留范围内，不会被自己刚写的那份挤掉
+  await pruneBackups();
   return dest;
 }
 export async function listBookIds(): Promise<string[]> {

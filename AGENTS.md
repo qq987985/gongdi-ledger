@@ -48,7 +48,7 @@
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴
   （1.8.1 已在该模板里补「Excel 往返对拍」一步；本机等价命令 `pnpm run check`）。**目前 GitHub 上仍未创建 check.yml**，
   所以四道闸只能靠人跑（推 main 触发的只有 docker.yml 的镜像构建与 Release）。
-- 1.8.6 起覆盖 **315 个用例（315 pass + 0 todo）**（1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.7 起覆盖 **344 个用例（344 pass + 0 todo）**（1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源；
   1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外，
@@ -73,7 +73,13 @@
   两处用途不许再混；**已发 A + 待发放 C = 全部合计**，且**代发 B ⊆ A**（单列「其中代发」、不减 A）；
   两种打印清单口径故意不同：明细把待发列入实际收款人名下并逐笔标「已发/待发」+ 拆「已发小计/待发小计」，
   汇总把待发单列一组；年度表逐行「已发」之和 == 总览「已发放」KPI；组合险标注只有一份 `COMBINED_POLICY_NOTE`。
-  见 tests/payments-stats.test.ts / tests/attendance-summary.test.ts / tests/insurance-stats.test.ts / tests/caliber-guards.test.ts）。
+  见 tests/payments-stats.test.ts / tests/attendance-summary.test.ts / tests/insurance-stats.test.ts / tests/caliber-guards.test.ts）/
+  权限与账户体验（1.8.7 起：`src/lib/readonly.ts` 是「这次改动能不能落盘」的唯一判定
+  ——`canManageLedger()` **且** 该模块 `.edit`，与服务端 `ledger.manage` 同口径；
+  有编辑入口的页面必须调 `blockedWrite()`，只读账号的编辑/新增/删除/保存入口禁用或隐藏并写明
+  「改动不会保存」；换账号/换台账/退出登录必须 `dropLocalLedger()` 清本机缓存、拉取 401/403 也要清；
+  导出必须 `appendAudit`；备份保留 `BACKUP_KEEP` 且只删自己生成的文件名形状。
+  见 tests/readonly.test.ts / tests/readonly-guards.test.ts / tests/backup-retention.test.ts / tests/export-audit.test.ts）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
 

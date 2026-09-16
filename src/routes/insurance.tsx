@@ -14,6 +14,8 @@ import { DocActions, setDoc, renameFile } from "~/components/doc-actions";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { InsuranceMember, InsurancePolicy } from "~/lib/types";
 import { COMBINED_POLICY_NOTE, datePart, emptyMember, emptyPolicy, isActive, memberDays, prevDayEnd } from "~/lib/insurance";
+import { permLabel } from "~/lib/perms";
+import { blockedWrite } from "~/lib/readonly";
 import { ALL_BUCKETS } from "~/lib/buckets";
 import {
   filterMembers,
@@ -184,6 +186,8 @@ function InsurancePage() {
       return;
     }
     const pno = policyEdit.policyNo.trim();
+    // 只读账号：服务端 PUT 台账会 403，本机改了也存不下去，不许弹「已保存」
+    if (blockedWrite("insurance.edit", permLabel("insurance.edit"))) return;
     // 保单号重复拦截：新增或改号撞车都拒绝，避免静默覆盖已有保单
     const dup = (useApp.getState().insurancePolicies || []).find(
       (p) => p.policyNo && p.policyNo === pno && p.id !== policyEdit.id,
@@ -216,6 +220,7 @@ function InsurancePage() {
 
   function saveMember() {
     if (!memberEdit) return;
+    if (blockedWrite("insurance.edit", permLabel("insurance.edit"))) return;
     if (!memberEdit.name.trim()) {
       toast.error("姓名必填");
       return;
@@ -228,6 +233,7 @@ function InsurancePage() {
 
   function confirmReplace() {
     if (!replaceState) return;
+    if (blockedWrite("insurance.edit", permLabel("insurance.edit"))) return;
     if (!replaceState.name.trim()) {
       toast.error("新姓名必填");
       return;
@@ -264,12 +270,14 @@ function InsurancePage() {
   }
 
   function delPolicy(p: InsurancePolicy) {
+    if (blockedWrite("insurance.edit", permLabel("insurance.edit"))) return;
     if (!confirm(`删除保单「${p.policyNo}」？\n\n会同时删除该保单下的所有保险人员。`)) return;
     removePolicies([p.id]);
     toast.success("已删除保单");
   }
 
   function delMember(m: InsuranceMember) {
+    if (blockedWrite("insurance.edit", permLabel("insurance.edit"))) return;
     if (!confirm(`删除被保人「${m.name}」？`)) return;
     removeMembers([m.id]);
     syncLinked(m.policyId);

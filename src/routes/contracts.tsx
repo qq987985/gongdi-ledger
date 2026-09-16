@@ -7,7 +7,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { WideTable, usePager, ThHint } from "~/components/wide-table";
-import { Need } from "~/components/can";
+import { Need, ReadonlyNotice, useCanSave } from "~/components/can";
 import { ContractImport } from "~/components/excel-import";
 import { ContractEditor } from "~/components/contract-editor";
 import { useApp } from "~/lib/store";
@@ -21,6 +21,8 @@ import { buildContractWorkbook } from "~/lib/excel";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
 import { round2 } from "~/lib/wage";
+import { permLabel } from "~/lib/perms";
+import { blockedWrite } from "~/lib/readonly";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { ContractRecord, ContractEntry } from "~/lib/types";
 
@@ -160,6 +162,8 @@ function ContractsPage() {
   const [selected, setSelected] = React.useState<string[]>([]);
   const [editing, setEditing] = React.useState<ContractRecord | null>(null);
   const [creating, setCreating] = React.useState(false);
+  // 只读账号：新增/编辑/保存/删除入口一律拦（A 组报告第 17 项同源）
+  const canEditContract = useCanSave("contracts.edit");
   const list = React.useMemo(() => {
     let rows = contracts;
     if (scope === "year") rows = rows.filter((c) => c.year === year);
@@ -178,6 +182,7 @@ function ContractsPage() {
   const totals = React.useMemo(() => sumContractRollups(list, contractEntries), [list, contractEntries]);
   function dropIds(ids: string[]) {
     if (!ids.length) return;
+    if (blockedWrite("contracts.delete", permLabel("contracts.delete"))) return;
     if (!confirmBatchDelete("合同", ids.length, "会同时删掉这些合同的报量、开票、收款流水。考勤人员不受影响。")) return;
     removeContracts(ids);
     setSelected((s) => s.filter((id) => !ids.includes(id)));
@@ -212,6 +217,7 @@ function ContractsPage() {
     <Need perm="contracts.view">
       <>
         <div className="no-print space-y-5">
+          <ReadonlyNotice perm="contracts.edit" />
           <header className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h1 className="font-display text-2xl font-semibold">合同管理</h1>
@@ -246,7 +252,10 @@ function ContractsPage() {
               </Button>
               <Button
                 type="button"
+                disabled={!canEditContract}
+                title={canEditContract ? undefined : `你是只读账号（缺「${permLabel("contracts.edit")}」权限），改动不会保存。`}
                 onClick={() => {
+                  if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;
                   setCreating(true);
                   setEditing(emptyContract(year));
                 }}
@@ -303,14 +312,22 @@ function ContractsPage() {
                 setCreating(false);
               }}
               onSave={(c) => {
+                if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;
                 upsertContract(c);
                 setEditing(c);
                 setCreating(false);
                 toast.success("合同已保存");
               }}
-              onAddEntry={(e) => addContractEntry(e)}
-              onRemoveEntries={removeContractEntries}
+              onAddEntry={(e) => {
+                if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;
+                addContractEntry(e);
+              }}
+              onRemoveEntries={(ids) => {
+                if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;
+                removeContractEntries(ids);
+              }}
               onDelete={() => {
+                if (blockedWrite("contracts.delete", permLabel("contracts.delete"))) return;
                 if (!confirmBatchDelete("合同", 1, `将删除 ${editing.name} 的合同及所有报量、发票、收款记录。`)) return;
                 dropIds([editing.id]);
                 setEditing(null);
@@ -386,7 +403,10 @@ function ContractsPage() {
                           variant="outline"
                           size="sm"
                           type="button"
+                          disabled={!canEditContract}
+                          title={canEditContract ? undefined : `你是只读账号（缺「${permLabel("contracts.edit")}」权限），改动不会保存。`}
                           onClick={() => {
+                            if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;
                             setCreating(false);
                             setEditing(c);
                           }}
@@ -402,6 +422,7 @@ function ContractsPage() {
                           type="button"
                           className="text-left font-medium hover:text-accent"
                           onClick={() => {
+                            if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;
                             setCreating(false);
                             setEditing(c);
                           }}

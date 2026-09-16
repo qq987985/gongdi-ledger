@@ -16,6 +16,7 @@ import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear, confirmRemoveYear } from "~/lib/dates";
 import { pushNasBackup, pullNasLedger, flushPendingLedger } from "~/lib/nas-sync";
 import { nasEnabled } from "~/lib/nas-flag";
+import { backupKeep } from "~/lib/backup-keep";
 import { clearAllPhotos } from "~/lib/photos";
 import { authStatus, authOp } from "~/lib/auth";
 
@@ -155,6 +156,12 @@ function SettingsPage() {
               ? " 全部个人数据只在 NAS 的 data 目录：accounts、books、photos、backups、templates。软件删了重装，只要 data 还在就能恢复。"
               : ""}
           </p>
+          {nasEnabled() ? (
+            <p className="mt-1 text-xs text-subtle">
+              备份保留策略：data/backups 里带时间戳的备份只留最近 {backupKeep()} 份（旧备份会自动清理），
+              固定名「考勤表.xlsx」永远是最新一份、不会被删。份数可用环境变量 BACKUP_KEEP 调整。
+            </p>
+          ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             {nasEnabled() ? (
               <Button

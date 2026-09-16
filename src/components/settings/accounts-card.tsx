@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Input, Label } from "~/components/ui/input";
 import { authStatus, authOp } from "~/lib/auth";
-import { pullNasLedger, flushPendingLedger } from "~/lib/nas-sync";
+import { dropLocalLedger, pullNasLedger, flushPendingLedger, setCacheOwner } from "~/lib/nas-sync";
 import { PRESETS } from "~/lib/perms";
 
 export function AccountsCard() {
@@ -106,6 +106,9 @@ export function AccountsCard() {
                         await authOp("useBook", { id: b.id });
                         window.dispatchEvent(new CustomEvent("gongdi-book", { detail: b.name }));
                         window.dispatchEvent(new Event("gongdi-books"));
+                        // 换台账先丢掉上一本的残留（拉到之前屏幕上是空的，不是上一本的）
+                        dropLocalLedger(`切换到台账 ${b.id}`);
+                        setCacheOwner(String(me.id || ""), b.id);
                         await pullNasLedger();
                         toast.success(`已进入「${b.name}」`);
                       }}
@@ -129,13 +132,24 @@ export function AccountsCard() {
                         size="sm"
                         type="button"
                         onClick={async () => {
-                          if (!confirm(`删除台账「${b.name}」？该套数据会删掉。`)) return;
-                          await flushPendingLedger();
-                          await authOp("deleteBook", { id: b.id });
-                          await load();
-                          window.dispatchEvent(new Event("gongdi-books"));
-                          await pullNasLedger();
-                          toast.success("已删除这套台账");
+                          // 确认文案要写明影像资料也一起删（级联删除本来就是这么做的，
+                          // 原来只说「该套数据会删掉」，用户不知道证件照/合同扫描件也没了）
+                          if (
+                            !confirm(
+                              `删除台账「${b.name}」？\n\n该套数据会删掉，该台账的影像资料（证件照、银行卡、合同扫描件、考勤影像等）也会一起删除。\n\n删除后无法恢复，确定继续？`,
+                            )
+                          )
+                            return;
+                          try {
+                            await flushPendingLedger();
+                            await authOp("deleteBook", { id: b.id });
+                            await load();
+                            window.dispatchEvent(new Event("gongdi-books"));
+                            await pullNasLedger();
+                            toast.success("已删除这套台账");
+                          } catch (err: any) {
+                            toast.error(err instanceof Error ? err.message : "删除失败");
+                          }
                         }}
                       >
                         删除
@@ -165,6 +179,9 @@ export function AccountsCard() {
                 await authOp("createBook", { name: bookName.trim() });
                 setBookName("");
                 await load();
+                // 新建台账后左侧下拉要立刻出现这本（原来 createBook 分支漏发事件，
+                // 必须刷新整页才看到 —— A 组报告第 32 项）
+                window.dispatchEvent(new Event("gongdi-books"));
                 await pullNasLedger();
                 toast.success("已新建空台账，可在左侧切换");
               } catch (err) {
@@ -194,7 +211,14 @@ export function AccountsCard() {
           className="mt-3"
           type="button"
           onClick={async () => {
-            await authOp("changePassword", { old: oldPwd, password: newPwd });
+            // authOp 在服务端拒绝时抛错（如「当前密码不对」）。原来这里没有 catch，
+            // 只留下一条 unhandledrejection，界面**什么都不显示**（A 组报告第 12 项）。
+            try {
+              await authOp("changePassword", { old: oldPwd, password: newPwd });
+            } catch (err: any) {
+              toast.error(err instanceof Error ? err.message : "改密码失败");
+              return;
+            }
             setOldPwd("");
             setNewPwd("");
             toast.success("密码已改");
