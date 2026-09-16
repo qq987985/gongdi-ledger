@@ -489,3 +489,61 @@
   size: A4 portrait;
   margin: 12mm;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   打印分页协议（1.8.10）—— 发放明细/汇总、报销单、合同对账单、保险清单、
+   工资条**共用这一处**，不许在组件里各写一套（守卫：tests/ui-guards.test.ts）。
+
+   背景（用户实测）：发放记录 26 条「打印汇总/明细」就分页，第一页还有大片空缺、
+   尾巴被整体推到第二页。两个根因：
+   ① 打印件里用了**容器级** break-inside:avoid（每个人的明细 section、小表外层 div、
+      整张对账单 article）：页底放不下就把**整块**推走 → 上一页留一大片空白；
+   ② 外壳 `.app-bg` 的 min-h-screen/min-h-dvh 在打印媒体里按纸张高度把容器撑到至少一屏
+      （`overflow-x-hidden` 在打印态还等于 `overflow-y:auto` 的滚动容器，超出部分会被裁）。
+
+   新约定（`开发规范.md` §6.6 已同步）：
+   · 打印态容器不许有一屏高：min-h-screen / min-h-dvh / h-screen 归零，外壳 overflow:visible；
+   · 「不许拆页」只下沉到**行/小单元**（tr、.print-keep 如单张工资条）；
+     容器级 break-inside:avoid 在打印件里**一律不许用** —— 它只会在上一页留下空白；
+   · 表格跨页：thead 每页重复（第二页起照样有表头）、行不拆、tfoot 合计行不拆且始终在表尾；
+   · 小标题 break-after:avoid（.print-title），别孤零零挂在页底。
+   说明：本块写在 @layer 之外（Tailwind 的 utilities 在 layer 里，layered 规则压不过
+   unlayered 规则），否则 `.min-h-screen` 的清零会被 utilities 覆盖。
+   ══════════════════════════════════════════════════════════════════════════ */
+@media print {
+  /* ① 外壳：打印态不许撑满一屏，也不许当滚动容器（滚动容器在分页媒体里会裁内容） */
+  .app-bg {
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  .min-h-screen,
+  .min-h-dvh,
+  .min-h-svh,
+  .min-h-lvh,
+  .h-screen,
+  .h-dvh {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  /* ② 表格跨页协议：表头每页重复；行（含合计行）不拆 */
+  .print-only thead {
+    display: table-header-group;
+  }
+  .print-only tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* ③ 「整块不拆」白名单：只允许行/小单元（单张工资条是裁切设计的最小单元） */
+  .print-only .print-keep {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* ④ 小标题跟着它的表格 */
+  .print-only .print-title {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}

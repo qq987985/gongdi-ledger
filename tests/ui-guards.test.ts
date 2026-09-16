@@ -237,3 +237,134 @@ test("约定：弹窗面板不许用裸 max-h-screen（375×667 下 100vh 高于
   const sample = `<div className="fixed inset-0 z-50 flex items-end"><section className="max-h-screen w-full" /></div>`;
   assert.equal((sample.match(/className="([^"]*\bmax-h-screen\b[^"]*)"/g) || []).length, 1);
 });
+
+// ───────────────────── 打印分页（1.8.10） ─────────────────────
+
+/**
+ * 背景（用户实测）：发放记录「打印汇总」26 条就分页，**第一页还有很多空缺**，
+ * 尾巴被整体推到第二页。实测到的三条根因（证据见 VERSION.txt [1.8.10]）：
+ *  ① 打印件里用了**容器级** `break-inside-avoid`（每个人的明细 `section`、小表外层 `div`、
+ *     整张对账单 `article`）：页底放不下就把整块推走 → 上一页留一大片空白
+ *     （实测 26 笔 / 2 人 + 代收折行：第一页留白 **112.3mm**）；
+ *  ② 外壳 `.app-bg` 的 `min-h-screen min-h-dvh` 在打印媒体里按纸张高度把容器撑到至少一屏，
+ *     制造「提前断页 / 多一张空白页」；
+ *  ③ 打印表格没有跨页表头规则，第二页起没有 `<thead>`。
+ *
+ * 约定（`src/styles.css` 的「打印分页协议」一处集中，`开发规范.md` §6.6 同步）：
+ *  · 打印态一屏高一律清零（`.min-h-screen`/`.min-h-dvh`/`h-screen` → `min-height:0`），
+ *    外壳 `.app-bg` 还要 `overflow:visible`（`overflow-x-hidden` 在打印态等于滚动容器，会裁内容）；
+ *  · 「不许拆页」只下沉到**行/小单元**：`tr`、`.print-keep`（单张工资条 `.payslip` 是裁切设计的
+ *    最小单元，也在这个白名单里）；**组件里不许再出现容器级 break-inside-avoid**；
+ *  · 打印表格必须 `thead { display: table-header-group }`（第二页起照样有表头）。
+ */
+
+/** 取 CSS 里所有 `@media print { ... }` 块的正文（大括号配平，含嵌在 @layer 里的） */
+function printMediaBlocks(css: string): string[] {
+  const out: string[] = [];
+  const re = /@media\s+print\s*\{/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(css))) {
+    let depth = 1;
+    let i = re.lastIndex;
+    while (i < css.length && depth > 0) {
+      if (css[i] === "{") depth += 1;
+      else if (css[i] === "}") depth -= 1;
+      i += 1;
+    }
+    out.push(css.slice(m.index, i));
+  }
+  return out;
+}
+
+/** 打印块里所有带 break-inside:avoid 的规则选择器 */
+function avoidSelectors(blocks: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const block of blocks) {
+    for (const rule of block.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const body = rule[2];
+      if (/break-inside\s*:\s*avoid|page-break-inside\s*:\s*avoid/.test(body)) out.push(rule[1].trim());
+    }
+  }
+  return out;
+}
+
+/** 白名单：整块不拆只允许在「行 / 小单元」上（理由写在 styles.css 的注释里） */
+const BREAK_AVOID_ALLOW = /(^|[\s,>])(tr|\.print-keep|\.payslip)(\s|,|:|$)/;
+
+test("约定：打印分页——打印态一屏高清零 + 打印表格表头跨页重复（styles.css）", async () => {
+  const css = await readFile(repo("src/styles.css"), "utf8");
+  const blocks = printMediaBlocks(css);
+  assert.equal(blocks.length >= 2, true, `styles.css 里应有多处 @media print（现有 ${blocks.length} 处）`);
+  const printCss = blocks.join("\n");
+
+  // ① 一屏高清零：Min-h-screen / min-h-dvh / h-screen 必须在打印媒体里归零
+  for (const cls of ["min-h-screen", "min-h-dvh"]) {
+    const zeroed = new RegExp(`\\.${cls}[^{}]*\\{[^{}]*min-height\\s*:\\s*0`).test(printCss);
+    assert.equal(zeroed, true, `打印态必须把 .${cls} 的 min-height 清零（否则外壳至少一屏高 → 提前分页/多一张空白页）`);
+  }
+  assert.match(printCss, /\.app-bg[^{}]*\{[^{}]*overflow\s*:\s*visible/, "打印态 .app-bg 必须 overflow:visible（overflow-x-hidden 在打印态是滚动容器，会裁掉超出内容）");
+
+  // ② 表格跨页：表头每页重复
+  assert.match(
+    printCss,
+    /\.print-only\s+thead[^{}]*\{[^{}]*display\s*:\s*table-header-group/,
+    "打印表格必须有 `.print-only thead { display: table-header-group }`（第二页起要有表头）",
+  );
+
+  // ③ 整块不拆只许落在行/小单元上，不许再出现容器级
+  const bad = avoidSelectors(blocks).filter((sel) => !BREAK_AVOID_ALLOW.test(sel));
+  assert.deepEqual(
+    bad,
+    [],
+    `打印件里这些选择器用了整块不拆，会把上一页留白（只允许 tr / .print-keep / .payslip）：\n${bad.join("\n")}`,
+  );
+  // 行级不拆必须在（否则一行会被腰斩）
+  assert.match(printCss, /\.print-only\s+tr[^{}]*\{[^{}]*break-inside\s*:\s*avoid/, "打印表格的行必须 `break-inside: avoid`（不许把一行拆到两页）");
+});
+
+test("约定：打印件容器不许用 min-h-screen/min-h-dvh，也不许用容器级 break-inside-avoid（1.8.10 分页缺陷）", async () => {
+  const bad: string[] = [];
+  let sheets = 0;
+  for (const { file, text } of await uiSources()) {
+    const isSheet = /\bprint-only\b/.test(text);
+    if (isSheet) sheets += 1;
+    // 打印件（含 print-only 的文件）不许有一屏高的类
+    if (isSheet) {
+      for (const m of text.matchAll(/className="([^"]*)"/g)) {
+        const hit = m[1].match(/\b(min-h-screen|min-h-dvh|h-screen)\b/);
+        if (hit) bad.push(`${file}: 打印件用了 ${hit[1]}（打印态至少一屏高 → 提前分页）`);
+      }
+    }
+    // 全库：不许再出现容器级 break-inside-avoid（改由 styles.css 的 tr / .print-keep 承担）
+    for (const m of text.matchAll(/className="([^"]*break-inside-avoid[^"]*)"/g)) bad.push(`${file}: 容器级 break-inside-avoid（class）`);
+    for (const m of text.matchAll(/break-inside\s*:\s*avoid|breakInside\s*:\s*["']avoid["']/g)) bad.push(`${file}: 内联 ${m[0]}`);
+  }
+  assert.equal(sheets >= 4, true, `应扫描到多个打印件文件，实际 ${sheets} 个（正则可能失效）`);
+  assert.deepEqual(
+    bad,
+    [],
+    `打印分页协议要求「不许拆页」下沉到行/小单元（tr、.print-keep，见 styles.css）：\n${bad.join("\n")}`,
+  );
+});
+
+test("守卫自检：打印分页三条判据能抓出坏样本（改回旧写法必须变红）", () => {
+  const oldCss = `
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block; }
+  .payslip { break-inside: avoid; page-break-inside: avoid; }
+}
+@layer components { @media print { .print-only section { break-inside: avoid; } } }`;
+  const blocks = printMediaBlocks(oldCss);
+  assert.equal(blocks.length, 2, "嵌套在 @layer 里的 @media print 也要能被取到");
+  const sel = avoidSelectors(blocks);
+  assert.deepEqual(sel.filter((s) => !BREAK_AVOID_ALLOW.test(s)), [".print-only section"], "容器级 section 必须被白名单拦下");
+  assert.equal(sel.some((s) => BREAK_AVOID_ALLOW.test(s)), true, "行/小单元白名单要能放行");
+  const printCss = blocks.join("\n");
+  assert.equal(/\.min-h-screen[^{}]*\{[^{}]*min-height\s*:\s*0/.test(printCss), false, "旧写法（没清零一屏高）必须判不合格");
+  assert.equal(/\.print-only\s+thead[^{}]*\{[^{}]*display\s*:\s*table-header-group/.test(printCss), false, "旧写法（没跨页表头）必须判不合格");
+  // 组件侧坏样本
+  const sheetBad = `<div className="print-only min-h-screen"><section className="mt-3 break-inside-avoid">x</section></div>`;
+  assert.equal((sheetBad.match(/(min-h-screen|min-h-dvh|h-screen)/g) || []).length, 1);
+  assert.equal((sheetBad.match(/break-inside-avoid/g) || []).length, 1);
+});

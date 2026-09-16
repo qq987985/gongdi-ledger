@@ -12,7 +12,9 @@ import type { Payment } from "~/lib/types";
  * 所以屏幕上看到的数字与打印纸上的一模一样：
  * - 模式一「明细清单」：按实际收款人分节 —— 节内是该人的**全部记录（已发 + 待发）**，
  *   每笔标注「已发 / 待发」（代收笔另有「（代收）」标记），节尾小计拆
- *   「已发小计」+「待发小计」两行；整节 `break-inside-avoid` 不拆页。
+ *   「已发小计」+「待发小计」两行；**允许在人与人之间分页、也允许节内跨页**
+ *   （1.8.10 打印分页修复：整节不拆页会把上一页留一大片空白，改为行级不拆 + 节标题
+ *   跟着表格，规则见 `src/styles.css` 的「打印分页协议」）。
  * - 模式二「汇总清单」：每人一行（已发含代发）+「待发放」**单列一组** + 总计。
  * 口径（1.8.6）：**已发 A + 待发放 C = 总计**；代发是已发的**子集**（B ⊆ A），
  * 单列成「其中代发」标注，**不减 A**。两种清单表头小字分别写清差别（`printCaliberNote`）。
@@ -81,7 +83,13 @@ export function PaymentSheets({
         </header>
         {mode === "detail" ? (
           sections.map((s) => (
-            <section key={s.owner || "__empty__"} className="mt-3 break-inside-avoid">
+            /* 1.8.10：这里原来有容器级 `break-inside-avoid`（整节不许拆页）——
+               页底放不下时整节被推到下一页，上一页留一大片空白（用户实测 26 笔就分页）。
+               现在改成「允许在人与人之间分页、允许节内跨页」：整块不拆下沉到行（tr，见
+               styles.css 打印分页协议）。节标题**故意不加** `print-title`：实测
+               `break-after: avoid` 会让浏览器把「标题+表」当一组，每页反而多留 5~15mm 空白
+               （60 笔 / 6 人：21.8/22.1 → 14.7/5.4 的差别）。 */
+            <section key={s.owner || "__empty__"} className="mt-3">
               <div className="text-sm font-semibold">{sectionTitle(s)}</div>
               <table className="mt-1 w-full border-collapse text-center text-xs">
                 <thead>

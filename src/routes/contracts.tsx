@@ -41,8 +41,10 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 function MiniTable({ title, heads, rows, empty }: { title: string; heads: string[]; rows: any[][]; empty: string }) {
   return (
-    <section className="mt-4 break-inside-avoid">
-      <div className="text-sm font-semibold">{title}</div>
+    /* 1.8.10：容器级 `break-inside-avoid` 已删（页底放不下会把整张小表推走、上页留白）；
+       改为标题 `print-title` 粘住表格 + 行级不拆，规则见 styles.css 打印分页协议 */
+    <section className="mt-4">
+      <div className="print-title text-sm font-semibold">{title}</div>
       {rows.length ? (
         <table className="mt-1 w-full border-collapse text-center text-xs">
           <thead>
@@ -89,8 +91,13 @@ function ContractStatementSheets({ items }: { items: { contract: ContractRecord;
         const invoices = entries.filter((e) => e.kind === "invoice").slice().sort(sortByDate);
         const receipts = entries.filter((e) => e.kind === "receipt").slice().sort(sortByDate);
         return (
-          <article key={c.id} className="statement break-inside-avoid border border-black p-4">
-            <header className="border-b border-black pb-2 text-center">
+          /* 1.8.10：整张对账单不再用容器级 `break-inside-avoid`（一张单放不进当前页时
+             整张跳页，上一页留一大片空白；多张单也无法同页）。跨页可读性靠
+             thead 每页重复 + 行/小单元不拆（styles.css 打印分页协议） */
+          <article key={c.id} className="statement border border-black p-4">
+            {/* 单据抬头是很小的「小单元」：允许用 print-keep 整体不拆（最多推十几毫米），
+                单据正文则照常跨页 */}
+            <header className="print-keep border-b border-black pb-2 text-center">
               <div className="text-2xl font-semibold tracking-widest">合同对账单</div>
               <div className="mt-1 text-xs">
                 {c.code} · {c.name}

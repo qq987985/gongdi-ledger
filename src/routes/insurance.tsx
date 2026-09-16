@@ -731,8 +731,10 @@ function InsurancePage() {
               </tfoot>
             </table>
 
-            <div className="mt-6 break-inside-avoid">
-              <div className="text-center text-sm font-semibold">按班组汇总（保费）</div>
+            {/* 1.8.10：容器级 `break-inside-avoid` 已删（明细表长时整块"按班组汇总"被推走、
+                上一页留白）；改为标题 `print-title` + 行级不拆（styles.css 打印分页协议） */}
+            <div className="mt-6">
+              <div className="print-title text-center text-sm font-semibold">按班组汇总（保费）</div>
               <table className="mt-2 w-full border-collapse text-center text-sm">
                 <thead>
                   <tr>

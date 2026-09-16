@@ -33,6 +33,10 @@
   红线：单文件约 1000 行评估拆分、禁循环依赖（共同依赖下沉第三模块）、存储三层/excel/shell
   三条主线依赖单向；拆分=机械提取+barrel 兼容+守卫扫描路径同步改。
 - 修改数据模型时同步检查 `types.ts`、`store.ts`、`nas-sync.ts`、Excel 导入导出。
+- **改打印件（`.print-only`）前先读 `src/styles.css` 的「打印分页协议」（1.8.10）**：规则只在那一处写；
+  组件里禁用容器级 `break-inside-avoid`（页底放不下会整块推移、上一页留一大片空白），
+  「不许拆页」只下沉到 `tr` / `.print-keep`；打印态不许有一屏高的容器（`min-h-screen/min-h-dvh` 已在
+  `@media print` 清零）。`开发规范.md` §6.6 与 `tests/ui-guards.test.ts` 同步约束。
 - 提交前跑三道闸：`pnpm run typecheck`、`pnpm test`、`pnpm build`（规范 §2，测试见 §10）。
 
 ## 回归测试与质量闸门（2026-09-10 起）
@@ -46,13 +50,18 @@
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。**现在 0 个 todo（已知缺陷已清零）**。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴
-  （1.8.1 已在该模板里补「Excel 往返对拍」一步；本机等价命令 `pnpm run check`）。**目前 GitHub 上仍未创建 check.yml**，
-  所以四道闸只能靠人跑（推 main 触发的只有 docker.yml 的镜像构建与 Release）。
-- 1.8.8 起覆盖 **375 个用例（375 pass + 0 todo）**（1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+  （1.8.1 已在该模板里补「Excel 往返对拍」一步；本机等价命令 `pnpm run check`）。
+  **`check.yml` 已于 2026-09-16 建到 GitHub（1.8.10 起生效，推送 main / PR 都会跑 typecheck → test →
+  test:roundtrip → build + `app/VERSION.txt` 一致性）**；本地 `git log origin/main` 里能看到它
+  （本地 `git pull` 之前看不到文件，属正常）。
+- 1.8.10 起覆盖 **387 个用例（387 pass + 0 todo）**（1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源；
-  1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外，
-  见 tests/ui-guards.test.ts）/
+  1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外；
+  **1.8.10 起还管打印分页**——打印态一屏高必须清零（`min-h-screen/min-h-dvh` → 0 + `.app-bg`
+  `overflow:visible`）、打印表格必须有 `thead { display: table-header-group }`、
+  **不许出现容器级 `break-inside-avoid`**（白名单只有 `tr` / `.print-keep` / `.payslip`），
+  见 tests/ui-guards.test.ts 与 `src/styles.css` 的「打印分页协议」）/
   工具函数与版本日志解析（1.7.19 起：tests/utils.test.ts、changelog.test.ts、xlsx-center.test.ts）/
   保险结算口径（1.7.20 起：tests/insurance.test.ts，函数在 src/lib/insurance.ts，勿在页面重写）/
   全面检查守卫（1.8.0 起：savePhoto 先 rename 就位后清旧、导出月份识别含纯备注行、启动器请求级 500 落盘，
