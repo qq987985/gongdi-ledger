@@ -363,7 +363,9 @@ function InsurancePage() {
             })}
             {!policies.length ? (
               <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-muted md:col-span-2">
-                还没有保单。点「新增保单」开始。
+                还没有保单。
+                {/* 只读账号看不到「新增保单」按钮：别再指着不存在的按钮，免得用户以为软件坏了 */}
+                {canEdit ? "点「新增保单」开始。" : "等有保单后这里会显示，需要新增请让管理员开通「团体保险」编辑权限。"}
               </div>
             ) : null}
           </div>

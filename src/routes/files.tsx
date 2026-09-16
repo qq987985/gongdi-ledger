@@ -190,8 +190,8 @@ function FilesPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-6 text-muted">
-                    还没有影像资料。到月度考勤、合同流水或合同扫描件里上传。
+                  <td colSpan={5} className="py-8 text-center text-sm text-muted">
+                    还没有影像资料。到「月度考勤」传考勤影像、合同里传报量单/发票/收款回单/扫描件、报销单里传凭证。
                   </td>
                 </tr>
               ) : null}

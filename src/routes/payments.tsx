@@ -101,6 +101,13 @@ function PaymentsPage() {
       toast.error("请选择或填写发放日期");
       return;
     }
+    // 这个按钮会把**已有日期**的记录一并改写（store 是无条件覆盖），且改完不可撤销：
+    // 按 §6.11 批量操作必须有确认，并把「会改写几笔已有日期」写清楚（1.8.1）
+    const overwrite = store.payments.filter((p) => ids.includes(p.id) && (p.date || "").trim() && p.date !== d).length;
+    const msg = overwrite
+      ? `给所选的 ${ids.length} 笔填发放日期「${d}」？\n\n其中 ${overwrite} 笔原来已有日期，会被一并改写成 ${d}，改完不能撤销（已发/待发汇总会跟着变）。`
+      : `给所选的 ${ids.length} 笔填发放日期「${d}」？`;
+    if (!confirm(msg)) return;
     patchPayments(ids, { date: d } as any);
     setSelected([]);
     toast.success(`已给 ${ids.length} 笔补上日期 ${d}`);

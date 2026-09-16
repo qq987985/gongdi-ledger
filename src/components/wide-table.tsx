@@ -216,7 +216,9 @@ export function WideTable({
       <p className="mb-1 hidden text-[11px] text-muted md:block">
         底部左右滑动；拖表头右边线调列宽，双击收至最窄。调完会记住。
       </p>
-      <p className="mb-1 text-[11px] text-muted md:hidden">宽表请左右滑动。「更改」在勾选框右边。点一行是勾选。</p>
+      <p className="mb-1 text-[11px] text-muted md:hidden">
+        宽表请左右滑动。有勾选框的表：点一行是勾选，「编辑」在勾选框右边。
+      </p>
       <div ref={ref} className={cn("wide-scroll overflow-x-scroll rounded-xl border border-line bg-surface", className)}>
         {children}
       </div>

@@ -213,7 +213,7 @@ function YearOverview({
               <tbody>
                 {personRows.length === 0 ? (
                   <tr>
-                    <td colSpan={16} className="p-4 text-muted">
+                    <td colSpan={16} className="py-8 text-center text-sm text-muted">
                       这一年还没有人出勤。点上面某个月，把实际上班的人加进去。
                     </td>
                   </tr>
@@ -254,7 +254,7 @@ function YearOverview({
               <tbody>
                 {personRows.length === 0 ? (
                   <tr>
-                    <td colSpan={16} className="p-4 text-muted">
+                    <td colSpan={16} className="py-8 text-center text-sm text-muted">
                       这一年还没有人出勤。点上面某个月，把实际上班的人加进去。
                     </td>
                   </tr>
@@ -511,7 +511,7 @@ function MonthTable({
           <tbody>
             {calcRows.length === 0 ? (
               <tr>
-                <td colSpan={14} className="p-6 text-muted">
+                <td colSpan={14} className="py-8 text-center text-sm text-muted">
                   本月还没人。从上方人员表把实际出勤的人加进来，填出勤天数、加班小时、补助、扣款。
                 </td>
               </tr>
@@ -582,6 +582,8 @@ function MonthFiles({ year, month }: { year: number; month: number }) {
   const remove = useApp((s) => s.removeAttendanceDocs);
   const list = docs.filter((d: AttendanceDoc) => d.year === year && d.month === month);
   const [remark, setRemark] = React.useState("");
+  // 一批文件是逐份 await 上传的：请求期间禁用按钮，否则用户等不及再点一次会重复上传（1.8.1）
+  const [uploading, setUploading] = React.useState(false);
   return (
     <section className="rounded-xl border border-line bg-surface p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -595,24 +597,30 @@ function MonthFiles({ year, month }: { year: number; month: number }) {
           kind="file"
           compact
           multiple
+          disabled={uploading}
           accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls"
-          label="上传影像"
+          label={uploading ? "上传中…" : "上传影像"}
           hint="点击选择，或把文件拖到这里，可一次多份"
           onFiles={async (files) => {
-            if (!files.length) return;
-            const taken = docs.map((d: AttendanceDoc) => d.fileName);
-            let uploaded = 0;
-            for (const file of files) {
-              const id = uid();
-              const pack = await prepareNamedFile(file, attendanceBase(year, month), taken, "");
-              if (!pack) continue;
-              const saved = (await setDoc(id, "attendance", pack.file, { replace: pack.replace })) || pack.file.name;
-              taken.push(saved);
-              add({ id, year, month, fileName: saved, remark });
-              uploaded += 1;
+            if (!files.length || uploading) return;
+            setUploading(true);
+            try {
+              const taken = docs.map((d: AttendanceDoc) => d.fileName);
+              let uploaded = 0;
+              for (const file of files) {
+                const id = uid();
+                const pack = await prepareNamedFile(file, attendanceBase(year, month), taken, "");
+                if (!pack) continue;
+                const saved = (await setDoc(id, "attendance", pack.file, { replace: pack.replace })) || pack.file.name;
+                taken.push(saved);
+                add({ id, year, month, fileName: saved, remark });
+                uploaded += 1;
+              }
+              setRemark("");
+              if (uploaded) toast.success(`已上传 ${uploaded} 份`);
+            } finally {
+              setUploading(false);
             }
-            setRemark("");
-            if (uploaded) toast.success(`已上传 ${uploaded} 份`);
           }}
         />
       </div>

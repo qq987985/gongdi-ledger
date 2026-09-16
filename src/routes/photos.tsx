@@ -72,8 +72,14 @@ function PhotosPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted">
-                    没有匹配的人员
+                  <td colSpan={7} className="py-8 text-center text-sm text-muted">
+                    {people.length === 0
+                      ? "还没有人员。先在「人员」里建档，或到「导入」导入人员名单。"
+                      : q
+                        ? "没有匹配的人员"
+                        : filter === "missing"
+                          ? "人员照片都齐了。"
+                          : "没有匹配的人员"}
                   </td>
                 </tr>
               ) : null}

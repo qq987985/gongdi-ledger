@@ -564,7 +564,7 @@ function ExpensesPage() {
               <tbody>
                 {shown.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="p-6 text-muted">
+                    <td colSpan={11} className="py-8 text-center text-sm text-muted">
                       还没有报销。点右上角「新增报销」。勾几笔可一起报销、记打款。
                     </td>
                   </tr>

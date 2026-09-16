@@ -386,7 +386,7 @@ function ContractsPage() {
               <tbody>
                 {list.length === 0 ? (
                   <tr>
-                    <td colSpan={20} className="p-6 text-muted">
+                    <td colSpan={20} className="py-8 text-center text-sm text-muted">
                       还没有合同。点右上角「新增合同」，或在 Excel 导入后刷新。
                     </td>
                   </tr>

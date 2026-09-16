@@ -186,8 +186,8 @@ function PeoplePage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="p-8 text-center text-sm text-muted">
-                    没有匹配的人员
+                  <td colSpan={12} className="py-8 text-center text-sm text-muted">
+                    {people.length === 0 ? "还没有人员。点「新增人员」即可开始。" : "没有匹配的人员"}
                   </td>
                 </tr>
               ) : null}
@@ -626,7 +626,7 @@ function PersonEditor({
           </div>
         ) : (
           <p className="mt-4 text-xs text-muted">
-            先填姓名再上传。身份证格子只显示正面，边上可点「查看反面」。也可直接拷到 NAS：data/photos/id，文件名「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。编辑老档案时照片挂在档案原姓名下，改名保存后请重传。
+            先填姓名再上传。身份证格子正面、反面各一张小图，点小图可放大查看。也可直接拷到 NAS：data/photos/id，文件名「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。编辑老档案时照片挂在档案原姓名下，改名保存后请重传。
           </p>
         )}
       </div>
