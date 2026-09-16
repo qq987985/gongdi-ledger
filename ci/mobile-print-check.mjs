@@ -29,6 +29,8 @@ import { existsSync } from "node:fs";
 import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import { pdfPageTexts } from "./print-pdf.mjs";
+
 const DATA_DIR = process.env.DATA_DIR;
 const PORT = Number(process.env.PORT || 4599);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -103,7 +105,11 @@ const NAMES = [
   ["褚小龙", ""],
   ["卫红旗", ""],
 ];
-const people = NAMES.map(([n, t], i) => person(i + 1, n, t, 300 + (i % 5) * 20));
+/** 人数：`SEED_PEOPLE=45` 时自动补出「人员13…人员45」这种合成姓名（用来把汇总清单也压到多页） */
+const targetPeople = Number(process.env.SEED_PEOPLE || 0) || NAMES.length;
+const allNames = [...NAMES];
+while (allNames.length < targetPeople) allNames.push([`人员${allNames.length + 1}`, `班组${(allNames.length % 6) + 1}`]);
+const people = allNames.slice(0, targetPeople).map(([n, t], i) => person(i + 1, n, t, 300 + (i % 5) * 20));
 
 const attendance = [];
 for (const p of people)
@@ -136,6 +142,27 @@ for (const p of people)
       remark: pi % 7 === 0 ? "含上月补发" : "",
     });
   }
+/** `SEED_PAY_COUNT=26`：改成按人轮流铺 26 笔（复现用户「26 条记录打印汇总就分页、第一页还有大片空缺」那条）。
+ *  不设这个变量时，发放记录与上面完全一样（12 人 × 4 笔 + 1 条待发放）。 */
+const payCount = Number(process.env.SEED_PAY_COUNT || 0);
+if (payCount > 0) {
+  payments.length = 0;
+  const months = [1, 3, 5, 7];
+  for (let i = 0; i < payCount; i += 1) {
+    const p = people[i % people.length];
+    const m = months[Math.floor(i / people.length) % months.length];
+    const n = i + 1;
+    payments.push({
+      id: `pay${n}`,
+      owner: p.name,
+      receiver: m === 7 && n % 5 === 0 ? "张建国（代收）" : p.name,
+      date: `${YEAR}-${String(m).padStart(2, "0")}-${String(10 + (n % 18)).padStart(2, "0")}`,
+      amount: 7000 + (n % 5) * 300,
+      source: n % 3 === 0 ? "五冶" : n % 3 === 1 ? "一局" : "",
+      remark: n % 7 === 0 ? "含上月补发" : "",
+    });
+  }
+}
 payments.push({
   id: "pay-wait",
   owner: "张建国",
@@ -216,6 +243,55 @@ const insuranceMembers = people.slice(0, 6).map((p, i) => ({
   remark: "",
 }));
 
+/** 把报销 / 合同明细 / 保险人数也撑到多页（`SEED_EXPENSES=40` 等），用来排查另外 4 个打印入口的分页 */
+const extraExpenses = Number(process.env.SEED_EXPENSES || 0);
+for (let i = expenses.length; i < extraExpenses; i += 1) {
+  expenses.push({
+    ...expenses[0],
+    id: `x${i + 1}`,
+    name: `材料采购-${i + 1}（含税含运费的长名字）`,
+    period: `2026-${String((i % 12) + 1).padStart(2, "0")}`,
+    status: "未报销",
+    payMethod: "",
+    reimbursedAt: "",
+    amount: 100 + i * 13,
+    remark: i % 5 === 0 ? "长备注：含税、含运费、含卸车费，共三行文字，用来看表格会不会被撑破" : "",
+  });
+}
+
+const extraEntries = Number(process.env.SEED_CONTRACT_ENTRIES || 0);
+for (let i = contractEntries.length; i < extraEntries; i += 1) {
+  contractEntries.push({
+    id: `e${i + 1}`,
+    contractId: "c1",
+    kind: i % 3 === 0 ? "report" : i % 3 === 1 ? "invoice" : "receipt",
+    date: `2026-${String((i % 12) + 1).padStart(2, "0")}-1${i % 10}`,
+    amount: 10000 + i * 700,
+    amountExcl: 9000 + i * 600,
+    taxRate: 9,
+    workerPay: 0,
+    workerPayDate: "",
+    payTo: i % 2 ? "worker" : "sub",
+    no: `NO-${i + 1}`,
+    remark: i % 6 === 0 ? "长备注：分期结算，按进度付款，附验收单" : "",
+    fileName: "",
+  });
+}
+
+const extraMembers = Number(process.env.SEED_INSURANCE_MEMBERS || 0);
+for (let i = insuranceMembers.length; i < extraMembers; i += 1) {
+  const p = people[i % people.length];
+  insuranceMembers.push({
+    id: `im${i + 1}`,
+    policyId: i % 4 === 0 ? "ip2" : "ip1",
+    name: `${p.name}${i + 1}`,
+    leader: i % 3 === 0 ? "张建国" : i % 3 === 1 ? "王铁柱" : "",
+    startDate: `2026-${String((i % 12) + 1).padStart(2, "0")}-01`,
+    endDate: i % 7 === 0 ? "2026-06-30" : "",
+    remark: "",
+  });
+}
+
 const ledger = {
   schemaVersion: 2,
   year: YEAR,
@@ -240,7 +316,7 @@ async function seed() {
   const dir = join(DATA_DIR, "books", "default");
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "ledger.json"), JSON.stringify(ledger, null, 2), "utf8");
-  console.log(`已写入 ${join(dir, "ledger.json")}：${people.length} 人 / ${attendance.length} 考勤 / ${payments.length} 发放`);
+  console.log(`已写入 ${join(dir, "ledger.json")}：${people.length} 人 / ${attendance.length} 考勤 / ${payments.length} 发放 / ${expenses.length} 报销 / ${contractEntries.length} 合同明细 / ${insuranceMembers.length} 参保人`);
 }
 
 async function browser() {
@@ -563,83 +639,95 @@ async function printCase(b, outDir, results, kase) {
   return record;
 }
 
+/** 发放页「打印的实际收款人」下拉里挑第 index 个（台账是异步拉的，要等选项出来） */
+async function pickOwner(page, index) {
+  const sel = page.getByLabel("打印的实际收款人");
+  for (let i = 0; i < 20; i += 1) {
+    const values = await sel.locator("option").evaluateAll((os) => os.map((o) => o.value));
+    if (Array.isArray(values) && values.length > index) {
+      await sel.selectOption(values[index]);
+      await page.waitForTimeout(200);
+      return values[index];
+    }
+    await page.waitForTimeout(300);
+  }
+  return "";
+}
+
+/**
+ * 全部打印入口（`printCheck` 查「印出了什么」、`pageAudit` 查「分了几页 / 留了多少白」，共用这一份清单）：
+ * 以后加打印入口只改这里，两处检查一起覆盖，不会只补一边。
+ */
+function printCases() {
+  return [
+    // ① 发放记录：明细/汇总 × 全部人/单人（用户报的那个缺陷）
+    { name: "发放记录-明细-全部人", route: "/payments", button: "打印明细", file: "payments-明细-全部人", picked: "全部实际收款人" },
+    {
+      name: "发放记录-明细-单人",
+      route: "/payments",
+      button: "打印明细",
+      file: "payments-明细-单人",
+      picked: "（动态选第一个实际收款人）",
+      setup: (page) => pickOwner(page, 1),
+    },
+    { name: "发放记录-汇总-全部人", route: "/payments", button: "打印汇总", file: "payments-汇总-全部人", picked: "全部实际收款人" },
+    {
+      name: "发放记录-汇总-单人",
+      route: "/payments",
+      button: "打印汇总",
+      file: "payments-汇总-单人",
+      picked: "（动态选第一个实际收款人）",
+      setup: (page) => pickOwner(page, 1),
+    },
+    // ② 其它打印入口：同一个尺子
+    { name: "报销单-打印全部", route: "/expenses", button: "打印报销单", file: "expenses-all" },
+    { name: "保险合同清单", route: "/insurance", button: "打印清单", file: "insurance-list" },
+    {
+      name: "合同对账单",
+      route: "/contracts",
+      button: "打印对账单",
+      file: "contracts-statement",
+      setup: async (page) => {
+        // 对账单必须先选中合同（勾表格里的复选框，按钮才会 enable）
+        const chk = page.locator('table input[type="checkbox"]').first();
+        for (let i = 0; i < 20 && (await chk.count()) === 0; i += 1) await page.waitForTimeout(300);
+        if (await chk.count()) await chk.check().catch(() => {});
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      name: "个人查询-工资条",
+      route: "/query",
+      button: "打印",
+      file: "query-payslips",
+      setup: async (page) => {
+        const btn = page.getByRole("button", { name: "选择人员" });
+        if (await btn.count()) {
+          await btn.click();
+          await page.waitForTimeout(300);
+        }
+        const boxes = page.locator('input[type="checkbox"]');
+        const n = await boxes.count();
+        for (let i = 0; i < Math.min(n, 2); i += 1) await boxes.nth(i).check().catch(() => {});
+        await page.waitForTimeout(300);
+      },
+    },
+  ];
+}
+
 async function printCheck() {
   const b = await browser();
   const outDir = "browser-screenshots/print";
   await mkdir(outDir, { recursive: true });
   const results = [];
 
-  const pickOwner = async (page, index) => {
-    const sel = page.getByLabel("打印的实际收款人");
-    // 台账拉取是异步的：下拉选项可能还没出来，等一会儿再取
-    for (let i = 0; i < 20; i += 1) {
-      const values = await sel.locator("option").evaluateAll((os) => os.map((o) => o.value));
-      if (Array.isArray(values) && values.length > index) {
-        await sel.selectOption(values[index]);
-        await page.waitForTimeout(200);
-        return values[index];
-      }
-      await page.waitForTimeout(300);
-    }
-    return "";
-  };
-
-  // ① 发放记录：明细/汇总 × 全部人/单人（用户报的那个缺陷）
-  for (const [mode, label] of [["明细", "打印明细"], ["汇总", "打印汇总"]]) {
-    for (const who of ["全部人", "单人"]) {
-      let picked = "";
-      await printCase(b, outDir, results, {
-        name: `发放记录-${mode}-${who}`,
-        route: "/payments",
-        button: label,
-        file: `payments-${mode}-${who}`,
-        picked: who === "单人" ? "（动态选第一个实际收款人）" : "全部实际收款人",
-        setup: async (page) => {
-          if (who === "单人") picked = await pickOwner(page, 1);
-        },
-      });
-    }
-  }
-
-  // ② 其它打印入口：同一个尺子
-  await printCase(b, outDir, results, { name: "报销单-打印全部", route: "/expenses", button: "打印报销单", file: "expenses-all" });
-  await printCase(b, outDir, results, { name: "保险合同清单", route: "/insurance", button: "打印清单", file: "insurance-list" });
-  await printCase(b, outDir, results, {
-    name: "合同对账单",
-    route: "/contracts",
-    button: "打印对账单",
-    file: "contracts-statement",
-    setup: async (page) => {
-      // 对账单必须先选中合同（勾表格里的复选框，按钮才会 enable）
-      const chk = page.locator('table input[type="checkbox"]').first();
-      for (let i = 0; i < 20 && (await chk.count()) === 0; i += 1) await page.waitForTimeout(300);
-      if (await chk.count()) await chk.check().catch(() => {});
-      await page.waitForTimeout(400);
-    },
-  });
-  await printCase(b, outDir, results, {
-    name: "个人查询-工资条",
-    route: "/query",
-    button: "打印",
-    file: "query-payslips",
-    setup: async (page) => {
-      const btn = page.getByRole("button", { name: "选择人员" });
-      if (await btn.count()) {
-        await btn.click();
-        await page.waitForTimeout(300);
-      }
-      const boxes = page.locator('input[type="checkbox"]');
-      const n = await boxes.count();
-      for (let i = 0; i < Math.min(n, 2); i += 1) await boxes.nth(i).check().catch(() => {});
-      await page.waitForTimeout(300);
-    },
-  });
+  for (const kase of printCases()) await printCase(b, outDir, results, kase);
 
   await b.close();
   console.log("\n=== 打印媒体验证 ===");
   console.log(JSON.stringify(results, null, 1));
   const bad = results.filter((r) => !r.ok);
-  console.log(`\n合格 ${results.length - bad.length}/${results.length}` + (bad.length ? `，不合格：${bad.map((b) => b.name).join("、")}` : ""));
+  console.log(`\n合格 ${results.length - bad.length}/${results.length}` + (bad.length ? `，不合格：${bad.map((x) => x.name).join("、")}` : ""));
 }
 
 /** 调试：看某页为什么停在「加载中…」（打印 console 与失败请求） */
@@ -706,10 +794,72 @@ async function diag() {
   await b.close();
 }
 
+/** 打印分页体检：8 个打印入口各出一份 A4 PDF，量页数与每页白边 */
+async function pageAudit() {
+  const b = await browser();
+  const outDir = "browser-screenshots/print";
+  await mkdir(outDir, { recursive: true });
+  const only = process.argv.slice(3);
+  const rows = [];
+  for (const kase of printCases()) {
+    if (only.length && !only.some((k) => kase.name.includes(k))) continue;
+    const ctx = await loggedInContext(b, { width: 1280, height: 900 });
+    const page = await ctx.newPage();
+    await page.addInitScript("window.print = function () {};");
+    try {
+      await page.goto(BASE + kase.route, { waitUntil: "networkidle" });
+      await waitReady(page);
+      if (kase.setup) await kase.setup(page);
+      await page.getByRole("button", { name: new RegExp(kase.button) }).first().click();
+      await page.waitForTimeout(700);
+      await page.emulateMedia({ media: "print" });
+      await page.waitForTimeout(300);
+      const pdf = await page.pdf({
+        preferCSSPageSize: true,
+        // 与浏览器打印对话框默认一致（不勾「背景图形」）：否则页面底色会让每页都显得印满了
+        printBackground: false,
+        margin: { top: "12mm", bottom: "12mm", left: "12mm", right: "12mm" },
+        path: `${outDir}/${kase.file}.pdf`,
+      });
+      const detail = pdfPageTexts(pdf);
+      rows.push({
+        name: kase.name,
+        pages: detail.length,
+        pdf: `${outDir}/${kase.file}.pdf`,
+        detail: detail.map((pg) => ({
+          page: pg.page,
+          blankBottomMm: pg.blankBottomMm,
+          blankTopMm: pg.blankTopMm,
+          blank: pg.blank,
+          head: (pg.lines[0] || {}).text || "",
+          tail: (pg.lines[pg.lines.length - 1] || {}).text || "",
+        })),
+      });
+    } catch (err) {
+      rows.push({ name: kase.name, error: String(err).slice(0, 160) });
+    }
+    await ctx.close();
+  }
+  await b.close();
+  console.log("\n=== 打印分页体检（底部空白 = 该页最后一行到纸底可打印区的距离，mm）===");
+  for (const r of rows) {
+    if (r.error) {
+      console.log(`!! ${r.name} → ${r.error}`);
+      continue;
+    }
+    const bottoms = r.detail.map((pg) => (pg.blank ? "整页空白" : `${pg.blankBottomMm}mm`)).join(" | ");
+    const waste = r.detail.reduce((acc, pg) => acc + (pg.blank ? 273 : pg.blankBottomMm), 0);
+    console.log(`${r.name}：${r.pages} 页，底部空白 ${bottoms}；累计白边 ${waste.toFixed(0)}mm`);
+    for (const pg of r.detail) console.log(`    第${pg.page}页 首行「${String(pg.head).slice(0, 60)}」/ 末行「${String(pg.tail).slice(0, 40)}」`);
+  }
+  console.log("\n" + JSON.stringify(rows, null, 1));
+}
+
 const cmd = process.argv[2];
 if (cmd === "seed") await seed();
 else if (cmd === "mobile") await mobile();
 else if (cmd === "print") await printCheck();
+else if (cmd === "pages") await pageAudit();
 else if (cmd === "diag") await diag();
 else if (cmd === "debug") await debugPage();
-else console.log("用法见文件头注释：seed / mobile / print / diag <路径> / debug <路径>");
+else console.log("用法见文件头注释：seed / mobile / print / pages [用例名…] / diag <路径> / debug <路径>");

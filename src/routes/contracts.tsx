@@ -39,15 +39,34 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function MiniTable({ title, heads, rows, empty }: { title: string; heads: string[]; rows: any[][]; empty: string }) {
+function MiniTable({
+  caption,
+  title,
+  heads,
+  rows,
+  empty,
+}: {
+  /** 单据抬头（哪份合同，如「合同对账单 GD-2026-001」）—— 写在 thead 第一行，跨页每页重复 */
+  caption: string;
+  title: string;
+  heads: string[];
+  rows: any[][];
+  empty: string;
+}) {
+  const label = `${caption} · ${title}`;
   return (
     /* 1.8.10：容器级 `break-inside-avoid` 已删（页底放不下会把整张小表推走、上页留白）；
-       改为标题 `print-title` 粘住表格 + 行级不拆，规则见 styles.css 打印分页协议 */
+       改为抬头进表头 + 行级不拆，规则见 styles.css 打印分页协议。
+       1.8.11：抬头从「表外的小标题」改进 thead（跨页续页也认得出是哪份合同）。 */
     <section className="mt-4">
-      <div className="print-title text-sm font-semibold">{title}</div>
       {rows.length ? (
-        <table className="mt-1 w-full border-collapse text-center text-xs">
+        <table className="w-full border-collapse text-center text-xs">
           <thead>
+            <tr>
+              <th className="border border-black px-1 py-1 text-left font-semibold" colSpan={heads.length}>
+                {label}
+              </th>
+            </tr>
             <tr>
               {heads.map((h) => (
                 <th key={h} className="border border-black px-1 py-1 font-medium">
@@ -69,9 +88,10 @@ function MiniTable({ title, heads, rows, empty }: { title: string; heads: string
           </tbody>
         </table>
       ) : (
-        <p className="mt-1 text-xs">
-          （{empty}）
-        </p>
+        <>
+          <div className="print-title text-sm font-semibold">{label}</div>
+          <p className="mt-1 text-xs">（{empty}）</p>
+        </>
       )}
     </section>
   );
@@ -116,18 +136,21 @@ function ContractStatementSheets({ items }: { items: { contract: ContractRecord;
               <Row label="经理" value={c.manager} />
             </div>
             <MiniTable
+              caption={`合同对账单 ${c.code}`}
               title={reportLabel}
               heads={["日期", reportLabel, "期次", "备注"]}
               rows={reports.map((e) => [e.date, money(e.amount), e.no || "", e.remark || ""])}
               empty="无报量"
             />
             <MiniTable
+              caption={`合同对账单 ${c.code}`}
               title="开票"
               heads={["日期", "开票金额", "不含税", "税率", "发票号", "备注"]}
               rows={invoices.map((e) => [e.date, money(e.amount), money(e.amountExcl || 0), `${e.taxRate || 0}%`, e.no || "", e.remark || ""])}
               empty="无开票"
             />
             <MiniTable
+              caption={`合同对账单 ${c.code}`}
               title="收款"
               heads={["日期", "金额", "类型", "备注"]}
               rows={receipts.map((e) => [e.date, money(e.amount), e.payTo === "worker" ? "代付农民工" : "到分包", e.remark || ""])}

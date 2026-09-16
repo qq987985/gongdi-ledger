@@ -368,3 +368,72 @@ test("守卫自检：打印分页三条判据能抓出坏样本（改回旧写�
   assert.equal((sheetBad.match(/(min-h-screen|min-h-dvh|h-screen)/g) || []).length, 1);
   assert.equal((sheetBad.match(/break-inside-avoid/g) || []).length, 1);
 });
+
+// ───────────────────── 打印件「续页认得出」与「合计只印一次」（1.8.11） ─────────────────────
+
+/**
+ * 用户口径（1.8.11）：「除非放不下下一个人或下一条记录才允许大空白；能塞下就省纸；
+ * **我可以拆开分发**。」→ 拆开分发的前提是**每一页都认得出这是哪张单、哪个人**。
+ *
+ * 1.8.10 把「容器级 break-inside:avoid」清掉之后，单据会被拆到两页：
+ *  · 保险清单第 2 页顶上只剩列标题（没有保单号/项目名）；
+ *  · 合同对账单第 2 页顶上只剩「收款」两字（没有合同编号）；
+ *  · 报销单第 2 页顶上只剩列标题（没有报销人）。
+ * 实测（45 人 / 30 条明细，Chrome 出 A4 PDF）：这三处的续页首行就是上面那些残缺内容。
+ *
+ * 修法：把**单据抬头**从「表外的小标题 / 页头」搬进 `<thead>` 的第一行 ——
+ * 表头本来就跨页重复（1.8.10 的 `thead { display: table-header-group }`），
+ * 于是第一页不多占行（抬头原来也在），续页顶上多一行（≈4mm，续页本来就空着）。
+ *
+ * 同批的第二条：`tfoot` 的 UA 默认值是 `table-footer-group`，跨页时浏览器会在**每页**页脚
+ * 重复合计行 —— 45 人汇总第 1 页只有前 32 人却印着「总计 46 笔 ¥343,500.00」，
+ * 保险清单第 1 页只有 29 人却印着全单合计。拆开分发时会被当成「这一页的小计」，
+ * 所以显式改回 `table-row-group`：整单合计只在表格结束时出现一次。
+ */
+
+/** 取出文件里所有 `<thead>…</thead>` 的正文 */
+function theadBodies(text: string): string[] {
+  return [...text.matchAll(/<thead>([\s\S]*?)<\/thead>/g)].map((m) => m[1]);
+}
+
+test("约定：打印分页——合计只在最后一页印一次（tfoot 不许每页重复）", async () => {
+  const css = await readFile(repo("src/styles.css"), "utf8");
+  const printCss = printMediaBlocks(css).join("\n");
+  assert.match(
+    printCss,
+    /\.print-only\s+tfoot[^{}]*\{[^{}]*display\s*:\s*table-row-group/,
+    "打印态必须 `.print-only tfoot { display: table-row-group }`：tfoot 默认 table-footer-group 会在每页页脚重复合计，半页下面印着整单合计会被当成这一页的小计",
+  );
+  // 坏样本自检：旧写法（没有这条规则）必须判不合格
+  const oldCss = "@media print { .print-only thead { display: table-header-group; } .print-only tr { break-inside: avoid; } }";
+  assert.equal(
+    /\.print-only\s+tfoot[^{}]*\{[^{}]*display\s*:\s*table-row-group/.test(oldCss),
+    false,
+    "旧写法（没有 tfoot 规则）必须被判不合格",
+  );
+});
+
+test("约定：单据抬头必须写在跨页重复的表头里（保险清单 / 合同对账单 / 报销单）", async () => {
+  const cases: { file: string; token: RegExp; what: string }[] = [
+    { file: "src/routes/insurance.tsx", token: /policyCaption\(/, what: "保单抬头（哪张保单/哪个班组/在保状态）" },
+    { file: "src/routes/contracts.tsx", token: /\{label\}/, what: "合同抬头（合同编号 + 表名）" },
+    { file: "src/routes/expenses.tsx", token: /\{identity\}/, what: "报销单抬头（报销人/收款人/开户行/打款账户）" },
+  ];
+  const bad: string[] = [];
+  for (const c of cases) {
+    const text = stripComments(await readFile(repo(c.file), "utf8"));
+    const heads = theadBodies(text);
+    if (!heads.length) {
+      bad.push(`${c.file}: 找不到 <thead>（跨页表头本身就没有，续页更认不出）`);
+      continue;
+    }
+    if (!heads.some((h) => c.token.test(h))) bad.push(`${c.file}: 表头里没有${c.what} —— 拆到第 2 页就认不出是哪张单`);
+  }
+  assert.deepEqual(bad, [], `单据抬头必须放进 thead 第一行（跟着表头每页重复）：\n${bad.join("\n")}`);
+
+  // 坏样本自检：抬头写回「表外小标题」必须被抓出来
+  const badSample = `<section><div className="print-title">{label}</div><table><thead><tr>{heads.map((h) => <th>{h}</th>)}</tr></thead><tbody /></table></section>`;
+  assert.equal(theadBodies(badSample).some((h) => /\{label\}/.test(h)), false, "抬头在表外时必须判不合格");
+  const goodSample = `<table><thead><tr><th colSpan={4}>{label}</th></tr><tr>{heads.map((h) => <th>{h}</th>)}</tr></thead></table>`;
+  assert.equal(theadBodies(goodSample).some((h) => /\{label\}/.test(h)), true, "抬头在 thead 里时必须放行");
+});

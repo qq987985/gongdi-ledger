@@ -30,6 +30,23 @@ import {
 // 统一用 dates.ts 的 localToday()，不再各自手写当天日期
 const today = localToday;
 
+/**
+ * 打印件的**单据抬头**（1.8.11）：哪一张保单、哪个班组、什么在保状态。
+ * 它被写进打印表格 `thead` 的第一行 —— 表头跨页重复，所以被裁开分发的**续页也认得出是哪张单**
+ * （原来这行只印在第 1 页的页头，第 2 页顶上只剩列标题）。唯一实现，明细表与「按班组汇总」共用。
+ */
+function policyCaption(policy: Pick<InsurancePolicy, "policyNo" | "name">, leader: string, status: string): string {
+  const statusText = status === "active" ? "在保" : status === "ended" ? "已结束" : "";
+  return [
+    "团体保险人员清单",
+    `${policy.policyNo}${policy.name ? ` · ${policy.name}` : ""}`,
+    leader !== ALL_BUCKETS ? `队长：${leader || "未分班组"}` : "",
+    statusText,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function safeFileBase(s: string): string {
   return (s || "").replace(/[\\/:*?"<>|]/g, "").replace(/\s+/g, "").trim();
 }
@@ -687,16 +704,17 @@ function InsurancePage() {
           <article className="p-2">
             <header className="border-b-2 border-black pb-2 text-center">
               <div className="text-xl font-semibold">团体保险人员清单</div>
-              <div className="mt-1 text-sm">
-                {selected.policyNo}
-                {selected.name ? ` · ${selected.name}` : ""}
-                {leader !== ALL_BUCKETS ? ` · 队长：${leader || "未分班组"}` : ""}
-                {statusFilter === "active" ? " · 在保" : statusFilter === "ended" ? " · 已结束" : ""}
-              </div>
               <div className="mt-0.5 text-[11px]">{COMBINED_POLICY_NOTE}</div>
             </header>
             <table className="mt-3 w-full border-collapse text-center text-sm">
               <thead>
+                {/* 1.8.11：单据抬头（哪张保单/哪个班组/什么状态）放进表头第一行 ——
+                    明细表跨页时第 2 页顶上也会重复，用户裁开分发也认得出（见 styles.css 打印分页协议） */}
+                <tr>
+                  <th className="border border-black px-2 py-1 text-left font-semibold" colSpan={7}>
+                    {policyCaption(selected, leader, statusFilter)}
+                  </th>
+                </tr>
                 <tr>
                   {["序号", "姓名", "队长", "开始日期", "结束日期", "使用天数", "保费(元)"].map((h) => (
                     <th key={h} className="border border-black px-2 py-1 font-semibold">
@@ -737,6 +755,12 @@ function InsurancePage() {
               <div className="print-title text-center text-sm font-semibold">按班组汇总（保费）</div>
               <table className="mt-2 w-full border-collapse text-center text-sm">
                 <thead>
+                  {/* 汇总表也可能单独落在续页上：同样把保单抬头带在表头里 */}
+                  <tr>
+                    <th className="border border-black px-2 py-0.5 text-left font-semibold" colSpan={4}>
+                      {policyCaption(selected, leader, statusFilter)}
+                    </th>
+                  </tr>
                   <tr>
                     {["班组（队长）", "人数", "累计人天", "保费(元)"].map((h) => (
                       <th key={h} className="border border-black px-2 py-0.5 font-semibold">

@@ -663,6 +663,13 @@ function ExpenseSheets({ rows, showVoucher }: { rows: any[]; showVoucher?: boole
   const cards = [...new Set(rows.map((e) => (e.payCardNo || "").trim()).filter(Boolean))];
   const cols = showVoucher ? ["序号", "项目", "购买时间", "金额", "备注", "票据"] : ["序号", "项目", "购买时间", "金额", "备注"];
   const emptyCells = showVoucher ? 2 : 1;
+  /** 报销单抬头（1.8.11）：写进表头第一行，跨页时第 2 页顶上也会重复（原来只印在第 1 页） */
+  const identity = [
+    `报销人：${claimants.join("、") || "—"}`,
+    `收款人：${forWhoms.join("、") || "—"}`,
+    `开户行：${banks.join("、") || "—"}`,
+    `打款账户：${cards.map(formatCardNo).join("、") || "—"}`,
+  ].join(" · ");
   return (
     <div className="print-only space-y-8 text-black">
       <article className="statement border border-black p-4">
@@ -672,27 +679,10 @@ function ExpenseSheets({ rows, showVoucher }: { rows: any[]; showVoucher?: boole
         <table className="mt-2 w-full border-collapse text-center text-xs">
           <thead>
             <tr>
-              {["报销人", "收款人", "开户行", "打款账户"].map((col) => (
-                <th key={col} className="border border-black px-1 py-1 font-medium">
-                  {col}
-                </th>
-              ))}
+              <th className="border border-black px-1 py-1 text-left font-medium" colSpan={cols.length}>
+                {identity}
+              </th>
             </tr>
-          </thead>
-          <tbody>
-            <tr>
-              {[claimants.join("、") || "—", forWhoms.join("、") || "—", banks.join("、") || "—", cards.map(formatCardNo).join("、") || "—"].map(
-                (v, i) => (
-                  <td key={i} className="border border-black px-1 py-1">
-                    {v}
-                  </td>
-                ),
-              )}
-            </tr>
-          </tbody>
-        </table>
-        <table className="mt-2 w-full border-collapse text-center text-xs">
-          <thead>
             <tr>
               {cols.map((col) => (
                 <th key={col} className="border border-black px-1 py-1 font-medium">
