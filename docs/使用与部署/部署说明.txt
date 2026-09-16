@@ -1,5 +1,6 @@
 ================================================
-工地台账  1.2.20
+工地台账 · 飞牛 NAS 部署与升级
+（版本号以 VERSION.txt 第一行为准；本文按 1.8.0 的现状核对）
 ================================================
 
 两种 Docker 用法：
@@ -15,16 +16,14 @@
   data/                 ← 现有台账，不要动
   app/
   Dockerfile
-  docker-compose.yml
-  docker-compose.build.yml
-  docker-compose.github.yml
+  docker-compose.yml            ← 国内加速拉镜像（默认）
+  docker-compose.ghcr.yml       ← GitHub 官方源
+  docker-compose.build.yml      ← 本机构建
   一键部署.sh
   一键拉取.sh
   初始化目录.sh
   VERSION.txt
-  部署说明.txt
-  使用说明.md
-  目录结构.txt
+  docs/                 ← 说明文档
 
 
 二、本机构建（推荐）
@@ -37,7 +36,7 @@
   ./一键部署.sh
 
 打开 http://NAS的IP:8501
-左下角应显示 1.2.20
+左下角版本号应与 VERSION.txt 第一行一致。
 
 
 三、拉 GitHub 镜像（可选）
@@ -47,33 +46,43 @@ Packages 里 gongdi-ledger 已设 Public 之后：
 
   ./一键拉取.sh
 
-国内镜像：ghcr.1ms.run/qq987985/gongdi-ledger:latest
-compose 只挂 data，不要挂 VERSION.txt。
+compose 默认走国内加速 ghcr.1ms.run/qq987985/gongdi-ledger:latest；
+官方源用 docker-compose.ghcr.yml。compose 只挂 data 与 docker.sock，不要挂 VERSION.txt。
 
 
-四、data 必须有的文件夹
+四、以后升级（三种方式，选一）
 
-accounts  books  backups  templates
-photos/id  photos/bank  photos/ic
-photos/报量单  photos/发票  photos/收款回单  photos/考勤影像  photos/合同扫描件
+  1. 软件内一键更新（推荐）：设置 → 软件更新 → 更新。
+     需要 compose 里挂了 /var/run/docker.sock（默认已挂）。
+     更新结果与日志在卡片和「查看更新日志」里直接可见；数据只读 data，不受影响。
+  2. ./一键拉取.sh（拉最新镜像重建容器）。
+  3. 把新版本覆盖到本目录（不要动 data），再 ./一键部署.sh 本机构建。
 
-脚本会自动建。也可先跑：./初始化目录.sh
+软件是从 GitHub 查新版本的。请把仓库设成 Public（和 Packages 一样公开）。
+只公开镜像、仓库仍保密时，左下角会提示连不上。
 
 
-五、身份证和合同扫描件
+五、data 必须有的文件夹（脚本会自动建，也可先跑 ./初始化目录.sh）
 
-身份证两个文件，都放 photos/id：
+  accounts  books  backups  templates  logs
+  photos/<台账id>/id  bank  ic
+  photos/<台账id>/报量单  发票  收款回单  考勤影像  合同扫描件  报销凭证  报销打款  保险合同
+
+  历史全局影像目录（photos/id 等）保留为只读回落，老照片不会丢；
+  在 设置 → 影像归入本台账 可一次性复制进当前台账。
+
+
+六、身份证和合同扫描件
+
+身份证两个文件，按姓名命名：
   张三-身份证-正面.jpg
   张三-身份证-反面.jpg
-人员页只显示正面，点「查看反面」。
+人员页只显示正面，点「查看反面」。从软件里上传即可，会自动落到本台账的影像目录。
 
-合同原件上传到 photos/合同扫描件，文件名是「项目名称-合同电子版」，例如 某某住宅-合同电子版.pdf。
-有文件就是有合同，没传就是无合同；原因写在备注。
+合同原件在合同编辑里上传扫描件。有文件就是有合同，没传就是无合同；原因写在备注。
 
 
-六、以后升级
+七、已知部署风险
 
-把新版本覆盖到本目录（不要动 data），再运行一次 ./一键拉取.sh。
-软件是从 GitHub 查新版本的。请把仓库设成 Public（和 Packages 一样公开）。只公开镜像、仓库仍保密时，左下角会提示连不上。
-
-也可以继续用 ./一键部署.sh 本机构建。永远不要删 data。
+compose 挂载了 /var/run/docker.sock 供「一键更新」用，这赋予容器较高的宿主机 Docker
+控制能力。可信内网部署可以保留；不需要网页更新时，移除该挂载并不要使用软件内更新入口。

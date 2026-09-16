@@ -1,15 +1,25 @@
-工地台账 程序文件 1.2.22
+工地台账 · 程序文件说明
+（版本号以 VERSION.txt 第一行为准；本文按 1.8.0 的现状核对）
 ========================
 
-这是目前能提供的全部程序文件，不是另外一份 TypeScript 源码工程。
-仓库和覆盖包里本来就没有 .ts / .tsx。
+仓库是一份完整的 TypeScript 源码工程（TanStack Start + React + Zustand）：
 
-包含：
-  app/          页面和接口（改功能改这里）
-  .github/      自动打镜像和 Windows 包
-  Docker、飞牛脚本、Windows 启动、说明文档
+  src/            全部源码：routes/ 页面与 API、components/ 组件、lib/ 数据与计算
+  tests/          零依赖回归测试（pnpm test，Node 内置测试器）+ Excel 往返对拍（pnpm run test:roundtrip）
+  scripts/        生产启动器（构建时复制为 app/server/index.mjs）与产物整理
+  app/            构建产物（pnpm build 生成并整体替换）。**不要手改 app/**，改功能改 src/ 后重新构建
+  win/            Windows 启动/停止/打包脚本
+  ci/             质量闸门与发版说明（workflow 需在 GitHub 网页启用）
+  docs/           说明文档（使用与部署/）与历轮审查报告（审查与报告/）
+  .github/        自动打镜像和 Windows 包
+  Dockerfile、docker-compose*.yml、一键脚本、四个入口文档（README/VERSION/开发规范/AGENTS）
+
+构建与验证（改代码后、提交前必须全过）：
+  pnpm run typecheck && pnpm test && pnpm build
+  改了 Excel 相关代码加跑：pnpm run test:roundtrip
 
 不要放进仓库或覆盖包：
-  data/         台账、账号、照片、合同扫描件
+  data/         台账、账号、照片、合同影像、日志
+  node/  node_modules/  dist/  任何 zip 安装包
 
 覆盖到 GitHub 前先 Pull，不要 Force Push。.github 要一起带上。

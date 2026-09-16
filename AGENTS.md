@@ -46,11 +46,15 @@
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。**现在 0 个 todo（已知缺陷已清零）**。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴。**目前 CI 还没装**，所以三道闸只能靠人跑。
-- 1.7.20 起覆盖 169 个用例（169 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.0 起覆盖 173 个用例（173 pass + 0 todo）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源，见 tests/ui-guards.test.ts）/
   工具函数与版本日志解析（1.7.19 起：tests/utils.test.ts、changelog.test.ts、xlsx-center.test.ts）/
-  保险结算口径（1.7.20 起：tests/insurance.test.ts，函数在 src/lib/insurance.ts，勿在页面重写）。
+  保险结算口径（1.7.20 起：tests/insurance.test.ts，函数在 src/lib/insurance.ts，勿在页面重写）/
+  全面检查守卫（1.8.0 起：savePhoto 先 rename 就位后清旧、导出月份识别含纯备注行、启动器请求级 500 落盘，
+  见 tests/api-guards.test.ts 与 docs/审查与报告/全面检查-20260916.md）/
+  版本号规则守卫（1.8.0 起：当前版本 Y≤9、Z≤19，违规直接测试失败，见 tests/changelog.test.ts；
+  发版升版本前必看开发规范 §1——1.6.20 与 1.7.20 两次误发都是「知道规则、发版没核对」）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
 
@@ -181,9 +185,8 @@
   实测「中等工地」（100 人×3 年考勤+50 合同+300 报销）约 1.45 MB/次。要拆成按实体保存 + 索引，
   属于专项（见架构报告 §2「中期」），不要在顺手改功能时夹带。
 - **容器以 root 运行 / docker.sock**：属部署取舍，改非 root 需要入口脚本先 chown 再降权；见 `ci/README.md` §3。
-- **说明文档落后**：`说明.txt`(1.2.22)、`目录结构.txt`/`部署说明.txt`(1.2.20)、
-  `程序文件说明.txt`（称仓库没有 .ts/.tsx）、`GITHUB上传说明.txt`（要求上传已删除的 `app/public/templates`）。
-  （`使用说明.md` 已于 1.7.7 改为「版本以 `VERSION.txt` 为准」并对齐版本号规则。）
+- ~~**说明文档落后**~~：已于 **1.8.0** 集中重写 `docs/使用与部署/` 下 5 份说明（版本行统一「以 VERSION.txt 为准」、
+  影像隔离/logs/一键更新入库、两处失实描述更正），本条闭环。
 - **权限预设缺口**：预设「合同财务」没有 `people.view`，而全量台账读取需要它 → 该预设实际上看不到数据。
   修它要么给该预设 `people.view`（会连身份证/银行卡一起开放），要么做实体级权限；属产品决策。
 - **HTTP 层无请求体上限**：~~`scripts/app-server-index.mjs` 在鉴权前把整个 body 读进内存。~~

@@ -247,8 +247,9 @@ const server = createServer(async (req, res) => {
     }
     res.end();
   } catch (e) {
-    console.error("[server error]", e);
-    console.error(e.stack);
+    // 请求级 500 也要落 data/logs：uncaughtException 只兜「逃出事件循环」的异常，
+    // 被这里接住的请求错误原来只进 stdout，NAS 上按日期翻日志看不到任何 500
+    logLine("error", "请求处理失败", { url: req.url, method: req.method, error: String((e && e.stack) || e) });
     if (!res.headersSent) {
       res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
       res.end("Internal Server Error");

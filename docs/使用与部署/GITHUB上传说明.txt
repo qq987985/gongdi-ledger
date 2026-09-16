@@ -1,4 +1,5 @@
 把本包覆盖上传到 GitHub 仓库 qq987985/gongdi-ledger
+（版本号以 VERSION.txt 第一行为准；本文按 1.8.0 的现状核对）
 ================================================
 
 网页一次最多 100 个文件，本包超过 100 个。请用 GitHub Desktop，
@@ -8,15 +9,20 @@
 把 仓库内的 .github/workflows/docker.yml 全文粘贴保存为 .github/workflows/docker.yml
 
 不要上传：
-  data/                 真实台账、账号、照片、合同扫描件
+  data/                 真实台账、账号、照片、合同影像、日志
   node/                 Windows 自带的 node.exe
+  node_modules/  dist/  本机依赖与中间产物
   任何 zip 安装包
   办公室原来的人员表、考勤表、合同表（真实名单）
-  data/templates/       运行时目录；空白模板在 app/public/templates/，那个要上传
+  data/templates/       运行时目录；空白模板由软件内「下载模板」实时生成，仓库里没有静态模板
 
 要上传：
-  app/ 整份（含 app/public/templates 空白导入模板）
-  Dockerfile、compose、脚本、VERSION.txt、win/、README 和说明文档
+  src/  tests/  scripts/  app/  win/  ci/  docs/  public/
+  package.json  pnpm-lock.yaml  tsconfig.json  vite.config.ts
+  Dockerfile、docker-compose*.yml、.dockerignore、.gitignore、.gitattributes
+  一键部署.sh  一键拉取.sh  初始化目录.sh
+  README.md  VERSION.txt  开发规范.md  AGENTS.md
+  （app/ 是构建产物，随源码一起上传，部署时无需再装依赖构建）
 
 推到 main 后看 Actions 是否全绿。
 然后 GitHub → Packages → gongdi-ledger → 改成 Public。
@@ -24,3 +30,4 @@
 飞牛上：
   本机构建   ./一键部署.sh
   拉镜像     ./一键拉取.sh
+  之后也可以在软件里 设置 → 软件更新 一键更新

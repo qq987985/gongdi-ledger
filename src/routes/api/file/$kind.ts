@@ -78,7 +78,9 @@ function monthsFromAttendance(attendance: any[]) {
   const seen = new Set<number>();
   const out: { year: number; month: number; k: number }[] = [];
   for (const a of attendance || []) {
-    if (!hasWork(a)) continue;
+    // 口径必须与 buildFullWorkbook 的 hasAttContent 一致：只有备注（如「工伤休息」）也算有内容。
+    // 否则「全部」范围导出时，一个纯备注的月份不会生成 sheet，这些行导出即丢。
+    if (!hasWork(a) && !String(a.remark || "").trim()) continue;
     const y = a.year;
     const m = a.month;
     if (!(y >= 2e3 && y <= 2100) || !(m >= 1 && m <= 12)) continue;

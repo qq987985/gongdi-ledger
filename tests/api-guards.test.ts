@@ -81,3 +81,40 @@ test("约定：启动器要有请求体上限与未捕获异常落盘", async ()
   assert.match(s, /unhandledRejection/, "未处理的 Promise 拒绝也要写日志");
   assert.match(s, /logs/, "日志要落到 data/logs");
 });
+
+test("约定：启动器请求级 500 也要落 data/logs（不能只有 stdout）", async () => {
+  const s = await src("scripts/app-server-index.mjs");
+  assert.match(
+    s,
+    /logLine\("error",\s*"请求处理失败"/,
+    "请求处理 catch 里必须用 logLine 落盘，否则 NAS 上看不到任何 500",
+  );
+});
+
+test("约定：savePhoto 必须先 rename 就位再清旧（与 saveDoc 同一原则）", async () => {
+  const s = stripComments(await src("src/lib/assets.server.ts"));
+  const start = s.indexOf("export async function savePhoto");
+  assert.equal(start > 0, true);
+  const body = s.slice(start, start + 1600);
+  const renameAt = body.indexOf("await rename(tmp, dest)");
+  const rmOldAt = body.indexOf("rm(join(hit.dir, hit.file)");
+  assert.equal(renameAt > 0, true, "savePhoto 里要找到 rename(tmp, dest)");
+  assert.equal(rmOldAt > 0, true, "savePhoto 里要找到清理旧文件");
+  assert.equal(
+    renameAt < rmOldAt,
+    true,
+    "必须先 rename 新文件就位、再删旧文件；先删后 rename 在 rename 失败时两头空",
+  );
+});
+
+test("约定：整本导出「全部」范围的月份识别要含纯备注行（与 hasAttContent 同口径）", async () => {
+  const s = stripComments(await src("src/routes/api/file/$kind.ts"));
+  const start = s.indexOf("function monthsFromAttendance");
+  assert.equal(start > 0, true);
+  const body = s.slice(start, start + 600);
+  assert.match(
+    body,
+    /hasWork\(a\)\s*&&\s*!\s*String\(a\.remark/,
+    "monthsFromAttendance 只认 hasWork 时，纯备注月份（如整月工伤休息）不会生成 sheet，这些行导出即丢",
+  );
+});

@@ -228,9 +228,15 @@ export async function savePhoto(name: string, kind: string, dataUrl: string): Pr
   const tmp = `${dest}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   try {
     await writeFile(tmp, Buffer.from(m[2], "base64"));
-    // 只清理本台账目录里的旧文件（换类型/改名留下的）；公共回落目录是只读的，不动
-    if (hit && join(hit.dir, hit.file) !== dest && isInsideBookAssets(hit.dir)) await rm(join(hit.dir, hit.file), { force: true });
+    // 新文件先 rename 就位，再清旧文件（与 saveDoc 同一原则：先就位后清旧）。
+    // 原顺序（先删旧再 rename）在 rename 失败时会两头空：旧照片已删、新照片还是临时名被清掉。
     await rename(tmp, dest);
+    // 只清理本台账目录里的旧文件（换类型/改名留下的）；公共回落目录是只读的，不动
+    if (hit && join(hit.dir, hit.file) !== dest && isInsideBookAssets(hit.dir))
+      await rm(join(hit.dir, hit.file), { force: true }).catch(async (e) => {
+        // 清旧失败只是留下一份旧副本（新文件已就位），记日志即可，不能让保存报错
+        await logServer("warn", "旧照片清理失败（新照片已保存）", { file: join(hit.dir, hit.file), error: String(e) });
+      });
   } catch (err) {
     await rm(tmp, { force: true }).catch(() => {});
     throw err;

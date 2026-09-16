@@ -85,3 +85,16 @@ test("parseChangelog：真实 VERSION.txt 能解析，current 与首行一致、
     assert.ok(newerOrEqual, `版本顺序错乱：${c.entries[i - 1].version} 在 ${c.entries[i].version} 之上`);
   }
 });
+
+test("版本号规则守卫：当前版本必须满足 Y≤9、Z≤19（开发规范 §1；1.6.20/1.7.20 两次误发教训）", async () => {
+  // 只拦「当前版本」（首行 + 最新一节）：历史里的误发条目（1.2.25/1.6.20/1.7.20）保留作记录，
+  // 但下一次发版把首行写成 1.x.20 时，这条测试会直接失败——不再靠人记。
+  const text = await readFile(fileURLToPath(new URL("../VERSION.txt", import.meta.url)), "utf8");
+  const firstLine = (text.split(/\r?\n/).find((l) => l.trim()) || "").trim();
+  const m = firstLine.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  assert.ok(m, `VERSION.txt 首行不是 X.Y.Z：${firstLine}`);
+  assert.ok(Number(m[2]) <= 9, `第二位 Y=${m[2]} 超过上界 9：到 9 要进位为 X+1.0.0`);
+  assert.ok(Number(m[3]) <= 19, `第三位 Z=${m[3]} 超过上界 19：到 19 要进位为 Y+1.0（绝不是 Z=20）`);
+  const c = parseChangelog(text);
+  assert.equal(c.entries[0]?.version, firstLine, "最新一节版本号必须与首行一致");
+});
