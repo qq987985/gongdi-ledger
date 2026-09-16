@@ -119,12 +119,13 @@ function buildSlips({
           remark: x.remark || "",
         }));
       if (!months.length && !pays.length) return null;
-      // 「已打款」必须和「应发」同口径：只算打进本人名下的款，且**收款人就是本人**。
-      // 判定走 lib/payments-stats.ts 的 isPaidSelf（与发放记录页 / 总览「已发放」KPI 同一处实现，决策四）。
+      // 【单人视角】「已打款（本人）」＝打进本人名下、且**收款人就是本人**的款 —— 回答「这笔钱他本人有没有拿到」。
+      // 判定走 lib/payments-stats.ts 的 isPaidSelf（与「其中代发」的子集标注同一处实现）。
+      // ⚠️ 这不是发放页/年度表/总览 KPI 的汇总口径：那边「已发放」按实际收款人计入、**含代发**（1.8.6 纠正）。
       // 代收他人的钱记在 collected 里单列，否则工资条上会出现负数未打款。
       const paid = pays.filter(isPaidSelf).reduce((s: number, x: any) => s + x.amount, 0);
       const collected = pays.filter((x: any) => x.owner !== name).reduce((s: number, x: any) => s + x.amount, 0);
-      // 本人名下的钱但由别人代领：不算本人已打款（决策四），单列说明，不让它静默消失
+      // 本人名下的钱但由别人代领：单人视角下「他本人没拿到」，单列说明，不让它静默消失
       const proxyOut = pays.filter((x: any) => x.owner === name && !isPaidSelf(x)).reduce((s: number, x: any) => s + x.amount, 0);
       return {
         person: p,

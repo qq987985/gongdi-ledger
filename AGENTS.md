@@ -48,7 +48,7 @@
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴
   （1.8.1 已在该模板里补「Excel 往返对拍」一步；本机等价命令 `pnpm run check`）。**目前 GitHub 上仍未创建 check.yml**，
   所以四道闸只能靠人跑（推 main 触发的只有 docker.yml 的镜像构建与 Release）。
-- 1.8.5 起覆盖 **314 个用例（314 pass + 0 todo）**（1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.6 起覆盖 **315 个用例（315 pass + 0 todo）**（1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源；
   1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外，
@@ -68,9 +68,11 @@
   写接口输入口径守卫（1.8.1 起：写 handler 必须有鉴权、必须在第一次写盘前有 4xx/重定向拒绝路径、
   非法 dataUrl/空名字/空 id 必须 400 且不写盘，见 tests/api-input-guards.test.ts）/
   备份接口不写空文件（1.8.4 起：0 字节 body 必须 400 且不动已有备份，见 tests/backup-guard.test.ts）/
-  口径决策不变量（1.8.5 起：`isPaidSelf` 是「本人收款」的唯一判定，发放统计/年度汇总/工资条三处共用；
-  **已发（本人）A + 代发 B + 待发放 C = 全部合计**，明细=汇总=总计在含/不含待发放两种筛选下都成立；
-  年度表逐行「已发」之和 == 总览「已发放」KPI；组合险标注只有一份 `COMBINED_POLICY_NOTE`。
+  口径决策不变量（1.8.5 起、**1.8.6 纠正代发口径**：`isPaid`（有发放日期即算，按实际收款人、**含代发**）
+  是「已发」的唯一判定，`isPaidSelf`（收款人=本人）**只管工资条的单人视角与「其中代发」的子集标注**，
+  两处用途不许再混；**已发 A + 待发放 C = 全部合计**，且**代发 B ⊆ A**（单列「其中代发」、不减 A）；
+  两种打印清单口径故意不同：明细把待发列入实际收款人名下并逐笔标「已发/待发」+ 拆「已发小计/待发小计」，
+  汇总把待发单列一组；年度表逐行「已发」之和 == 总览「已发放」KPI；组合险标注只有一份 `COMBINED_POLICY_NOTE`。
   见 tests/payments-stats.test.ts / tests/attendance-summary.test.ts / tests/insurance-stats.test.ts / tests/caliber-guards.test.ts）。
 
 ## 1.8.0 的架构改动（A–F 已落地）

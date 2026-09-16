@@ -15,6 +15,7 @@ import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { useGuardedClose } from "~/lib/confirm-close";
 import { ALL_BUCKETS } from "~/lib/buckets";
 import {
+  PROXY_INLINE_LABEL,
   panelRows,
   detailSections,
   filterPayments,
@@ -72,24 +73,24 @@ function PaymentsPage() {
   const pager = usePager("payments", filtered, [status, batch, q, lo, hi].join("|"));
   const pageRows = pager.rows;
   // 汇总口径与当前筛选一致（全部用 filtered），避免待发放按区间、已发放按筛选导致对不上。
-  // 三维修互不重叠：已发（本人）selfAmt + 代发 proxyAmt + 待发放 pendingAmt = 合计 total（决策一/四）
-  const { selfAmt, selfCount, proxyAmt, proxyCount, pendingAmt, pendingCount, total } = paymentSummary(filtered);
+  // 1.8.6：已发（含代发）+ 待发放 = 合计；代发是已发的**子集**（「其中代发」），不减已发。
+  const { paidAmt, paidCount, proxyAmt, proxyCount, pendingAmt, pendingCount, total } = paymentSummary(filtered);
   const ownerNames = [...new Set([...names, ...payments.map((p) => p.owner)].filter(Boolean))];
   const receiverNames = [...new Set([...names, ...payments.map((p) => p.receiver)].filter(Boolean))];
   const sources = [...new Set(payments.map((p) => p.source).filter(Boolean))];
   const allChecked = pageRows.length > 0 && pageRows.every((p) => selected.includes(p.id));
-  // 分组面板（人员行 + 「代发」+ 「待发放」）与「全部实际收款人」的打印汇总同一份数据。
+  // 分组面板（人员行含代发 + 「待发放」）与「全部实际收款人」的打印汇总同一份数据。
   // 以前这里 `.slice(0, 12)`，超过 12 个人就不显示，面板金额之和 < 汇总（用户报的「统计显示不全」）。
   const panel = React.useMemo(() => panelRows(filtered), [filtered]);
   const printOwners = React.useMemo(() => printOwnerBuckets(filtered), [filtered]);
   const printOwnerLabel = printOwner === ALL_BUCKETS ? "全部实际收款人" : printOwner || "（未填实际收款人）";
   const detail = React.useMemo(() => detailSections(filtered, printOwner), [filtered, printOwner]);
   const summary = React.useMemo(() => printSummary(filtered, printOwner), [filtered, printOwner]);
-  // 打印表尾的「总计」必须与打印出来的行同源：选单人时是该人的合计（本人 + 代发 + 待发放），不是全部人的
+  // 打印表尾的「总计」必须与打印出来的行同源：选单人时是该人的合计（已发含代发 + 待发放），不是全部人的
   const detailTotal = React.useMemo(() => sectionTotals(detail), [detail]);
   const summaryTotal = React.useMemo(() => ownerTotals(summary), [summary]);
   const printTotal = React.useMemo(() => printTotals(filtered, printOwner), [filtered, printOwner]);
-  // 打印件表头的口径小字与三维修数字也走同一份计算（打印件自己不许再算一遍合计）
+  // 打印件表头的口径小字与汇总数字也走同一份计算（打印件自己不许再算一遍合计）
   const printBreakdown = React.useMemo(() => paymentSummary(scopeRows(filtered, printOwner)), [filtered, printOwner]);
   function runPrint(kind: "detail" | "summary") {
     if (!printTotal.count) {
@@ -193,8 +194,8 @@ function PaymentsPage() {
             ))}
           </div>
           <span className="text-sm text-muted">
-            {filtered.length} 笔 · 合计 ¥{money(total)} · 已发（本人）¥{money(selfAmt)}（{selfCount} 笔） · 代发 ¥
-            {money(proxyAmt)}（{proxyCount} 笔） · 待发放 ¥{money(pendingAmt)}（{pendingCount} 笔）
+            {filtered.length} 笔 · 合计 ¥{money(total)} · 已发 ¥{money(paidAmt)}（{paidCount} 笔，含代发） ·{" "}
+            {PROXY_INLINE_LABEL} ¥{money(proxyAmt)}（{proxyCount} 笔） · 待发放 ¥{money(pendingAmt)}（{pendingCount} 笔）
           </span>
           <span className="flex flex-wrap items-center gap-2">
             <select
@@ -366,10 +367,10 @@ function PaymentsPage() {
           <div className="overflow-x-auto rounded-xl border border-line bg-surface">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2">
               <span className="text-xs text-muted">
-                按实际收款人入账（只计本人收款；代收单列「代发」；待发放单列 —— 两者都不进任何人的已发合计）
+                按实际收款人入账（已填发放日期的都计入实际收款人名下，含代发；待发放单列，不算已发）
               </span>
               <span className="text-xs text-muted">
-                共 {panel.length} 行 · 已发（本人）¥{money(selfAmt)} + 代发 ¥{money(proxyAmt)} + 待发放 ¥
+                共 {panel.length} 行 · 已发 ¥{money(paidAmt)}（{PROXY_INLINE_LABEL} ¥{money(proxyAmt)}） + 待发放 ¥
                 {money(pendingAmt)} = ¥{money(total)}
               </span>
             </div>
@@ -378,7 +379,7 @@ function PaymentsPage() {
                 <tr>
                   <th className="p-3">实际收款人</th>
                   <th className="p-3">笔数</th>
-                  <th className="p-3">已入账金额</th>
+                  <th className="p-3">已发金额（含代发）</th>
                   <th className="p-3">备注</th>
                 </tr>
               </thead>
@@ -394,11 +395,9 @@ function PaymentsPage() {
                     <td className="p-3 text-xs text-muted">
                       {r.kind === "person"
                         ? r.proxyCount
-                          ? `另有 ${r.proxyCount} 笔他人代收，已计入「代发」，不在本行`
+                          ? `${PROXY_INLINE_LABEL} ${r.proxyCount} 笔 ¥${money(r.proxyAmt)}（收款人非本人，已计入本行）`
                           : ""
-                        : r.kind === "proxy"
-                          ? "收款人非本人（代收），不计入任何人的已发合计"
-                          : "没有发放日期，不计入已发"}
+                        : "没有发放日期，不计入已发"}
                     </td>
                   </tr>
                 ))}

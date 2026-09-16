@@ -128,9 +128,9 @@ function YearOverview({
         已录入 {filledMonths} / 12 个月 · 在册 {people.length} 人
       </p>
       <p className="text-xs text-muted">
-        本年已发（本人收款）¥{money(paid)}
-        {proxyAmt ? ` · 代发（代收）¥${money(proxyAmt)}` : ""}
-        {pendingAmt ? ` · 待发放 ¥${money(pendingAmt)}` : ""}。无日期的待发放记录按当前年份（{year}）显示，不计入已发。
+        本年已发 ¥{money(paid)}（含代发）
+        {proxyAmt ? ` · 其中代发 ¥${money(proxyAmt)}` : ""}
+        {pendingAmt ? ` · 待发放 ¥${money(pendingAmt)}` : ""}。已发按实际收款人计入（代发不减）；无日期的待发放记录按当前年份（{year}）显示，不计入已发。
       </p>
       {offRowsPaid.count > 0 ? (
         <p className="text-xs text-warn">

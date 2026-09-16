@@ -78,7 +78,7 @@ type HomeProps = {
   should: number;
   noWage: number;
   paid: number;
-  /** 代发（代收）金额：有发放日期但收款人非本人 —— 不进「已发放」KPI（决策四） */
+  /** 其中代发（代收）金额：有发放日期但收款人非本人 —— 是 `paid` 的**子集**，不减已发（1.8.6） */
   proxyAmt: number;
   pendingAmt: number;
   proxy: number;
@@ -91,15 +91,15 @@ type HomeProps = {
 };
 
 /**
- * 「已发放」KPI 的副标题（决策一 + 决策四）：这笔数字只算**本人收款**，
- * 代发（代收）与待发放都单列出来，三维修互不重叠、不做减法，别让人对着差额找错账。
+ * 「已发放」KPI 的副标题（1.8.6 纠正）：已发 = 所有填了发放日期的记录（按实际收款人，**含代发**）；
+ * 代发只是它的子集，单列成「其中代发」；待发放单列、不算已发。不做减法，别让人对着差额找错账。
  */
 function paidHint(p: HomeProps): string {
   const bits: string[] = [];
-  if (p.proxyAmt) bits.push(`代发 ¥${money(p.proxyAmt)}（${p.proxy} 笔）`);
-  else if (p.proxy) bits.push(`代发 ${p.proxy} 笔`);
+  if (p.proxyAmt) bits.push(`其中代发 ¥${money(p.proxyAmt)}（${p.proxy} 笔）`);
+  else if (p.proxy) bits.push(`其中代发 ${p.proxy} 笔`);
   if (p.pendingAmt) bits.push(`待发 ¥${money(p.pendingAmt)}`);
-  return bits.length ? `${bits.join(" · ")} · 只算本人收款` : "只算本人收款";
+  return bits.length ? `${bits.join(" · ")} · 含代发` : "含代发";
 }
 
 /* ＝＝ 新版（仪表盘）总览 ＝＝ */

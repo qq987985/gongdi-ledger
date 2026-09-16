@@ -1,21 +1,35 @@
 /**
- * 发放记录的口径唯一实现（口径一致性专项 20260916；1.8.5 三条产品口径决策）。
+ * 发放记录的口径唯一实现（口径一致性专项 20260916；1.8.5 三条产品口径决策，1.8.6 纠正「代发」）。
  *
  * 从 `src/routes/payments.tsx` 按行段机械提取（§12.1），**行数、汇总、面板、下拉、打印**
  * 共用同一份计算，不许出现第二套口径。
  *
- * ## 三个互不重叠的维度（1.8.5 决策一 + 决策四）
- * 一笔发放**只能**落到其中一维：
- * - **已发（本人）** A：填了发放日期，且**收款人就是本人**（`isPaidSelf`）。
- * - **代发（代收）** B：填了发放日期，但**收款人不是本人**（别人代领）——
- *   **不计入「已发放」**，单独列「代发 N 笔 ¥X」；记录本身照常出现在列表/清单里（保留「代收」标注）。
- * - **待发放** C：没有发放日期。不算已发。
- * 恒等式：`A + B + C = 全部合计`（金额与笔数都成立），
- * 且「明细逐笔之和 = 汇总各行之和 = 总计」在**含待发放 / 不含待发放**两种筛选下都成立。
+ * ## 汇总口径（发放页 / 年度表 / 总览 KPI 共用）—— 1.8.6 纠正
+ * 一笔发放按「有没有填发放日期」只分成两部分：
+ * - **已发放** A：填了发放日期 → 按**实际收款人**（`owner`）计入其名下，**包含代发/代收**。
+ *   别人代领 ≠ 没发，钱已经出去了，所以**不从已发里扣**。
+ * - **待发放** C：没有发放日期，单独列「待发放 N 笔 ¥X」，不算已发。
+ * 恒等式：`已发 ¥A + 待发放 ¥C = 全部合计`。
  *
- * ## 「本人收款」只有一处判定
- * `isPaidSelf()` 是全库唯一实现（工资条打印的「已打款合计（本人）」也走它），
- * 不许在页面里再写 `owner === receiver` 这类第二套判断。
+ * **代发**（收款人非本人）是**已发的子集** B ⊆ A：单列成「其中代发 N 笔 ¥X」（口径行/标注），
+ * **不减 A**；明细/清单里每笔仍保留「代收」标记。
+ * ⚠️ 1.8.5 曾把代发从已发里扣掉（当时写成 A + B + C = 总计，B 与 A 互斥）—— 那是**错的**，
+ * 1.8.6 已纠正为「待发不计，代发计入实际收款人」。
+ *
+ * ## 两种打印清单的口径**故意不同**（1.8.6）
+ * - **明细清单**（`detailSections`）：待发放也**计入对应实际收款人名下**（和已发同一节），
+ *   每一笔标注「已发/待发」，节尾小计拆「已发小计 / 待发小计」两行；
+ *   要求：已发小计 == 汇总里该人的已发，待发小计 == 汇总「待发放」组里该人的部分，
+ *   `已发行数 + 待发行数 == 该筛选下该人的全部记录数`。
+ * - **汇总清单**（`printSummary`）：**待发放单列一组、不计入已发**（已发含代发，单列「其中代发」）。
+ * - 两种清单表头的小字分别写清差别（`printCaliberNote`）。
+ *
+ * ## 「本人收款」判定的两个用途（别再拿它判「已发放」）
+ * `isPaidSelf()`（有日期 **且** 收款人 = 本人）只用于：
+ * 1. **工资条**（`src/routes/query.tsx`）的「已打款合计（本人）」——
+ *    单人视角，回答「这笔钱他本人有没有拿到」；
+ * 2. 「其中代发」的**子集统计/标注**（`isProxyPaid()` = 有日期 && !isPaidSelf）。
+ * 「已发放」的判定是 `isPaid()`（有日期即算），**不是** `isPaidSelf()`。
  *
  * ## 其它既有约定
  * - 汇总/分组/打印都跟随当前筛选（区间 + 状态 + 发放方 + 搜索）。
@@ -36,7 +50,7 @@ export interface PaymentFilters {
   q: string;
 }
 
-/* ＝＝ 三个维度的唯一判定（决策一 / 决策四） ＝＝ */
+/* ＝＝ 两个维度的唯一判定（已发含代发 / 待发放） ＋ 两个「本人收款」标注用途 ＝＝ */
 
 /** 收款人：空 = 同实际收款人（旧数据 / Excel 导入里 receiver 可能是空的） */
 export function receiverOf(p: Pick<Payment, "owner" | "receiver">): string {
@@ -44,17 +58,11 @@ export function receiverOf(p: Pick<Payment, "owner" | "receiver">): string {
 }
 
 /**
- * 「已发（本人）」= 有发放日期 **且** 收款人就是本人 —— 全库唯一判定（决策四）。
- * 代收（收款人非本人）**不算已发**，只进「代发」。
- * 工资条打印的「已打款合计（本人）」也调用本函数，两边不允许各写一套。
+ * 已发放（汇总口径，1.8.6）：**有发放日期即算**，按实际收款人计入其名下，含代发/代收。
+ * 发放统计 / 年度汇总 / 总览 KPI 都用它。**不要**用 `isPaidSelf` 判已发。
  */
-export function isPaidSelf(p: Pick<Payment, "date" | "owner" | "receiver">): boolean {
-  return Boolean(p.date) && (p.owner || "").trim() === receiverOf(p);
-}
-
-/** 代发（代收）= 有发放日期但收款人非本人（别人代领），不计入已发 */
-export function isProxyPaid(p: Pick<Payment, "date" | "owner" | "receiver">): boolean {
-  return Boolean(p.date) && !isPaidSelf(p);
+export function isPaid(p: Pick<Payment, "date">): boolean {
+  return Boolean(p.date);
 }
 
 /** 待发放 = 没有发放日期，一直留在列表里，不算已发 */
@@ -62,9 +70,29 @@ export function isPending(p: Pick<Payment, "date">): boolean {
   return !p.date;
 }
 
-/** 分组面板/清单里「代发」「待发放」两组的固定名字 */
-export const PROXY_LABEL = "代发";
+/**
+ * 「本人收款」= 有发放日期 **且** 收款人就是本人 —— 全库唯一判定。
+ * **只用于**：① 工资条「已打款合计（本人）」（单人视角：这笔钱他本人有没有拿到）；
+ * ② 「其中代发」的子集统计（见 `isProxyPaid`）。**不用它判「已发放」**（用 `isPaid`）。
+ */
+export function isPaidSelf(p: Pick<Payment, "date" | "owner" | "receiver">): boolean {
+  return Boolean(p.date) && (p.owner || "").trim() === receiverOf(p);
+}
+
+/**
+ * 代发（代收）= 有发放日期但收款人非本人（别人代领）。
+ * 它是**已发的子集**（B ⊆ A），只作「其中代发」的标注/统计，**不从已发里扣**。
+ */
+export function isProxyPaid(p: Pick<Payment, "date" | "owner" | "receiver">): boolean {
+  return Boolean(p.date) && !isPaidSelf(p);
+}
+
+/** 「待发放」在面板/清单里那一组的固定名字 */
 export const PENDING_LABEL = "待发放";
+/** 「其中代发」口径行的固定前缀（面板/明细/汇总三处共用同一句） */
+export const PROXY_INLINE_LABEL = "其中代发";
+/** 兼容旧引用的代发短标签 */
+export const PROXY_LABEL = "代发";
 
 /**
  * 按「年-月」区间筛（lo/hi 来自 dates.ts 的 ymKey）。
@@ -97,20 +125,20 @@ export function filterPayments<T extends Payment>(ranged: T[], f: PaymentFilters
   return list;
 }
 
-/** 金额求和（统一 round2，保证 A+B+C 与总计逐分相等） */
+/** 金额求和（统一 round2，保证 A + C 与总计逐分相等） */
 function sumAmount(rows: Payment[]): number {
   return round2(rows.reduce((s, p) => s + (p.amount || 0), 0));
 }
 
 export interface PaymentSummary {
-  /** 列表条数（当前筛选后的全部笔数 = A + B + C） */
+  /** 列表条数（当前筛选后的全部笔数） */
   count: number;
-  /** 合计（含代发与待发放）= A + B + C */
+  /** 合计 = 已发（含代发）+ 待发放 */
   total: number;
-  /** A：已发放（本人收款，只认有发放日期的） */
-  selfCount: number;
-  selfAmt: number;
-  /** B：代发（代收，有发放日期但收款人非本人）—— 不计入已发 */
+  /** A：已发放（所有已填发放日期的记录，按实际收款人计入，含代发） */
+  paidCount: number;
+  paidAmt: number;
+  /** B：其中代发（收款人非本人）—— **已发的子集**，B ⊆ A，不从 A 里扣 */
   proxyCount: number;
   proxyAmt: number;
   /** C：待发放（无发放日期）—— 不算已发 */
@@ -118,16 +146,16 @@ export interface PaymentSummary {
   pendingAmt: number;
 }
 
-/** 汇总数字（与列表、面板、下拉、打印同一份 rows）；三维修为互不重叠 */
+/** 汇总数字（与列表、面板、下拉、打印同一份 rows） */
 export function paymentSummary(rows: Payment[]): PaymentSummary {
-  const self = rows.filter(isPaidSelf);
+  const paid = rows.filter(isPaid);
   const proxy = rows.filter(isProxyPaid);
   const pending = rows.filter(isPending);
   return {
     count: rows.length,
     total: sumAmount(rows),
-    selfCount: self.length,
-    selfAmt: sumAmount(self),
+    paidCount: paid.length,
+    paidAmt: sumAmount(paid),
     proxyCount: proxy.length,
     proxyAmt: sumAmount(proxy),
     pendingCount: pending.length,
@@ -135,74 +163,76 @@ export function paymentSummary(rows: Payment[]): PaymentSummary {
   };
 }
 
-export type RowKind = "person" | "proxy" | "pending";
+/** 面板/清单里的行：人员行（该人已发，含代发）或「待发放」固定行 */
+export type RowKind = "person" | "pending";
 
 export interface OwnerRow {
-  /** 实际收款人（入账人）；或 `PROXY_LABEL` / `PENDING_LABEL` 两组固定行 */
+  /** 实际收款人（入账人）；或 `PENDING_LABEL` 固定行 */
   owner: string;
   kind: RowKind;
-  /** 笔数（person 行只计本人收款） */
+  /** person 行：该人已发笔数（**含代发**） */
   count: number;
-  /** 金额（person 行只计本人收款，即该人「已发（本人）」） */
+  /** person 行：该人已发金额（**含代发**，即该人「已发放」） */
   amount: number;
-  /** person 行专用提示：该人名下有多少笔是「他人代收」（只作提示，**不计入**本行金额/笔数） */
+  /** person 行：其中代发笔数（⊆ count，只作「其中代发」标注，不减本行） */
   proxyCount: number;
+  /** person 行：其中代发金额（⊆ amount） */
+  proxyAmt: number;
 }
 
-/** 人员行（只计本人收款）：金额即该人「已发（本人）」；代收部分不进这里 */
+/**
+ * 人员行（按实际收款人入账，**含代发**）：金额即该人「已发放」；
+ * 代发部分同时记在 `proxyCount/proxyAmt` 里作「其中代发」标注。
+ */
 export function byOwnerRows(rows: Payment[]): OwnerRow[] {
   const map = new Map<string, OwnerRow>();
-  const proxySeen = new Map<string, number>();
   for (const p of rows) {
+    if (!isPaid(p)) continue;
     const owner = (p.owner || "").trim();
-    if (isPaidSelf(p)) {
-      const cur = map.get(owner) || { owner, kind: "person" as RowKind, count: 0, amount: 0, proxyCount: 0 };
-      cur.count += 1;
-      cur.amount += p.amount || 0;
-      map.set(owner, cur);
-    } else if (isProxyPaid(p)) {
-      proxySeen.set(owner, (proxySeen.get(owner) || 0) + 1);
+    const cur = map.get(owner) || { owner, kind: "person" as RowKind, count: 0, amount: 0, proxyCount: 0, proxyAmt: 0 };
+    cur.count += 1;
+    cur.amount += p.amount || 0;
+    if (isProxyPaid(p)) {
+      cur.proxyCount += 1;
+      cur.proxyAmt += p.amount || 0;
     }
+    map.set(owner, cur);
   }
   const out = [...map.values()];
   for (const r of out) {
     r.amount = round2(r.amount);
-    r.proxyCount = proxySeen.get(r.owner) || 0;
+    r.proxyAmt = round2(r.proxyAmt);
   }
   return out.sort((a, b) => b.amount - a.amount || a.owner.localeCompare(b.owner, "zh"));
 }
 
 /**
  * 打印/面板的可见范围：`ALL_BUCKETS` = 全部；否则 = 该实际收款人名下
- * （含他本人的已发、他名下的代发、他名下的待发放）。
+ * （含他的已发、他名下的代发、他名下的待发放 —— 代发本来就算在他已发里）。
  */
 export function scopeRows(rows: Payment[], owner: string): Payment[] {
   return owner === ALL_BUCKETS ? rows : rows.filter((p) => inBucket((p.owner || "").trim(), owner));
 }
 
-/** 把「代发」「待发放」两组接到人员行后面（金额与笔数单列，不进任何人已发合计） */
-function appendGroups(persons: OwnerRow[], scope: Payment[]): OwnerRow[] {
+/** 把「待发放」一组接到人员行后面（单列，不进任何人的已发） */
+function appendPending(persons: OwnerRow[], scope: Payment[]): OwnerRow[] {
   const out = [...persons];
-  const proxy = scope.filter(isProxyPaid);
-  if (proxy.length) {
-    out.push({ owner: PROXY_LABEL, kind: "proxy", count: proxy.length, amount: sumAmount(proxy), proxyCount: 0 });
-  }
   const pending = scope.filter(isPending);
   if (pending.length) {
-    out.push({ owner: PENDING_LABEL, kind: "pending", count: pending.length, amount: sumAmount(pending), proxyCount: 0 });
+    out.push({ owner: PENDING_LABEL, kind: "pending", count: pending.length, amount: sumAmount(pending), proxyCount: 0, proxyAmt: 0 });
   }
   return out;
 }
 
-/** 模式二：按实际收款人的汇总清单（人员行 + 代发 + 待发放） */
+/** 模式二：按实际收款人的汇总清单（人员行 + 待发放） */
 export function printSummary(rows: Payment[], owner: string): OwnerRow[] {
   const scope = scopeRows(rows, owner);
-  return appendGroups(byOwnerRows(scope), scope);
+  return appendPending(byOwnerRows(scope), scope);
 }
 
 /**
  * 屏幕上的「按实际收款人」分组面板：与「全部实际收款人」的打印汇总**同一份数据**
- * （人员行 + 「代发」+ 「待发放」）。
+ * （人员行 + 「待发放」）。
  */
 export function panelRows(rows: Payment[]): OwnerRow[] {
   return printSummary(rows, ALL_BUCKETS);
@@ -213,60 +243,81 @@ export function sourceBuckets(ranged: { source?: string }[]): Bucket[] {
   return groupBuckets(ranged.map((p) => p.source), "未填发放方");
 }
 
-/** 打印时可选的「实际收款人」下拉：只列当前筛选下**真有本人收款记录**的人 */
+/**
+ * 打印时可选的「实际收款人」下拉：列当前筛选下**有任何记录**（已发或待发）的人 ——
+ * 明细清单把待发放也归到实际收款人名下，所以只存在待发的人也要能单独打。
+ */
 export function printOwnerBuckets(rows: Payment[]): Bucket[] {
-  return groupBuckets(byOwnerRows(rows).map((r) => r.owner), "（未填实际收款人）");
+  return groupBuckets(rows.map((p) => (p.owner || "").trim()), "（未填实际收款人）");
 }
 
+/**
+ * 明细清单的一节 = 一个实际收款人的**全部记录**（已发 + 待发），逐笔带「已发/待发」状态。
+ * 小计拆成两行：`paidAmt`（已发小计，**含代发**，== 汇总清单里该人的已发）与
+ * `pendingAmt`（待发小计，== 汇总清单「待发放」组里该人的部分）。
+ */
 export interface DetailSection {
   owner: string;
-  kind: RowKind;
+  /** 该人全部记录（已发 + 待发），已按日期排序 */
   rows: Payment[];
+  /** 全部笔数 = paidCount + pendingCount */
   count: number;
+  /** 全部金额 = paidAmt + pendingAmt */
   amount: number;
-  /** person 节：该人还有几笔是他人代收（提示用，不在本节的金额里） */
+  /** 已发小计（含代发） */
+  paidCount: number;
+  paidAmt: number;
+  /** 待发小计 */
+  pendingCount: number;
+  pendingAmt: number;
+  /** 其中代发（⊆ 已发小计，标注用） */
   proxyCount: number;
+  proxyAmt: number;
 }
 
-/** 按日期排序（同日按 id），明细/代发/待发放三处共用 */
+/** 按日期排序（同日按 id）；待发（无日期）排在最后 */
 function byDateThenId(a: Payment, b: Payment): number {
+  if (!a.date && b.date) return 1;
+  if (a.date && !b.date) return -1;
   return (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id);
 }
 
 /**
- * 模式一：按实际收款人的明细清单（按人分节 + 「代发」节 + 「待发放」节）。
+ * 模式一：按实际收款人的明细清单 —— **每个实际收款人一节，节内含他的全部记录**
+ * （已发 + 待发，逐笔标注「已发/待发」；代收笔保留「代收」标记），节尾小计拆成
+ * 「已发小计」与「待发小计」两行。
  * `owner` 为 `ALL_BUCKETS` = 全部人；否则只出这个人的范围（不存在就是空数组 → 页面禁用打印，不弹空白页）。
+ * 硬约束：各节 `amount` 之和 == `printTotals`（该筛选下的全部记录）；各节 `paidAmt` 之和 == A。
  */
 export function detailSections(rows: Payment[], owner: string): DetailSection[] {
   const scope = scopeRows(rows, owner);
-  const byOwner = byOwnerRows(scope);
-  const order = new Map(byOwner.map((r, i) => [r.owner, i]));
-  const sections: DetailSection[] = byOwner
-    .map((r) => {
-      const mine = scope
-        .filter((p) => isPaidSelf(p) && (p.owner || "").trim() === r.owner)
-        .slice()
-        .sort(byDateThenId);
+  const groups = new Map<string, Payment[]>();
+  for (const p of scope) {
+    const key = (p.owner || "").trim();
+    const list = groups.get(key);
+    if (list) list.push(p);
+    else groups.set(key, [p]);
+  }
+  return [...groups.entries()]
+    .map(([owner, mine]) => {
+      const sorted = mine.slice().sort(byDateThenId);
+      const paid = sorted.filter(isPaid);
+      const pending = sorted.filter(isPending);
+      const proxy = paid.filter(isProxyPaid);
       return {
-        owner: r.owner,
-        kind: "person" as RowKind,
-        rows: mine,
-        count: mine.length,
-        amount: sumAmount(mine),
-        proxyCount: r.proxyCount,
+        owner,
+        rows: sorted,
+        count: sorted.length,
+        amount: sumAmount(sorted),
+        paidCount: paid.length,
+        paidAmt: sumAmount(paid),
+        pendingCount: pending.length,
+        pendingAmt: sumAmount(pending),
+        proxyCount: proxy.length,
+        proxyAmt: sumAmount(proxy),
       };
     })
-    .filter((s) => s.rows.length > 0)
-    .sort((a, b) => (order.get(a.owner) ?? 0) - (order.get(b.owner) ?? 0));
-  const proxy = scope.filter(isProxyPaid).slice().sort(byDateThenId);
-  if (proxy.length) {
-    sections.push({ owner: PROXY_LABEL, kind: "proxy", rows: proxy, count: proxy.length, amount: sumAmount(proxy), proxyCount: 0 });
-  }
-  const pending = scope.filter(isPending).slice().sort(byDateThenId);
-  if (pending.length) {
-    sections.push({ owner: PENDING_LABEL, kind: "pending", rows: pending, count: pending.length, amount: sumAmount(pending), proxyCount: 0 });
-  }
-  return sections;
+    .sort((a, b) => b.paidAmt - a.paidAmt || b.pendingAmt - a.pendingAmt || a.owner.localeCompare(b.owner, "zh"));
 }
 
 export interface PrintTotals {
@@ -274,7 +325,7 @@ export interface PrintTotals {
   amount: number;
 }
 
-/** 打印范围的总计 = 已发（本人）+ 代发 + 待发放（选单人时就是那个人的三者之和） */
+/** 打印范围的总计 = 已发（含代发）+ 待发放（选单人时就是那个人的两者之和） */
 export function printTotals(rows: Payment[], owner: string = ALL_BUCKETS): PrintTotals {
   const scope = scopeRows(rows, owner);
   return { count: scope.length, amount: sumAmount(scope) };
@@ -296,6 +347,18 @@ export function ownerTotals(rows: OwnerRow[]): PrintTotals {
   };
 }
 
-/** 打印件表头口径小字（决策一 + 决策四）：三维修都写全，页面直接引这一份 */
-export const PRINT_CALIBER_NOTE =
-  "只计已填发放日期的记录；代收（收款人非本人）不计入已发，单列代发；待发放不算已发。";
+/**
+ * 明细/汇总两种清单**口径不同**，表头小字必须分别写清（不许共用一句含糊的话）：
+ * - 明细清单：把待发放也列入实际收款人名下、逐笔标注「已发/待发」，小计拆「已发小计 / 待发小计」；
+ * - 汇总清单：待发放**单列一组**、不计入已发（已发含代发，单列「其中代发」）。
+ */
+export const PRINT_CALIBER_NOTE_DETAIL =
+  "明细清单：已填发放日期的按实际收款人计入已发；待发放也列入实际收款人名下，逐笔标注「已发 / 待发」，小计拆「已发小计 / 待发小计」；代发（收款人非本人）已计入实际收款人名下，小计单列「其中代发」。";
+export const PRINT_CALIBER_NOTE_SUMMARY =
+  "汇总清单：已发 = 只计已填发放日期的记录，按实际收款人计入（含代发，单列「其中代发」）；待发放单列一组，不计入已发。";
+
+/** 按打印模式取口径小字（页面/打印件都走这里，不许各写一句） */
+export function printCaliberNote(mode: "detail" | "summary"): string {
+  return mode === "detail" ? PRINT_CALIBER_NOTE_DETAIL : PRINT_CALIBER_NOTE_SUMMARY;
+}
+

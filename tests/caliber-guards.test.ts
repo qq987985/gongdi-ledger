@@ -83,21 +83,31 @@ test("守卫：发放页的统计与打印只能来自 payments-stats（画面�
   const sheets = await srcCode("src/components/payment-sheets.tsx");
   assert.match(sheets, /from "~\/lib\/payments-stats"/, "打印件必须吃 lib/payments-stats 的类型/数据");
   assert.equal(sheets.includes(".reduce("), false, "打印件不许自己再算一遍合计（合计只能来自纯函数传进来的 totals）");
-  assert.match(sheets, /PRINT_CALIBER_NOTE/, "打印件表头口径小字必须引唯一实现（决策一 / 决策四）");
+  assert.match(sheets, /printCaliberNote\(mode\)/, "打印件表头口径小字必须走唯一实现（1.8.6：两种清单分别写清）");
+  // 明细清单必须逐笔标状态 + 小计拆「已发小计 / 待发小计」（1.8.6 用户追加要求）
+  assert.match(sheets, /已发小计/, "明细清单要有「已发小计」");
+  assert.match(sheets, /待发小计/, "明细清单要有「待发小计」");
+  assert.match(sheets, /isPaid\(p\) \? "已发" : "待发"/, "明细清单每一笔要标注「已发 / 待发」");
 });
 
-test("守卫：「本人收款」判定与组合险标注各只有一份实现（1.8.5 决策三 / 决策四）", async () => {
+test("守卫：「已发」判定是 isPaid、「本人收款」是 isPaidSelf（两种用途不许再混，1.8.6）", async () => {
   const payLib = await src("src/lib/payments-stats.ts");
-  assert.equal((payLib.match(/export function isPaidSelf/g) || []).length, 1, "isPaidSelf 只能定义一次");
-  // 调用方：发放统计、年度汇总、工资条打印（三处必须同一判定）
-  const users: [string, RegExp][] = [
-    ["src/lib/payments-stats.ts", /rows\.filter\(isPaidSelf\)/],
-    ["src/lib/attendance-summary.ts", /import \{ isPaidSelf/],
-    ["src/routes/query.tsx", /filter\(isPaidSelf\)/],
-  ];
-  for (const [file, re] of users) {
-    assert.match(await src(file), re, `${file} 必须走 isPaidSelf（不许再写 owner === receiver 的第二套）`);
-  }
+  assert.equal((payLib.match(/export function isPaid\(/g) || []).length, 1, "isPaid 只能定义一次");
+  assert.equal((payLib.match(/export function isPaidSelf\(/g) || []).length, 1, "isPaidSelf 只能定义一次");
+  // 汇总口径（发放统计 / 年度汇总）：已发走 isPaid
+  assert.match(payLib, /rows\.filter\(isPaid\)/, "发放统计的已发必须走 isPaid");
+  const attSum = await srcCode("src/lib/attendance-summary.ts");
+  assert.match(attSum, /yearPay\.filter\(isPaid\)/, "年度汇总的已发必须走 isPaid");
+  assert.equal(
+    attSum.includes("isPaidSelf"),
+    false,
+    "年度汇总又拿 isPaidSelf 判已发了 —— 这正是 1.8.5 把代发扣出已发的错",
+  );
+  // 单人视角（工资条）：本人已打款走 isPaidSelf
+  assert.match(await src("src/routes/query.tsx"), /filter\(isPaidSelf\)/, "工资条「已打款（本人）」走 isPaidSelf");
+  // 两种清单的口径小字各只有一处定义，且明确不同
+  assert.equal((payLib.match(/export const PRINT_CALIBER_NOTE_DETAIL/g) || []).length, 1);
+  assert.equal((payLib.match(/export const PRINT_CALIBER_NOTE_SUMMARY/g) || []).length, 1);
   // 页面上不许再就地写「已发 = owner === receiver」
   for (const file of ["src/routes/payments.tsx", "src/routes/attendance.tsx", "src/routes/index.tsx"]) {
     assert.equal(/owner === receiver/.test(await srcCode(file)), false, `${file} 里又出现了 owner === receiver 的就地判定`);
