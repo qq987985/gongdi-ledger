@@ -17,8 +17,18 @@ export function uid(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+/**
+ * 金额展示：千分位 + 两位小数。
+ *
+ * 1.8.8 加固：`n` 不是有效数字时按 0 显示，**不抛异常**。
+ * 起因（实测）：从服务器拉回的台账里，老 data 的合同明细可能缺 `amountExcl`
+ * （`pullNasLedger` 不跑 migrate/默认值），合同编辑弹窗渲染 `money(e.amountExcl)` 直接
+ * `Cannot read properties of undefined (reading 'toLocaleString')` → 整页白屏。
+ * 金额字段的默认值仍应由数据层给（§3 防 undefined），这里只做最后一道防线。
+ */
 export function money(n: number): string {
-  return n.toLocaleString("zh-CN", {
+  const v = Number(n);
+  return (Number.isFinite(v) ? v : 0).toLocaleString("zh-CN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });

@@ -6,9 +6,19 @@ export interface OtRule {
   label: string;
 }
 
+/**
+ * 没设加班规则时的显示文案（1.8.8 修 B 组 A14）。
+ *
+ * 之前空规则也显示「不计加班」，与考勤页顶部警示「有 N 人**还没在人员表设加班规则**」
+ * 自相矛盾 —— 用户分不清「没设（视为不计加班）」和「明确选了不计加班」。
+ * 现在：空规则 → 本常量；非空但认不出的老文本（如手写的「不计加班」）→ 原文照显。
+ * 唯一实现，月表 / 人员页 / 个人查询 / 批量改工资预览共用。
+ */
+export const OT_RULE_UNSET_LABEL = "未设加班规则";
+
 export function parseOtRule(rule: string | undefined | null): OtRule {
   const s = (rule || "").trim();
-  if (!s) return { kind: "none", param: 0, label: "不计加班" };
+  if (!s) return { kind: "none", param: 0, label: OT_RULE_UNSET_LABEL };
   const [head, tail] = s.includes(":") ? s.split(":", 2) : [s, ""];
   const param = Number(tail);
   if (head.startsWith("按小时") && param > 0)

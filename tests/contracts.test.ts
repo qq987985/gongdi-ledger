@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  contractEntryChanges,
   contractRollup,
   normalizeContractStatus,
   normalizeEntry,
@@ -89,4 +90,52 @@ test("normalizeContractStatus：中文状态归一", () => {
   assert.equal(normalizeContractStatus("退质保"), "退质保金");
   assert.equal(normalizeContractStatus("结算已开票"), "结算已开票");
   assert.equal(normalizeContractStatus("看不懂的状态"), "在建");
+});
+
+/* ── 1.8.8 D1：合同三类明细的「改」入口 ── */
+
+test("D1 contractEntryChanges：逐项列出改动，格式与合同编辑一致", () => {
+  const before = entry({ id: "e1", contractId: "c1", kind: "report", date: "2026-03-31", amount: 180000, no: "2026-03", remark: "3月报量" });
+  const after = entry({ ...before, amount: 200000, no: "2026-04" });
+  assert.deepEqual(contractEntryChanges(before, after), ["金额：180000 → 200000", "单号：2026-03 → 2026-04"]);
+});
+
+test("D1 contractEntryChanges：收款去向用中文标签，空值显示（空）", () => {
+  const before = entry({ id: "e2", contractId: "c1", kind: "receipt", date: "2026-04-15", amount: 80000, payTo: "sub" });
+  const after = normalizeEntry({ ...before, payTo: "worker", remark: "改代付" });
+  assert.deepEqual(contractEntryChanges(before, after), ["收款去向：到分包 → 代付农民工", "备注：（空） → 改代付"]);
+});
+
+test("D1 contractEntryChanges：没有改动返回空数组（界面提示「没有改动」而不是空 confirm）", () => {
+  const e = entry({ id: "e3", contractId: "c1", kind: "invoice", date: "2026-04-12", amount: 200000, amountExcl: 183486.24, taxRate: 9, no: "1100000001" });
+  assert.deepEqual(contractEntryChanges(e, { ...e }), []);
+});
+
+test("D1 编辑不改变金额/不含税/税率口径：normalizeEntry(改后) 与原口径一致", () => {
+  const original = entry({ id: "e4", contractId: "c1", kind: "invoice", date: "2026-04-12", amount: 218000, amountExcl: 200000, taxRate: 9, no: "1" });
+  // 只改备注（编辑表单里金额字段原样带出来）→ 三口径一个不动
+  const edited = normalizeEntry({ ...original, remark: "补备注" });
+  assert.equal(edited.amount, 218000);
+  assert.equal(edited.amountExcl, 200000, "不含税不因编辑被重算");
+  assert.equal(edited.taxRate, 9);
+  assert.equal(edited.id, "e4", "编辑必须保留原 id（影像文件挂在这条上）");
+  assert.equal(edited.kind, "invoice");
+});
+
+test("D1 三类明细都有「改」入口（源码守卫：三个 Book 都把 onUpdate 传给了 EntryRows）", async () => {
+  const fs = await import("node:fs/promises");
+  const { dirname, join, resolve } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const src = await fs.readFile(join(root, "src/components/contract-editor.tsx"), "utf8");
+  assert.equal((src.match(/onEdit=\{disabled \? undefined : startEdit\}/g) || []).length, 3, "报量/开票/收款三个明细列表都要有「改」入口");
+  assert.equal((src.match(/aria-label="编辑"/g) || []).length, 1, "编辑按钮的唯一实现（EntryRows）");
+  assert.match(src, /askEntryEdit\("报量"/);
+  assert.match(src, /askEntryEdit\("发票"/);
+  assert.match(src, /askEntryEdit\("收款"/);
+  // 编辑必须走与新增同一个 normalizeEntry，且要落操作记录（store 的 updateContractEntry）
+  assert.match(src, /onUpdate\(normalizeEntry\(/);
+  const store = await fs.readFile(join(root, "src/lib/store.ts"), "utf8");
+  assert.match(store, /updateContractEntry: \(row\) => \{[\s\S]{0,400}?normalizeEntry\(row\)/, "updateContractEntry 必须与新增同口径");
+  assert.match(store, /修改合同明细/, "编辑明细要落操作记录");
 });

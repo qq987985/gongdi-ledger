@@ -40,7 +40,7 @@ export function OtRulePick({
           else onChange(encodeOtRule(k, p.param || (k === "hour" ? 25 : 8)));
         }}
       >
-        <option value="none">不计加班</option>
+        <option value="none">未设（不计加班）</option>
         <option value="hour">按小时</option>
         <option value="fold">按折算</option>
       </select>

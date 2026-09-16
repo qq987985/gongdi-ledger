@@ -30,6 +30,8 @@ import {
   scopeRows,
   sectionTotals,
   sourceBuckets,
+  isProxyReceiver,
+  receiverOf,
 } from "~/lib/payments-stats";
 import { PaymentSheets } from "~/components/payment-sheets";
 import type { Payment } from "~/lib/types";
@@ -312,7 +314,7 @@ function PaymentsPage() {
                   <td className="p-3 text-muted">{p.source}</td>
                   <td className="p-3">
                     {p.receiver}
-                    {p.owner !== p.receiver ? (
+                    {isProxyReceiver(p) ? (
                       <Badge tone="warn" className="ml-2">
                         代收
                       </Badge>
@@ -350,8 +352,8 @@ function PaymentsPage() {
                 });
                 toast.success(
                   row.date
-                    ? row.receiver !== row.owner
-                      ? `已记到 ${row.owner} 头上，${row.receiver} 代收`
+                    ? isProxyReceiver(row)
+                      ? `已记到 ${row.owner} 头上，${receiverOf(row)} 代收`
                       : `已记到 ${row.owner} 头上`
                     : `已上报 ${row.owner}，待发放`,
                 );
@@ -517,7 +519,9 @@ function PaymentEditor({
     >
       <section
         id="payment-editor"
-        className="max-h-screen w-full max-w-5xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-6 shadow-panel md:rounded-xl"
+        // 1.8.8 D6：小屏（375×667）下 max-h-screen（=100vh）比可视区高 20px，面板贴底后顶部按钮被裁。
+        // 改用 dvh 并留出余量：手机 4rem、桌面 3rem（= md:p-6 的内边距）。
+        className="max-h-[calc(100dvh-4rem)] w-full max-w-5xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-6 shadow-panel md:max-h-[calc(100dvh-3rem)] md:rounded-xl"
         onClick={(e) => e.stopPropagation()}
         onChange={markDirty}
       >

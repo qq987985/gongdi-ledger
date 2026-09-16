@@ -10,6 +10,7 @@ import { DocActions, prepareNamedFile, setDoc } from "~/components/doc-actions";
 import { money, formatCardNo, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
 import { round2 } from "~/lib/wage";
+import { expenseFormFromDraft } from "~/lib/expense-rules";
 import { useGuardedClose } from "~/lib/confirm-close";
 import {
   applyPayee,
@@ -47,13 +48,15 @@ export function ExpenseEditor({
   onDelete: () => void;
   onPrintSingle: (row: any) => void;
 }) {
-  const [c, setC] = React.useState(() => ({
-    ...draft,
-    payBank: draft.payBank || (!draft.payCardNo ? draft.payAccount : "") || "",
-    payCardNo: draft.payCardNo || "",
-    payoutDate: draft.status === "已报销" ? draft.payoutDate || "" : "",
-  }));
+  const [c, setC] = React.useState(() => expenseFormFromDraft(draft));
   const { markDirty, requestClose } = useGuardedClose(onCancel);
+  // 1.8.8 E11：随 draft 重置本地副本。原来只在挂载时取一次初值，
+  // 于是「编辑 A 时点新增报销」会把 A 的项目/金额带进新表单，保存后 A 被同 id 覆盖而消失。
+  // 只要目标记录的 id 变了（新增每次 uid() 都是新的）就重新取初值。
+  React.useEffect(() => {
+    setC(expenseFormFromDraft(draft));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.id]);
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") requestClose();

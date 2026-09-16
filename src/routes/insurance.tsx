@@ -92,7 +92,8 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     <ModalCloseCtx.Provider value={requestClose}>
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 md:items-center md:p-6" onClick={requestClose}>
         <div
-          className="max-h-screen w-full max-w-md overflow-y-auto rounded-t-xl border border-line bg-surface p-5 shadow-panel md:rounded-xl"
+          // 1.8.8 D6：小屏不再用 max-h-screen（100vh 会超出可视区、顶部按钮被裁）
+          className="max-h-[calc(100dvh-4rem)] w-full max-w-md overflow-y-auto rounded-t-xl border border-line bg-surface p-5 shadow-panel md:max-h-[calc(100dvh-3rem)] md:rounded-xl"
           onClick={(e) => e.stopPropagation()}
           onChange={markDirty}
         >

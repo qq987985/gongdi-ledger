@@ -270,6 +270,7 @@ export interface AppActions {
   upsertContract: (c: ContractRecord) => void;
   removeContracts: (ids: string[]) => void;
   addContractEntry: (e: Parameters<typeof normalizeEntry>[0]) => void;
+  updateContractEntry: (e: ContractEntry) => void;
   patchContractEntry: (id: string, patch: Partial<ContractEntry>) => void;
   removeContractEntries: (ids: string[]) => void;
   replaceContracts: (contracts: ContractRecord[], entries?: ContractEntry[]) => void;
@@ -472,6 +473,14 @@ export const useApp = create<AppStore>()(
         const entry = normalizeEntry(e);
         set({ contractEntries: [...get().contractEntries, entry] });
         logOp("新增合同明细", `${entry.kind} ${entry.amount}`, "合同");
+      },
+      updateContractEntry: (row) => {
+        // 编辑一条已有明细（合同三类明细的「改」入口）。
+        // 与新增走同一个 normalizeEntry，金额/不含税/税率口径不许在编辑路径分叉；
+        // id 不变（normalizeEntry 用 e.id || uid()），影像文件挂接关系保持。
+        const entry = normalizeEntry(row);
+        set({ contractEntries: get().contractEntries.map((e) => (e.id === entry.id ? entry : e)) });
+        logOp("修改合同明细", `${entry.kind} ${entry.amount}`, "合同");
       },
       patchContractEntry: (id, patch) => {
         set({

@@ -13,7 +13,7 @@ import { derivedYears } from "~/lib/dates";
 import { monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
 import { hasContent } from "~/lib/work";
 import { groupBuckets } from "~/lib/buckets";
-import { isPaidSelf } from "~/lib/payments-stats";
+import { isPaidSelf, isProxyReceiver, receiverOf } from "~/lib/payments-stats";
 import { overAgeLabel } from "~/lib/idcard";
 import { money, copyText } from "~/lib/utils";
 import type { Person, Payment, AttendanceRow } from "~/lib/types";
@@ -268,7 +268,7 @@ function PayslipSheets({
                       <tr key={`${x.date}-${i}`}>
                         <td className="border border-black px-1 py-1">{x.date}</td>
                         <td className="border border-black px-1 py-1">{money(x.amount)}</td>
-                        <td className="border border-black px-1 py-1">{x.receiver === s.person.name ? "本人" : `${x.receiver}代收`}</td>
+                        <td className="border border-black px-1 py-1">{receiverOf(x) === s.person.name ? "本人" : `${receiverOf(x)}代收`}</td>
                         <td className="border border-black px-1 py-1">{x.source}</td>
                         <td className="border border-black px-1 py-1 text-left">{x.remark}</td>
                       </tr>
@@ -596,7 +596,7 @@ function QueryPage() {
                     <li key={x.id} className="flex flex-wrap justify-between gap-2 border-b border-line pb-2">
                       <span>
                         {x.date} · 实际收款人 {x.owner}
-                        {x.receiver !== x.owner ? ` · ${x.receiver}代收` : " · 本人收"}
+                        {isProxyReceiver(x) ? ` · ${receiverOf(x)}代收` : " · 本人收"}
                         {x.source ? ` · ${x.source}` : ""}
                       </span>
                       <span className="tabular-nums">¥{money(x.amount)}</span>

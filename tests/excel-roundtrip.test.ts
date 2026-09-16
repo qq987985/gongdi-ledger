@@ -225,6 +225,43 @@ test("合同导入模板仍可导入（模板路径不能被跳过逻辑误伤�
   assert.equal(parsed.entries.length, 4, "模板自带 1 报量 + 1 开票 + 2 收款");
 });
 
+/* ── 1.8.8 D4：合同导入模板与导出合同表的「合同管理表」列结构对齐 ── */
+function contractSheetHeader(wb: XLSX.WorkBook): string[] {
+  const aoa = XLSX.utils.sheet_to_json(wb.Sheets["合同管理表"], { header: 1, blankrows: false }) as unknown[][];
+  return (aoa[1] || []).map(String);
+}
+
+test("D4 合同模板表头 == 导出合同表的子序列，且补上了 有无合同/合同扫描件/无合同原因", () => {
+  const tpl = contractSheetHeader(contractTemplateWb());
+  const exp = contractSheetHeader(buildContractWorkbook({ contracts: [], entries: [] }));
+  for (const col of ["有无合同", "合同扫描件", "无合同原因"]) {
+    assert.ok(tpl.includes(col), `模板缺列「${col}」`);
+    assert.ok(exp.includes(col), `导出表缺列「${col}」`);
+  }
+  // 顺序必须一致：模板的列在导出表里按同样先后出现（否则「当模板」填出来的表导入端会认错列）
+  let cursor = 0;
+  for (const col of tpl) {
+    const at = exp.indexOf(col, cursor);
+    assert.ok(at >= 0, `模板列「${col}」与导出表顺序不一致（或导出表没有这一列）`);
+    cursor = at + 1;
+  }
+});
+
+test("D4 在模板里填「无合同 + 原因」→ 导入后 hasPaper=false 且原因保留", () => {
+  const wb = contractTemplateWb();
+  const ws = wb.Sheets["合同管理表"];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false }) as unknown[][];
+  const head = (aoa[1] || []).map(String);
+  const at = (name: string) => head.indexOf(name);
+  aoa[2][at("有无合同")] = "无";
+  aoa[2][at("无合同原因")] = "甲方未回签";
+  wb.Sheets["合同管理表"] = XLSX.utils.aoa_to_sheet(aoa);
+  const parsed = parseContractWorkbook(xlsxBuf(wb));
+  assert.equal(parsed.contracts.length, 1);
+  assert.equal(parsed.contracts[0].hasPaper, false, "模板的「有无合同=无」必须被导入端识别");
+  assert.equal(parsed.contracts[0].noContractReason, "甲方未回签");
+});
+
 test("整本导出 → 整本导入：跨年度考勤按各自年份入库", () => {
   const attendance = [att({ id: "a1", year: 2025, month: 3, days: 20 }), att({ id: "a2", year: 2026, month: 4, days: 22 })];
   const wb = buildFullWorkbook({

@@ -12,6 +12,7 @@ import {
   attendanceBase,
 } from "~/components/doc-actions";
 import { round2 } from "~/lib/wage";
+import { attendanceDocBelong, insuranceContractFiles } from "~/lib/file-list";
 import { useApp } from "~/lib/store";
 
 function safeBase(s: string) {
@@ -27,11 +28,13 @@ function FilesPage() {
     contracts,
     contractEntries,
     expenses,
+    insurancePolicies,
     patchAttendanceDoc,
     removeAttendanceDocs,
     patchContractEntry,
     upsertContract,
     upsertExpense,
+    upsertPolicy,
   } = useApp();
   const [kind, setKind] = React.useState("all");
   const [scope, setScope] = React.useState("year");
@@ -42,6 +45,7 @@ function FilesPage() {
     ...(contracts || []).map((c: any) => c.scanFileName),
     ...(expenses || []).map((e: any) => e.voucherFileName),
     ...(expenses || []).map((e: any) => e.payoutFileName),
+    ...insuranceContractFiles(insurancePolicies).map((c) => c.fileName),
   ].filter(Boolean);
   const filtered = React.useMemo(() => {
     const out: any[] = [];
@@ -51,7 +55,7 @@ function FilesPage() {
         id: d.id,
         kind: "attendance",
         fileName: d.fileName,
-        belong: `${d.year}年${d.month}月考勤`,
+        belong: attendanceDocBelong(d),
         extra: d.remark,
         suggest: attendanceBase(d.year || 0, d.month || 0),
         source: "attendance",
@@ -135,8 +139,24 @@ function FilesPage() {
         source: "payout",
       });
     }
+    // 保险合同（保单里上传的合同文件）：1.8.8 D2 之前这里根本没收集，导致「看不到也筛不出」
+    const insYear = (d: string) => Number((d || "").slice(0, 4)) || 0;
+    for (const c of insuranceContractFiles(insurancePolicies)) {
+      if (scope === "year" && insYear(c.periodStart) && insYear(c.periodStart) !== year) continue;
+      out.push({
+        id: c.id,
+        kind: "insurance",
+        fileName: c.fileName,
+        belong: [c.policyNo, c.name].filter(Boolean).join(" ") || "保险合同",
+        extra: [c.periodStart && c.periodEnd ? `保险期 ${c.periodStart} ~ ${c.periodEnd}` : "", "保险合同"]
+          .filter(Boolean)
+          .join(" · "),
+        suggest: `${safeBase(c.policyNo || c.name)}-保险合同`,
+        source: "insurance",
+      });
+    }
     return out;
-  }, [attendanceDocs, contractEntries, contracts, expenses, year, scope]).filter((r) => {
+  }, [attendanceDocs, contractEntries, contracts, expenses, insurancePolicies, year, scope]).filter((r) => {
     if (kind !== "all" && r.kind !== kind) return false;
     if (!q.trim()) return true;
     const s = q.trim();
@@ -148,7 +168,7 @@ function FilesPage() {
         <header>
           <h1 className="font-display text-2xl font-semibold">影像资料</h1>
           <p className="mt-1 text-sm text-muted">
-            文件在 NAS 的 data/photos 下：报量单、发票、收款回单、考勤影像、合同扫描件、报销凭证、报销打款。可查看、下载、复制、替换、删除。
+            文件在 NAS 的 data/photos 下：报量单、发票、收款回单、考勤影像、合同扫描件、保险合同、报销凭证、报销打款。可查看、下载、复制、替换、删除。
           </p>
         </header>
         <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4">
@@ -161,6 +181,7 @@ function FilesPage() {
               <option value="invoice">电子发票</option>
               <option value="receipt">收款回单</option>
               <option value="contract">合同扫描件</option>
+              <option value="insurance">保险合同</option>
               <option value="expense">报销凭证</option>
               <option value="payout">报销打款</option>
             </select>
@@ -193,7 +214,7 @@ function FilesPage() {
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-sm text-muted">
-                    还没有影像资料。到「月度考勤」传考勤影像、合同里传报量单/发票/收款回单/扫描件、报销单里传凭证。
+                    还没有影像资料。到「月度考勤」传考勤影像、合同里传报量单/发票/收款回单/扫描件、保单里传保险合同、报销单里传凭证。
                   </td>
                 </tr>
               ) : null}
@@ -224,6 +245,15 @@ function FilesPage() {
                           for (const e of expenses || []) {
                             if (e.payoutId === r.id) upsertExpense({ ...e, payoutFileName: name });
                           }
+                        } else if (r.source === "insurance") {
+                          // 保险合同：替换的是这张保单 contracts 里的那一份（同一份文件 id 不变）
+                          for (const p of insurancePolicies || []) {
+                            if (!(p.contracts || []).some((c: any) => c.id === r.id)) continue;
+                            upsertPolicy({
+                              ...p,
+                              contracts: (p.contracts || []).map((c: any) => (c.id === r.id ? { ...c, fileName: name } : c)),
+                            });
+                          }
                         } else patchContractEntry(r.id, { fileName: name });
                       }}
                       onDeleted={() => {
@@ -238,6 +268,11 @@ function FilesPage() {
                         } else if (r.source === "payout") {
                           for (const e of expenses || []) {
                             if (e.payoutId === r.id) upsertExpense({ ...e, payoutFileName: "", payoutId: "" });
+                          }
+                        } else if (r.source === "insurance") {
+                          for (const p of insurancePolicies || []) {
+                            if (!(p.contracts || []).some((c: any) => c.id === r.id)) continue;
+                            upsertPolicy({ ...p, contracts: (p.contracts || []).filter((c: any) => c.id !== r.id) });
                           }
                         } else patchContractEntry(r.id, { fileName: "" });
                       }}

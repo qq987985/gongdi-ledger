@@ -1,7 +1,7 @@
 import { money } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
 import { ALL_BUCKETS } from "~/lib/buckets";
-import { PROXY_INLINE_LABEL, isPaid, printCaliberNote } from "~/lib/payments-stats";
+import { PROXY_INLINE_LABEL, isPaid, isProxyReceiver, printCaliberNote, receiverOf } from "~/lib/payments-stats";
 import type { DetailSection, OwnerRow, PaymentSummary, PrintTotals } from "~/lib/payments-stats";
 import type { Payment } from "~/lib/types";
 
@@ -101,8 +101,8 @@ export function PaymentSheets({
                       <td className="border border-black px-1 py-1 font-medium">{isPaid(p) ? "已发" : "待发"}</td>
                       <td className="border border-black px-1 py-1">{p.owner || "—"}</td>
                       <td className="border border-black px-1 py-1">
-                        {p.receiver || p.owner || "—"}
-                        {p.owner !== p.receiver ? "（代收）" : ""}
+                        {receiverOf(p) || "—"}
+                        {isProxyReceiver(p) ? "（代收）" : ""}
                       </td>
                       <td className="border border-black px-1 py-1">{p.source || "未填发放方"}</td>
                       <td className="border border-black px-1 py-1 tabular-nums">{money(p.amount || 0)}</td>

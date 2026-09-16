@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import { uid } from "../utils";
 import { parseDateYmd } from "../dates";
 import { numOr, numOrWarn, parseNum, parseNumber } from "../num";
+import { receiverOf } from "../receiver";
 import type { Expense, Payment } from "../types";
 
 export { numOr, numOrWarn, parseNum, parseNumber };
@@ -194,14 +195,33 @@ export function contractFilesCell(list: { fileName: string }[] | undefined): str
 
 /* ───────────── 导入合并：按内容去重，重复导入不翻倍 ───────────── */
 
-/** 发放去重键：实际收款人 + 日期 + 金额 + 收款人 */
-export function paymentKey(p: { owner: string; date?: string; amount: number; receiver?: string }): string {
-  return [p.owner, p.date || "", p.amount || 0, p.receiver || ""].join("\u0001");
+/**
+ * 去重键里的日期一律先规范化（`2026-9-5` / `2026/9/5` → `2026-09-05`）。
+ *
+ * 1.8.8 修 D5：导出把台账里的日期**原样**写进 Excel（用户手填的可能是 `2026-9-5`），
+ * 导入时 `rowToPayment`/`rowToExpense` 又会 `normalizeDate` 成 `2026-09-05`，
+ * 于是「同一条记录」在键里一个不补零、一个补零 → 键不相等 → 同一份导出文件再导入
+ * **就多记一笔金额**（实测 5 笔 ¥4,900 → 7 笔 ¥6,400）。
+ * 这里是唯一的日期归一入口：解析不出来的（如空、纯文本期间）原样保留，
+ * 「待发放」（空日期）依旧是空，不会被当成某一天。
+ */
+function keyDate(s: string | undefined): string {
+  const t = (s || "").trim();
+  if (!t) return "";
+  return normalizeDate(t);
 }
 
-/** 报销去重键：项目 + 日期 + 金额 + 报销人 */
+/** 发放去重键：实际收款人 + 日期（规范化）+ 金额 + 收款人（空 = 同实际收款人） */
+export function paymentKey(p: { owner: string; date?: string; amount: number; receiver?: string }): string {
+  // 1.8.8 修 B 组 D3（Y14）：`receiverOf` = 收款人为空时算本人 —— 必须和导入端一致。
+  // `rowToPayment` 会把空收款人回填成 owner，若键里用原值 `receiver`（""），
+  // 「导出（空）→ 导入（回填 owner）」两遍键就不相等，同一份文件再导入会**多一条**（实测 7→8 条）。
+  return [p.owner, keyDate(p.date), p.amount || 0, receiverOf({ owner: p.owner || "", receiver: p.receiver || "" })].join("\u0001");
+}
+
+/** 报销去重键：项目 + 日期（规范化）+ 金额 + 报销人 */
 export function expenseKey(e: { name: string; date?: string; period?: string; amount: number; claimant?: string }): string {
-  return [e.name, e.date || e.period || "", e.amount || 0, e.claimant || ""].join("\u0001");
+  return [e.name, keyDate(e.date || e.period), e.amount || 0, e.claimant || ""].join("\u0001");
 }
 
 export interface MergeResult<T> {
@@ -225,6 +245,48 @@ export function mergeUnique<T>(existing: T[], incoming: T[], keyOf: (x: T) => st
     merged.push(x);
   }
   return { merged, added: merged.length - existing.length, skipped };
+}
+
+export interface DuplicateGroup<T> {
+  key: string;
+  items: T[];
+}
+
+/**
+ * 找出**已有数据里**去重键相同的记录组（1.8.8 D5 的善后提示用）。
+ *
+ * 修版前重复导入留下的记录会一直躺在台账里（金额已经多了），本函数只**报**不删：
+ * 用户数据不许自动清理，界面据此提示「有 N 组重复，请到发放/报销页核对后手工删除」。
+ */
+export function findDuplicateGroups<T>(list: T[], keyOf: (x: T) => string): DuplicateGroup<T>[] {
+  const byKey = new Map<string, T[]>();
+  for (const x of list) {
+    const k = keyOf(x);
+    const group = byKey.get(k);
+    if (group) group.push(x);
+    else byKey.set(k, [x]);
+  }
+  const out: DuplicateGroup<T>[] = [];
+  for (const [key, items] of byKey) if (items.length > 1) out.push({ key, items });
+  return out;
+}
+
+/** 历史重复的发放记录组（同样只报不删） */
+export function findDuplicatePayments(existing: Payment[]): DuplicateGroup<Payment>[] {
+  return findDuplicateGroups(existing, paymentKey);
+}
+
+/**
+ * 历史重复的提示文案（唯一实现，导入预览与整本导入确认框共用；没有重复返回 ""）。
+ * 口径：**只提示，不自动删用户数据**（开发规范 §7 的数据红线）。
+ */
+export function duplicateNotice<T>(groups: DuplicateGroup<T>[], what: string): string {
+  if (!groups.length) return "";
+  const rows = groups.reduce((s, g) => s + g.items.length, 0);
+  return (
+    `注意：本台账现有${what}里有 ${groups.length} 组重复（同人、同日期、同金额，共 ${rows} 条）。` +
+    `本次导入不会再新增重复；但这些历史重复会让合计偏大，请到对应页面核对后手动删除 —— 系统不会自动删你的数据。`
+  );
 }
 
 export function mergePayments(existing: Payment[], incoming: Payment[]): MergeResult<Payment> {

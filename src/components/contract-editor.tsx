@@ -3,7 +3,7 @@
  * 从合同页拆出，与列表页通过 props 通信；明细文件操作经 store 的 patchContractEntry。
  */
 import * as React from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Input, Label } from "~/components/ui/input";
@@ -11,7 +11,7 @@ import { Badge } from "~/components/ui/badge";
 import { FilePick } from "~/components/file-pick";
 import { DocActions, prepareNamedFile, setDoc, removeDoc, invoiceBase, reportBase, receiptSubBase, receiptWorkerBase } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
-import { contractRollup, emptyContract, normalizeEntry, CONTRACT_STATUSES } from "~/lib/contracts";
+import { contractRollup, contractEntryChanges, emptyContract, normalizeEntry, CONTRACT_STATUSES } from "~/lib/contracts";
 import { money, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
 import { round2 } from "~/lib/wage";
@@ -52,6 +52,7 @@ export function ContractEditor({
   onSave,
   onDelete,
   onAddEntry,
+  onUpdateEntry,
   onRemoveEntries,
 }: {
   draft: ContractRecord;
@@ -61,12 +62,21 @@ export function ContractEditor({
   onSave: (c: ContractRecord) => void;
   onDelete?: () => void;
   onAddEntry: (e: ContractEntry) => void;
+  onUpdateEntry: (e: ContractEntry) => void;
   onRemoveEntries: (ids: string[]) => void;
 }) {
   const [c, setC] = React.useState(draft);
   const roll = contractRollup(c, entries);
   const { markDirty, requestClose } = useGuardedClose(onCancel);
   const dirtyRef = React.useRef(false);
+  // 1.8.8（B 组 E11/P19 同类排查）：随 draft 重置本地副本。
+  // 原来只在挂载时取一次初值 —— 「编辑合同 A 时点新增合同」会把 A 的项目名/金额带进新表单，
+  // 保存后按同一个 id 覆盖，A 整条丢失。目标记录 id 变了（新增每次 uid() 都是新的）就重新取初值。
+  React.useEffect(() => {
+    setC(draft);
+    dirtyRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.id]);
   function patch(key: keyof ContractRecord, value: any) {
     dirtyRef.current = true;
     setC((prev) => ({ ...prev, [key]: value }));
@@ -236,6 +246,7 @@ export function ContractEditor({
             entries={entries.filter((e) => e.kind === "report")}
             disabled={creating}
             onAdd={onAddEntry}
+            onUpdate={onUpdateEntry}
             onRemove={onRemoveEntries}
           />
           <InvoiceBook
@@ -243,6 +254,7 @@ export function ContractEditor({
             entries={entries.filter((e) => e.kind === "invoice")}
             disabled={creating}
             onAdd={onAddEntry}
+            onUpdate={onUpdateEntry}
             onRemove={onRemoveEntries}
           />
           <ReceiptBook
@@ -250,6 +262,7 @@ export function ContractEditor({
             entries={entries.filter((e) => e.kind === "receipt")}
             disabled={creating}
             onAdd={onAddEntry}
+            onUpdate={onUpdateEntry}
             onRemove={onRemoveEntries}
           />
         </div>
@@ -298,19 +311,35 @@ function useTakenNames() {
   );
 }
 
+/**
+ * 明细行「改一笔」的确认文案（1.8.8 D1）。
+ * 无改动返回 null；有改动返回 { changes }，调用方据此弹 confirm。
+ */
+function askEntryEdit(kindLabel: string, before: ContractEntry, after: ContractEntry): boolean {
+  const changes = contractEntryChanges(before, after);
+  if (!changes.length) {
+    toast.message(`这笔${kindLabel}没有改动`);
+    return false;
+  }
+  return window.confirm(`确认保存这笔${kindLabel}的修改？\n\n${changes.join("\n")}`);
+}
+
 function ReportBook({
   contract,
   entries,
   disabled,
   onAdd,
+  onUpdate,
   onRemove,
 }: {
   contract: ContractRecord;
   entries: ContractEntry[];
   disabled: boolean;
   onAdd: (e: ContractEntry) => void;
+  onUpdate: (e: ContractEntry) => void;
   onRemove: (ids: string[]) => void;
 }) {
+  const [editId, setEditId] = React.useState("");
   const [date, setDate] = React.useState(localToday());
   const [amount, setAmount] = React.useState(0);
   const [no, setNo] = React.useState("");
@@ -318,6 +347,56 @@ function ReportBook({
   const [file, setFile] = React.useState<File>();
   const taken = useTakenNames();
   const total = entries.reduce((s, e) => s + (e.amount || 0), 0);
+  const editing = entries.find((e) => e.id === editId) || null;
+  function resetForm() {
+    setEditId("");
+    setDate(localToday());
+    setAmount(0);
+    setNo("");
+    setRemark("");
+    setFile(undefined);
+  }
+  function startEdit(e: ContractEntry) {
+    setEditId(e.id);
+    setDate(e.date || "");
+    setAmount(e.amount || 0);
+    setNo(e.no || "");
+    setRemark(e.remark || "");
+    setFile(undefined);
+  }
+  async function submit() {
+    if (editing) {
+      const fileName = file ? file.name || "（已选新文件）" : editing.fileName;
+      const draftEntry = { ...editing, date, amount, no, remark, fileName };
+      if (!askEntryEdit("报量", editing, draftEntry)) return;
+      const saved = file
+        ? await attachNamed(editing.id, "report", file, reportBase(contract.name, date, amount), taken)
+        : editing.fileName;
+      onUpdate(normalizeEntry({ ...editing, date, amount, no, remark, fileName: saved }));
+      toast.success("已保存这笔报量的修改");
+      resetForm();
+      return;
+    }
+    const id = uid();
+    const fileName = await attachNamed(id, "report", file, reportBase(contract.name, date, amount), taken);
+    onAdd(
+      normalizeEntry({
+        id,
+        contractId: contract.id,
+        kind: "report",
+        date,
+        amount,
+        no,
+        remark,
+        fileName,
+      }),
+    );
+    setAmount(0);
+    setNo("");
+    setRemark("");
+    setFile(undefined);
+    toast.success("已记一笔报量");
+  }
   return (
     <div className="rounded-lg border border-line bg-bg-elevated p-3">
       <div className="flex items-baseline justify-between gap-2">
@@ -342,40 +421,21 @@ function ReportBook({
         <Input value={no} onChange={(e) => setNo(e.target.value)} disabled={disabled} placeholder="期次" />
         <Input value={remark} onChange={(e) => setRemark(e.target.value)} disabled={disabled} placeholder="备注" />
         <DocPick label="报量单" fileName={file?.name} disabled={disabled} onFile={setFile} />
-        <Button
-          size="sm"
-          className="w-full"
-          disabled={disabled || !amount}
-          type="button"
-          onClick={async () => {
-            const id = uid();
-            const fileName = await attachNamed(id, "report", file, reportBase(contract.name, date, amount), taken);
-            onAdd(
-              normalizeEntry({
-                id,
-                contractId: contract.id,
-                kind: "report",
-                date,
-                amount,
-                no,
-                remark,
-                fileName,
-              }),
-            );
-            setAmount(0);
-            setNo("");
-            setRemark("");
-            setFile(undefined);
-            toast.success("已记一笔报量");
-          }}
-        >
-          记一笔报量
+        <Button size="sm" className="w-full" disabled={disabled || !amount} type="button" onClick={submit}>
+          {editing ? "保存这笔报量的修改" : "记一笔报量"}
         </Button>
+        {editing ? (
+          <Button size="sm" variant="outline" className="w-full" type="button" onClick={resetForm}>
+            取消修改
+          </Button>
+        ) : null}
       </div>
       <EntryRows
         entries={entries}
         title="报量"
         onRemove={onRemove}
+        onEdit={disabled ? undefined : startEdit}
+        editingId={editId}
         render={(e: any) => (
           <>
             <div className="tabular-nums">
@@ -400,14 +460,17 @@ function InvoiceBook({
   entries,
   disabled,
   onAdd,
+  onUpdate,
   onRemove,
 }: {
   contract: ContractRecord;
   entries: ContractEntry[];
   disabled: boolean;
   onAdd: (e: ContractEntry) => void;
+  onUpdate: (e: ContractEntry) => void;
   onRemove: (ids: string[]) => void;
 }) {
+  const [editId, setEditId] = React.useState("");
   const [date, setDate] = React.useState(localToday());
   const [incl, setIncl] = React.useState(0);
   const [excl, setExcl] = React.useState(0);
@@ -416,6 +479,7 @@ function InvoiceBook({
   const [remark, setRemark] = React.useState("");
   const [file, setFile] = React.useState<File>();
   const taken = useTakenNames();
+  const editing = entries.find((e) => e.id === editId) || null;
   // 切换合同（编辑器复用同一组件）时重置开票表单，避免上一份合同的税率/编号残留
   React.useEffect(() => {
     setRate(contract.taxRate || 9);
@@ -424,6 +488,7 @@ function InvoiceBook({
     setNo("");
     setRemark("");
     setFile(undefined);
+    setEditId("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contract.id]);
   const total = entries.reduce((s, e) => s + (e.amount || 0), 0);
@@ -439,6 +504,60 @@ function InvoiceBook({
     setRate(n);
     if (excl > 0) setIncl(round2(excl * (1 + n / 100)));
     else if (incl > 0 && n > 0) setExcl(round2(incl / (1 + n / 100)));
+  }
+  function resetForm() {
+    setEditId("");
+    setIncl(0);
+    setExcl(0);
+    setNo("");
+    setRemark("");
+    setFile(undefined);
+  }
+  function startEdit(e: ContractEntry) {
+    setEditId(e.id);
+    setDate(e.date || "");
+    setIncl(e.amount || 0);
+    setExcl(e.amountExcl || 0);
+    setRate(e.taxRate || 0);
+    setNo(e.no || "");
+    setRemark(e.remark || "");
+    setFile(undefined);
+  }
+  async function submit() {
+    if (editing) {
+      const fileName = file ? file.name || "（已选新文件）" : editing.fileName;
+      const draftEntry = { ...editing, date, amount: incl, amountExcl: excl, taxRate: rate, no, remark, fileName };
+      if (!askEntryEdit("发票", editing, draftEntry)) return;
+      const saved = file
+        ? await attachNamed(editing.id, "invoice", file, invoiceBase(contract.name, date, incl), taken)
+        : editing.fileName;
+      onUpdate(normalizeEntry({ ...editing, date, amount: incl, amountExcl: excl, taxRate: rate, no, remark, fileName: saved }));
+      toast.success("已保存这张发票的修改");
+      resetForm();
+      return;
+    }
+    const id = uid();
+    const fileName = await attachNamed(id, "invoice", file, invoiceBase(contract.name, date, incl), taken);
+    onAdd(
+      normalizeEntry({
+        id,
+        contractId: contract.id,
+        kind: "invoice",
+        date,
+        amount: incl,
+        amountExcl: excl,
+        taxRate: rate,
+        no,
+        remark,
+        fileName,
+      }),
+    );
+    setIncl(0);
+    setExcl(0);
+    setNo("");
+    setRemark("");
+    setFile(undefined);
+    toast.success("已记一张发票");
   }
   return (
     <div className="rounded-lg border border-line bg-bg-elevated p-3">
@@ -457,43 +576,21 @@ function InvoiceBook({
         <Input value={no} onChange={(e) => setNo(e.target.value)} disabled={disabled} placeholder="发票号" />
         <Input value={remark} onChange={(e) => setRemark(e.target.value)} disabled={disabled} placeholder="备注" />
         <DocPick label="电子发票" fileName={file?.name} disabled={disabled} onFile={setFile} />
-        <Button
-          size="sm"
-          className="w-full"
-          disabled={disabled || !incl}
-          type="button"
-          onClick={async () => {
-            const id = uid();
-            const fileName = await attachNamed(id, "invoice", file, invoiceBase(contract.name, date, incl), taken);
-            onAdd(
-              normalizeEntry({
-                id,
-                contractId: contract.id,
-                kind: "invoice",
-                date,
-                amount: incl,
-                amountExcl: excl,
-                taxRate: rate,
-                no,
-                remark,
-                fileName,
-              }),
-            );
-            setIncl(0);
-            setExcl(0);
-            setNo("");
-            setRemark("");
-            setFile(undefined);
-            toast.success("已记一张发票");
-          }}
-        >
-          记一张发票
+        <Button size="sm" className="w-full" disabled={disabled || !incl} type="button" onClick={submit}>
+          {editing ? "保存这张发票的修改" : "记一张发票"}
         </Button>
+        {editing ? (
+          <Button size="sm" variant="outline" className="w-full" type="button" onClick={resetForm}>
+            取消修改
+          </Button>
+        ) : null}
       </div>
       <EntryRows
         entries={entries}
         title="发票"
         onRemove={onRemove}
+        onEdit={disabled ? undefined : startEdit}
+        editingId={editId}
         render={(e: any) => (
           <>
             <div className="tabular-nums">
@@ -515,14 +612,17 @@ function ReceiptBook({
   entries,
   disabled,
   onAdd,
+  onUpdate,
   onRemove,
 }: {
   contract: ContractRecord;
   entries: ContractEntry[];
   disabled: boolean;
   onAdd: (e: ContractEntry) => void;
+  onUpdate: (e: ContractEntry) => void;
   onRemove: (ids: string[]) => void;
 }) {
+  const [editId, setEditId] = React.useState("");
   const [date, setDate] = React.useState(localToday());
   const [amount, setAmount] = React.useState(0);
   const [payTo, setPayTo] = React.useState<"" | "worker" | "sub">("sub");
@@ -532,7 +632,56 @@ function ReceiptBook({
   const taken = useTakenNames();
   const workers = entries.filter((e) => e.payTo === "worker").reduce((s, e) => s + (e.amount || 0), 0);
   const subs = entries.filter((e) => e.payTo !== "worker").reduce((s, e) => s + (e.amount || 0), 0);
+  const editing = entries.find((e) => e.id === editId) || null;
   const base = payTo === "worker" ? receiptWorkerBase(contract.name, date) : receiptSubBase(contract.name, date);
+  function resetForm() {
+    setEditId("");
+    setAmount(0);
+    setNo("");
+    setRemark("");
+    setFile(undefined);
+  }
+  function startEdit(e: ContractEntry) {
+    setEditId(e.id);
+    setDate(e.date || "");
+    setAmount(e.amount || 0);
+    setPayTo(e.payTo === "worker" ? "worker" : "sub");
+    setNo(e.no || "");
+    setRemark(e.remark || "");
+    setFile(undefined);
+  }
+  async function submit() {
+    if (editing) {
+      const fileName = file ? file.name || "（已选新文件）" : editing.fileName;
+      const draftEntry = { ...editing, date, amount, payTo, no, remark, fileName };
+      if (!askEntryEdit("收款", editing, draftEntry)) return;
+      const saved = file ? await attachNamed(editing.id, "receipt", file, base, taken) : editing.fileName;
+      onUpdate(normalizeEntry({ ...editing, date, amount, payTo, no, remark, fileName: saved }));
+      toast.success("已保存这笔收款的修改");
+      resetForm();
+      return;
+    }
+    const id = uid();
+    const fileName = await attachNamed(id, "receipt", file, base, taken);
+    onAdd(
+      normalizeEntry({
+        id,
+        contractId: contract.id,
+        kind: "receipt",
+        date,
+        amount,
+        payTo,
+        no,
+        remark,
+        fileName,
+      }),
+    );
+    setAmount(0);
+    setNo("");
+    setRemark("");
+    setFile(undefined);
+    toast.success("已记一笔收款");
+  }
   return (
     <div className="rounded-lg border border-line bg-bg-elevated p-3">
       <div className="flex items-baseline justify-between gap-2">
@@ -552,41 +701,21 @@ function ReceiptBook({
         <Input value={no} onChange={(e) => setNo(e.target.value)} disabled={disabled} placeholder="银行回单号" />
         <Input value={remark} onChange={(e) => setRemark(e.target.value)} disabled={disabled} placeholder="备注" />
         <DocPick label="收款回单" fileName={file?.name} disabled={disabled} onFile={setFile} />
-        <Button
-          size="sm"
-          className="w-full"
-          disabled={disabled || !amount}
-          type="button"
-          onClick={async () => {
-            const id = uid();
-            const fileName = await attachNamed(id, "receipt", file, base, taken);
-            onAdd(
-              normalizeEntry({
-                id,
-                contractId: contract.id,
-                kind: "receipt",
-                date,
-                amount,
-                payTo,
-                no,
-                remark,
-                fileName,
-              }),
-            );
-            setAmount(0);
-            setNo("");
-            setRemark("");
-            setFile(undefined);
-            toast.success("已记一笔收款");
-          }}
-        >
-          记一笔收款
+        <Button size="sm" className="w-full" disabled={disabled || !amount} type="button" onClick={submit}>
+          {editing ? "保存这笔收款的修改" : "记一笔收款"}
         </Button>
+        {editing ? (
+          <Button size="sm" variant="outline" className="w-full" type="button" onClick={resetForm}>
+            取消修改
+          </Button>
+        ) : null}
       </div>
       <EntryRows
         entries={entries}
         title="收款"
         onRemove={onRemove}
+        onEdit={disabled ? undefined : startEdit}
+        editingId={editId}
         render={(e: any) => (
           <>
             <div className="tabular-nums">
@@ -637,11 +766,16 @@ function EntryRows({
   entries,
   title,
   onRemove,
+  onEdit,
+  editingId,
   render,
 }: {
   entries: ContractEntry[];
   title: string;
   onRemove: (ids: string[]) => void;
+  /** 有「改」入口时传：点铅笔把这一笔带进上面的表单（1.8.8 D1 明细可改） */
+  onEdit?: (e: ContractEntry) => void;
+  editingId?: string;
   render: (e: ContractEntry) => React.ReactNode;
 }) {
   return (
@@ -653,18 +787,32 @@ function EntryRows({
         .map((e) => (
           <li key={e.id} className="flex items-start justify-between gap-2 border-b border-line py-1.5 last:border-0">
             <div className="min-w-0">{render(e)}</div>
-            <button
-              type="button"
-              className="text-muted hover:text-danger"
-              aria-label="删除"
-              onClick={async () => {
-                if (!confirm(`删除这笔${title}？`)) return;
-                if (e.kind === "report" || e.kind === "invoice" || e.kind === "receipt") await removeDoc(e.id, e.kind);
-                onRemove([e.id]);
-              }}
-            >
-              <Trash2 className="size-3.5" />
-            </button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {onEdit ? (
+                <button
+                  type="button"
+                  className="text-muted hover:text-accent"
+                  aria-label="编辑"
+                  title="改这一笔"
+                  data-editing={editingId === e.id ? "1" : undefined}
+                  onClick={() => onEdit(e)}
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="text-muted hover:text-danger"
+                aria-label="删除"
+                onClick={async () => {
+                  if (!confirm(`删除这笔${title}？`)) return;
+                  if (e.kind === "report" || e.kind === "invoice" || e.kind === "receipt") await removeDoc(e.id, e.kind);
+                  onRemove([e.id]);
+                }}
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
           </li>
         ))}
     </ul>

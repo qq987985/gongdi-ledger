@@ -4,6 +4,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { FilePick } from "~/components/file-pick";
 import {
+  duplicateNotice,
+  findDuplicatePayments,
   mergeExpenses,
   mergePayments,
   parseAttendanceSheet,
@@ -295,6 +297,8 @@ export function PaymentImport() {
   const store = useApp();
   const [mode, setMode] = React.useState<ImportMode>("add");
   const [preview, setPreview] = React.useState<{ rows: Payment[]; fileName: string; skipped: number } | null>(null);
+  // 1.8.8 D5 善后：修版前重复导入可能已经留下重复记录，这里只提示，不自动删（用户数据红线）
+  const dupNotice = duplicateNotice(findDuplicatePayments(store.payments), "发放记录");
   async function onFile(file: File) {
     if (!file) return;
     const rows = parsePaymentSheet(await file.arrayBuffer());
@@ -320,6 +324,7 @@ export function PaymentImport() {
   return (
     <>
       <ExcelBtn label="导入发放" onFile={onFile} />
+      {dupNotice ? <p className="basis-full mt-2 text-xs text-warn">{dupNotice}</p> : null}
       {preview ? (
         <section className="basis-full mt-3 rounded-xl border border-accent bg-surface p-4">
           <h2 className="font-semibold">发放导入确认</h2>
@@ -327,6 +332,7 @@ export function PaymentImport() {
             {preview.fileName} · {preview.rows.length} 条
             {preview.skipped ? ` · 跳过 ${preview.skipped} 条重复` : ""}
           </p>
+          {dupNotice ? <p className="mt-2 text-xs text-warn">{dupNotice}</p> : null}
           <div className="mt-3 flex flex-wrap gap-2">
             <label className="inline-flex items-center gap-1.5 text-sm">
               <input type="radio" name="pay-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
@@ -521,13 +527,16 @@ export function FullBookImport() {
         // 发放/报销按内容键去重：同一份整本重复导入不再翻倍
         const payMerge = mergePayments(store.payments, parsed.payments || []);
         const expMerge = mergeExpenses(store.expenses || [], parsed.expenses || []);
+        // 1.8.8 D5 善后：历史重复只提示、不自动删（用户数据红线）
+        const legacyDup = duplicateNotice(findDuplicatePayments(store.payments), "发放记录");
         // 整本导入直接合并写入，风险最大：先列出清单确认
         if (
           !confirm(
             `导入「${file.name}」？\n\n` +
               `人员 ${parsed.people.length} 人 · 考勤 ${parsed.attendance.length} 条 · 发放 ${parsed.payments.length} 条（跳过 ${payMerge.skipped} 条重复）· ` +
               `报销 ${(parsed.expenses || []).length} 条（跳过 ${expMerge.skipped} 条重复）· 保单 ${(parsed.policies || []).length} 份 · 保险人员 ${(parsed.members || []).length} 人。\n\n` +
-              "同名人员、同保单号保单、重复考勤（姓名+年月）与重复发放/报销会被跳过；现有数据追加保留。",
+              "同名人员、同保单号保单、重复考勤（姓名+年月）与重复发放/报销会被跳过；现有数据追加保留。" +
+              (legacyDup ? `\n\n${legacyDup}` : ""),
           )
         )
           return;

@@ -48,7 +48,7 @@
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴
   （1.8.1 已在该模板里补「Excel 往返对拍」一步；本机等价命令 `pnpm run check`）。**目前 GitHub 上仍未创建 check.yml**，
   所以四道闸只能靠人跑（推 main 触发的只有 docker.yml 的镜像构建与 Release）。
-- 1.8.7 起覆盖 **344 个用例（344 pass + 0 todo）**（1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.8 起覆盖 **375 个用例（375 pass + 0 todo）**（1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源；
   1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外，
@@ -79,7 +79,17 @@
   有编辑入口的页面必须调 `blockedWrite()`，只读账号的编辑/新增/删除/保存入口禁用或隐藏并写明
   「改动不会保存」；换账号/换台账/退出登录必须 `dropLocalLedger()` 清本机缓存、拉取 401/403 也要清；
   导出必须 `appendAudit`；备份保留 `BACKUP_KEEP` 且只删自己生成的文件名形状。
-  见 tests/readonly.test.ts / tests/readonly-guards.test.ts / tests/backup-retention.test.ts / tests/export-audit.test.ts）。
+  见 tests/readonly.test.ts / tests/readonly-guards.test.ts / tests/backup-retention.test.ts / tests/export-audit.test.ts）/
+  导入幂等与编辑器重置（**1.8.8 起**：① 发放/报销的 **Excel 去重键**里日期必须**先规范化**
+  （`keyDate()`）、收款人必须走 `receiverOf()`（空 = 同实际收款人）——否则「导出→导入→再导入」会
+  因为 `2026-9-5`→`2026-09-05`、或空收款人被回填而**多记一笔**；历史重复只提示不自动删
+  （`duplicateNotice()`）。② 收款人判定唯一实现是 `src/lib/receiver.ts` 的 `receiverOf()`，
+  **禁止**在页面/打印里写裸比较 `owner !== receiver`（空收款人会被标成「代收」，与「其中代发」打架）。
+  ③ 所有「本地副本」型编辑弹窗（payments / expense-editor / contract-editor / people）必须有一条
+  **随目标记录 id 变化重置本地副本**的同步 effect——少了它「编辑 A 时点新增」会沿用 A 的字段、
+  保存后按同 id **覆盖 A**（实测丢数据）。④ 弹窗面板不许用裸 `max-h-screen`（375×667 下顶部会被裁），
+  用 `max-h-[calc(100dvh-4rem)]` + `md:max-h-[calc(100dvh-3rem)]`。
+  见 tests/import-idempotency.test.ts / tests/receiver-and-editor-guards.test.ts / tests/file-list.test.ts）。
 
 ## 1.8.0 的架构改动（A–F 已落地）
 

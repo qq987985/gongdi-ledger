@@ -155,7 +155,7 @@ function ContractStatementSheets({ items }: { items: { contract: ContractRecord;
 }
 
 function ContractsPage() {
-  const { year, contracts, contractEntries, upsertContract, removeContracts, addContractEntry, removeContractEntries } = useApp();
+  const { year, contracts, contractEntries, upsertContract, removeContracts, addContractEntry, updateContractEntry, removeContractEntries } = useApp();
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState("all");
   const [scope, setScope] = React.useState("year");
@@ -321,6 +321,10 @@ function ContractsPage() {
               onAddEntry={(e) => {
                 if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;
                 addContractEntry(e);
+              }}
+              onUpdateEntry={(e) => {
+                if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;
+                updateContractEntry(e);
               }}
               onRemoveEntries={(ids) => {
                 if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;

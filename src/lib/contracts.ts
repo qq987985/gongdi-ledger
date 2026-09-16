@@ -145,6 +145,37 @@ export function normalizeEntry(e: Partial<ContractEntry> & { kind: EntryKind; co
   };
 }
 
+/**
+ * 明细编辑的改动清单（合同三类明细的「改」入口用；无改动返回 []）。
+ *
+ * 纯函数，确认文案与测试共用；口径与 `normalizeEntry` 的字段一一对应，
+ * 不在编辑路径另造一套金额/税额算法（金额、不含税、税率仍是既有语义）。
+ */
+export function contractEntryChanges(before: ContractEntry, after: ContractEntry): string[] {
+  const labels: [keyof ContractEntry, string][] = [
+    ["date", "日期"],
+    ["amount", "金额"],
+    ["amountExcl", "不含税"],
+    ["taxRate", "税率"],
+    ["payTo", "收款去向"],
+    ["no", "单号"],
+    ["remark", "备注"],
+    ["fileName", "影像文件"],
+  ];
+  const show = (k: keyof ContractEntry, v: unknown): string => {
+    if (k === "payTo") return v === "worker" ? "代付农民工" : v === "sub" ? "到分包" : "";
+    if (v === undefined || v === null || v === "") return "";
+    return String(v);
+  };
+  const out: string[] = [];
+  for (const [k, label] of labels) {
+    const a = show(k, before?.[k]);
+    const b = show(k, after?.[k]);
+    if (a !== b) out.push(`${label}：${a || "（空）"} → ${b || "（空）"}`);
+  }
+  return out;
+}
+
 /** 旧数据：一笔收款里同时填了代付，拆成两笔（日期可以不同） */
 export function splitLegacyReceipts(
   entries: (Partial<ContractEntry> & { kind: EntryKind; contractId: string })[],

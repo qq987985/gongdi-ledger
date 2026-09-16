@@ -52,10 +52,13 @@ export interface PaymentFilters {
 
 /* ＝＝ 两个维度的唯一判定（已发含代发 / 待发放） ＋ 两个「本人收款」标注用途 ＝＝ */
 
-/** 收款人：空 = 同实际收款人（旧数据 / Excel 导入里 receiver 可能是空的） */
-export function receiverOf(p: Pick<Payment, "owner" | "receiver">): string {
-  return (p.receiver || "").trim() || (p.owner || "").trim();
-}
+/**
+ * 收款人判定（空 = 同实际收款人）已**下沉到 `src/lib/receiver.ts`**：1.8.8 起
+ * Excel 去重键、发放页列表徽标、打印清单、工资条共用同一实现（B 组 D3/D4：
+ * 以前各写各的 —— 导入多一条、空收款人被标成「代收」）。这里保留转发出口，老引用不用改。
+ */
+import { receiverOf } from "./receiver";
+export { receiverOf, isProxyReceiver } from "./receiver";
 
 /**
  * 已发放（汇总口径，1.8.6）：**有发放日期即算**，按实际收款人计入其名下，含代发/代收。

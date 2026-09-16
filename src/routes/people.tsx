@@ -341,6 +341,18 @@ function confirmEdits(kind: string, name: string, creating: boolean, before: any
   return window.confirm(`确认保存${kind}「${name}」？\n\n改了 ${lines.length} 项：\n${show.join("\n")}${extra}`);
 }
 
+/**
+ * person → 本地表单初值（身份证有效期做一次归一）。
+ * 「编辑张三」和「新增人员」都必须走这里：本地副本沿用上一条会把身份证/银行卡一起带过去（1.8.8 P19）。
+ */
+function personForm(person: Person): Person {
+  return {
+    ...person,
+    idValidFrom: normalizeIdDate(person.idValidFrom),
+    idValidTo: normalizeIdDate(person.idValidTo, true),
+  };
+}
+
 function PersonEditor({
   person,
   creating,
@@ -358,13 +370,18 @@ function PersonEditor({
   onDelete?: () => void;
   onChanged?: () => void;
 }) {
-  const [form, setForm] = React.useState<Person>(() => ({
-    ...person,
-    idValidFrom: normalizeIdDate(person.idValidFrom),
-    idValidTo: normalizeIdDate(person.idValidTo, true),
-  }));
+  const [form, setForm] = React.useState<Person>(() => personForm(person));
   const [tried, setTried] = React.useState(false);
   const [idErr, setIdErr] = React.useState("");
+  // 1.8.8 P19：随 person 重置本地副本。原来只在挂载时取一次初值，
+  // 「编辑张三时点新增人员」会把张三的姓名/身份证/银行卡/电话一起带进新档案（实测）。
+  // 目标记录 id 变了（新增每次 uid() 都是新的）就重新取初值，并清掉上一轮的校验状态。
+  React.useEffect(() => {
+    setForm(personForm(person));
+    setTried(false);
+    setIdErr("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [person.id]);
   // 编辑框里的「保存 / 删除」也要按权限禁用：只读账号连点都不该点得动
   const canEditSelf = useCanSave("people.edit");
   const { markDirty, requestClose } = useGuardedClose(onClose);
@@ -438,7 +455,7 @@ function PersonEditor({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 md:items-center md:p-6" onClick={requestClose}>
       <div
-        className="max-h-screen w-full max-w-3xl overflow-y-auto rounded-t-xl bg-surface p-5 shadow-panel md:rounded-xl"
+        className="max-h-[calc(100dvh-4rem)] w-full max-w-3xl overflow-y-auto rounded-t-xl bg-surface p-5 shadow-panel md:max-h-[calc(100dvh-3rem)] md:rounded-xl"
         onClick={(e) => e.stopPropagation()}
         onChange={markDirty}
       >

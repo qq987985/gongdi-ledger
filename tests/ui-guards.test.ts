@@ -217,3 +217,23 @@ test("约定：含 window.print() 的页面必须「屏幕内容 no-print + 打�
     `这些页面打印时会连屏幕内容一起印（或打印件被藏起来）：\n${bad.join("\n")}`,
   );
 });
+
+test("约定：弹窗面板不许用裸 max-h-screen（375×667 下 100vh 高于可视区，顶部按钮被裁，1.8.8 D6）", async () => {
+  const bad: string[] = [];
+  let checked = 0;
+  for (const { file, text } of await uiSources()) {
+    // 只审「弹窗面板」：文件里同时出现 fixed inset-0 遮罩
+    if (!/fixed inset-0/.test(text)) continue;
+    checked += 1;
+    for (const m of text.matchAll(/className="([^"]*\bmax-h-screen\b[^"]*)"/g)) bad.push(`${file}: ${m[1]}`);
+  }
+  assert.equal(checked >= 4, true, `应扫描到多个弹窗文件，实际 ${checked} 个（正则可能失效）`);
+  assert.deepEqual(
+    bad,
+    [],
+    `这些弹窗面板用了 max-h-screen（100vh），小屏会被裁；改用 max-h-[calc(100dvh-4rem)] + md:max-h-[calc(100dvh-3rem)]：\n${bad.join("\n")}`,
+  );
+  // 反向自检：改造前的写法必须能被这条守卫抓出来（否则守卫是假绿）
+  const sample = `<div className="fixed inset-0 z-50 flex items-end"><section className="max-h-screen w-full" /></div>`;
+  assert.equal((sample.match(/className="([^"]*\bmax-h-screen\b[^"]*)"/g) || []).length, 1);
+});

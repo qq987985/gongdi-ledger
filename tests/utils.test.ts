@@ -15,6 +15,15 @@ test("money：千分位 + 两位小数", () => {
   assert.equal(money(-350.5), "-350.50");
 });
 
+test("money：undefined/NaN 按 0 显示，不白屏（1.8.8 实测的合同编辑弹窗崩溃）", () => {
+  // 老 data 的合同明细可能缺 amountExcl：以前 money(undefined) 直接抛 toLocaleString 异常 → 整页白屏
+  assert.equal(money(undefined as unknown as number), "0.00");
+  assert.equal(money(null as unknown as number), "0.00");
+  assert.equal(money(NaN), "0.00");
+  assert.equal(money("1200" as unknown as number), "1,200.00", "数字字符串照常显示，不当成 0");
+  assert.equal(money("说不清" as unknown as number), "0.00");
+});
+
 test("formatCardNo：每 4 位分组，仅展示用", () => {
   assert.equal(formatCardNo("6222020200112233"), "6222 0202 0011 2233");
   assert.equal(formatCardNo("6222 0202 0011 2233"), "6222 0202 0011 2233", "已分组的原样返回");
