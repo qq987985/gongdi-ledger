@@ -1,3 +1,19 @@
+# 发版工作流（镜像 + Windows 包）：**模板**，不会自动生效 —— 见 ci/README.md §2。
+#   GitHub 仓库 → Actions → 选中 docker → 编辑 → 整段粘贴 → 提交（改 workflow 需要 token 带 workflow 权限）。
+#
+# 与 1.8.13 线上那版的唯一差别（A8，2026-09-17 专家评审）：**两个 job 都自己从源码构建**，
+# 不再信任仓库里那份 `app/`：
+#   · image job：docker build 之前先 `pnpm install --frozen-lockfile && pnpm build`
+#     （Dockerfile 只 `COPY app ./app`，所以镜像内容 = 现场构建出来的产物）；
+#   · windows job：打包 zip 之前同样先 install + build（win/pack.sh 也是拷 app/）。
+# 为什么：源码改了忘了重建 app/ 时，原来 `check` 的第四道闸是恒真的、而 docker job 一道闸都不跑，
+# 于是 `latest` 镜像与 Windows 包会发出**旧代码**、版本号却已经是新的 ——
+# 用户端表现为「更新完版本变了、行为没变」，极难定位。
+# 这样改之后，即使仓库里的 app/ 陈旧，也只会影响 `pnpm preview` 之类的本地用法，不会进发布物。
+#
+# 可选（**已启用**，见下面 windows job 的 `if:` 与 ci/README.md §1b/§2）：让 release 只由
+# tag / 手动触发，推 main 只构建镜像，避免「推一次文档就移动一次 Release」。
+
 name: docker
 on:
   push:
@@ -14,6 +30,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: 安装依赖（严格按 lockfile）
+        run: pnpm install --frozen-lockfile
+      - name: 从源码构建 app/（不信任仓库里的产物）
+        run: pnpm run build
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -39,12 +66,29 @@ jobs:
 
   windows:
     runs-on: ubuntu-latest
+    # ★ 发版守卫（C4④）：只有当次推送是 v* tag，或网页手动触发（workflow_dispatch）才打包 + 发 Release。
+    #   没有这一行时，推 main（哪怕只改了一段文档）也会移动一次 Release —— 用户侧看到「有新版本」，CI 白跑。
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: 安装依赖（严格按 lockfile）
+        run: pnpm install --frozen-lockfile
+      - name: 从源码构建 app/（win/pack.sh 拷的就是它）
+        run: pnpm run build
       - name: version
         id: ver
         run: |
           VER=$(head -n1 VERSION.txt | awk '{print $1}' | tr -d '[:space:]')
+          # 打 tag 时以 tag 名为准（v1.8.14 → 1.8.14），避免 tag 与 VERSION.txt 不一致时发到别的 tag 上
+          TAG="${{ github.ref_name }}"
+          case "$TAG" in v*) VER="${TAG#v}";; esac
           [ -n "$VER" ] || VER=latest
           echo "ver=$VER" >> "$GITHUB_OUTPUT"
       - name: pack
@@ -54,5 +98,5 @@ jobs:
           tag_name: ${{ steps.ver.outputs.ver }}
           name: 工地台账 ${{ steps.ver.outputs.ver }} Windows
           body_path: VERSION.txt
-          files: gongdi-windows.zip
+          files: gongzi-windows.zip
           make_latest: true
