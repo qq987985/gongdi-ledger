@@ -92,8 +92,10 @@ grep -n 'windows.zip' ci/docker.workflow.yml win/pack.sh     # 两个名字必�
 grep -n 'windows.zip' .github/workflows/docker.yml           # 线上那份也应一致
 ```
 
-本地有守卫（`tests/deploy-guards.test.ts`）盯着模板与 `win/pack.sh` 的一致性；
-线上一份因为要 GitHub 网页粘贴、本地 token 没有 workflow 权限，只能靠上面这条自检。
+本地有守卫（`tests/deploy-guards.test.ts`）盯着**两份**的发包名与 `win/pack.sh` 的一致性 ——
+2026-09-17 用户在 GitHub 网页把线上那份改对之后，线上 `.github/workflows/docker.yml` 也一起纳入了断言
+（只比发包名和「仍由 `win/pack.sh` 打包」，不做逐字节比较：粘贴常带换行差异，硬比会把 CI 弄红）。
+改模板后别忘了重新粘贴一次，否则守卫会红。
 
 ---
 
