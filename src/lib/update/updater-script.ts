@@ -1,6 +1,7 @@
 /**
  * 更新容器里内联执行的替换脚本（Cmd: ["node","-e",UPDATER_SCRIPT]）。
- * 从 update.server.ts 原样搬出，一个字节都不能动 —— tests/update-script.test.ts 会真解析它。
+ * 从 update.server.ts 原样搬出；1.8.14 起加了「新容器就绪校验」（见脚本第 4 步）。
+ * tests/update-script.test.ts 会真解析它，改脚本必须过那几条。
  */
 
 export const UPDATER_SCRIPT = `const http=require("node:http");
@@ -40,6 +41,35 @@ function docker(method,apiPath,body){
     req.end();
   });
 }
+// 就绪校验的等待窗口（秒）：最多等 READY_SECONDS，其中「没有健康检查的镜像」要连续 Running 满
+// STABLE_SECONDS 秒才算就绪（拿不到健康检查时，这是唯一能证明「不是起来就退」的信号）。
+const READY_SECONDS=30;
+const STABLE_SECONDS=8;
+// 等新容器**真的在服务**："start" 返回 200 只说明进程被拉起来了。
+//   - Running===false / Restarting → 立刻判失败（带退出码，写进 update.log）
+//   - 有健康检查（Dockerfile 的 HEALTHCHECK，新镜像都有）→ 以 healthy/unhealthy 为准
+//   - 没有健康检查（更早的镜像）→ 连续 Running 满 STABLE_SECONDS 秒算就绪
+async function waitReady(id,seconds,stableSeconds){
+  const deadline=Date.now()+seconds*1000;
+  const stableAt=Date.now()+stableSeconds*1000;
+  let last="等待中";
+  while(Date.now()<deadline){
+    let st=null;
+    try{st=await docker("GET","/containers/"+id+"/json")}catch(e){last="读取容器状态失败："+String((e&&e.message)||e)}
+    if(st){
+      const s=st.State||{};
+      const health=(s.Health&&s.Health.Status)||"";
+      if(s.Running===false) return {ok:false,reason:"新容器已退出（exit "+String(s.ExitCode==null?"?":s.ExitCode)+"）"};
+      if(s.Restarting) return {ok:false,reason:"新容器在反复重启（Restarting=true）"};
+      if(health==="unhealthy") return {ok:false,reason:"新容器健康检查未通过（unhealthy）"};
+      if(health==="healthy") return {ok:true,reason:"健康检查通过"};
+      if(!health&&Date.now()>=stableAt) return {ok:true,reason:"已连续运行 "+stableSeconds+" 秒（该镜像没有健康检查）"};
+      last=health?("健康检查 "+health):"运行中";
+    }
+    await new Promise(r=>setTimeout(r,1000));
+  }
+  return {ok:false,reason:"等了 "+seconds+" 秒仍未就绪（"+last+"）"};
+}
 (async()=>{
   // 任务优先从环境变量拿（不依赖任何挂载）；兼容旧写法：读 data/.gondi-next.json
   let job=null;
@@ -68,11 +98,25 @@ function docker(method,apiPath,body){
     if(oldStopped){try{await docker("POST","/containers/"+job.oldId+"/start")}catch(e){log("回滚启动老容器也失败了")}}
     throw new Error("新容器启动失败，已回滚到原容器："+String((err&&err.message)||err));
   }
-  // 4) 新容器已经在跑：移除老容器，再让新容器接管正式名字
+  // 4) 就绪校验：确认新容器**确实在服务**，再动老容器与旧镜像。
+  //    没有这一步时「start 返回 200」就够删老容器 + 删旧镜像 + 记「更新成功」，
+  //    而「起来就退出（数据目录写不了 / 环境变量不对）」或「Running 但没在监听」这两种最常见的坏情况
+  //    会让用户看到「更新完成、页面打不开」且回不去 —— 老容器已经删了。
+  const ready=await waitReady(created.Id,READY_SECONDS,STABLE_SECONDS);
+  if(!ready.ok){
+    try{await docker("DELETE","/containers/"+created.Id+"?force=true")}catch(e){}
+    if(oldStopped){
+      try{await docker("POST","/containers/"+job.oldId+"/start");log("已回滚：老容器 "+job.name+" 仍在运行（数据没动）")}
+      catch(e){log("回滚启动老容器也失败了："+String((e&&e.message)||e))}
+    }
+    throw new Error("新容器未就绪（"+ready.reason+"），已回滚到原容器，本次更新未生效");
+  }
+  log("新容器已就绪："+ready.reason);
+  // 5) 新容器已经在服务：移除老容器，再让新容器接管正式名字
   try{await docker("DELETE","/containers/"+job.oldId+"?force=true")}catch(e){}
   await docker("POST","/containers/"+created.Id+"/rename?name="+encodeURIComponent(job.name));
   log("已接管名称 "+job.name);
-  // 5) 顺手清掉上一个版本的镜像：老容器已经删了，这份镜像再没人用，
+  // 6) 顺手清掉上一个版本的镜像：老容器已经删了，这份镜像再没人用，
   //    留着只会让 NAS 每更新一次就多占几百 MB。删错了也不会影响新容器（层是共享的、按引用计数）。
   try{
     const oldImage=job.oldImage||"";

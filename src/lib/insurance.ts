@@ -69,3 +69,31 @@ export function emptyPolicy(): InsurancePolicy {
 export function emptyMember(policyId: string): InsuranceMember {
   return { id: "", policyId, name: "", leader: "", startDate: `${today()} 00:00`, endDate: "", remark: "" };
 }
+
+/**
+ * 保险期算不出天数时的**明确提示**（专家评审 B-12①，1.8.14）。
+ *
+ * 现象：`periodEnd` 没填（或结束早于开始）时 `daysBetween()` 回 0 →
+ * 「每人每天 = 每人保费 ÷ 保险期天数」算不出来 → **整张保单每个人的保费静默变成 0**；
+ * 界面只是「每人每天 ¥0.00 / 保费合计 ¥0.00」，分不清是「没填期限」还是「本来就该 0」。
+ *
+ * 口径**不改**（`memberCalc` 仍是 periodDays ≤ 0 → 0，测试锁着），只把原因说出来：
+ * 返回空串 = 保险期正常；返回文案 = 屏幕与打印件都必须原样显示这句。
+ */
+export function periodUnsetNotice(
+  policy: Pick<InsurancePolicy, "periodStart" | "periodEnd"> | null | undefined,
+): string {
+  if (!policy) return "";
+  const start = datePart(policy.periodStart);
+  const end = datePart(policy.periodEnd);
+  if (!end) return "保险期结束日期未填：算不出保险期天数，本单每个人的保费都是 0。请先在「编辑保单」里补上结束日期。";
+  if (!start) return "保险期开始日期未填：算不出保险期天数，本单每个人的保费都是 0。请先补上开始日期。";
+  if (end < start)
+    return `保险期结束日期（${end}）早于开始日期（${start}）：算不出天数，本单每个人的保费都是 0。请核对保险期。`;
+  return "";
+}
+
+/** 保险期是否算不出天数（= 本单保费全为 0 的原因）：展示层用它决定要不要出这句提示 */
+export function periodHasNoDays(policy: Pick<InsurancePolicy, "periodStart" | "periodEnd"> | null | undefined): boolean {
+  return periodUnsetNotice(policy) !== "";
+}

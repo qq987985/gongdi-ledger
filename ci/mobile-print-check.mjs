@@ -21,8 +21,11 @@
  *   DATA_DIR=/tmp/gongdi-e2e node ci/mobile-print-check.mjs print       # 8 个打印用例（截图 + PDF）
  *   DATA_DIR=/tmp/gongdi-e2e node ci/mobile-print-check.mjs diag /files # 某页为什么横向溢出
  *
- * 环境变量：`PORT`（默认 4599）、`E2E_CHROME`（Chrome 可执行文件）、
- * `PLAYWRIGHT_CORE`（playwright-core 的 index.js；默认找几个常见位置）。
+ * 环境变量：`DATA_DIR`（必填）、`PORT`（默认 4599）、`E2E_CHROME`（Chrome 可执行文件）、
+ * `PLAYWRIGHT_CORE`（playwright-core 的 index.js）。后两个**优先于**脚本里内置的常见路径：
+ * 换机器（没有那些路径）时只设这两个变量即可；设错了/都没找到会在启动时抛出「该设哪个变量」的报错，
+ * 不会静默降级（1.8.14 起）。
+ * 自检：`pages` 解析不出页时按失败处理并以非 0 退出（否则「0 页 / 0mm 留白」看起来跟排版很好一样）。
  * 结论与截图清单见 `docs/审查与报告/移动端与打印媒体验证-20260916.md`。
  */
 import { existsSync } from "node:fs";
@@ -34,21 +37,44 @@ import { pdfPageTexts } from "./print-pdf.mjs";
 const DATA_DIR = process.env.DATA_DIR;
 const PORT = Number(process.env.PORT || 4599);
 const BASE = `http://127.0.0.1:${PORT}`;
-const CHROME =
-  process.env.E2E_CHROME ||
-  [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ].find((p) => existsSync(p)) ||
-  "google-chrome";
-const PW =
-  process.env.PLAYWRIGHT_CORE ||
-  [
-    "/Users/wsir/.dsh/profiles/web/node_modules/playwright-core/index.js",
-    join(process.cwd(), "node_modules/playwright-core/index.js"),
-  ].find((p) => existsSync(p)) ||
-  "playwright-core";
+/**
+ * 浏览器与驱动的位置：**环境变量优先**（`E2E_CHROME` / `PLAYWRIGHT_CORE`），
+ * 其次找几个常见安装位置，最后交给系统 PATH —— 换机器（没有下面这些路径）时只要设了环境变量就能用；
+ * 都没设又找不到，就由 `browser()` 抛出「该设哪个变量」的清晰报错，而不是拿着作者机器的绝对路径
+ * 一路走到看不懂的 ENOENT。
+ *
+ * 为什么本仓库**不装** playwright：`package.json` 里所有依赖都写 `latest`，
+ * 装它会把无关依赖一起重解析（见 `开发规范.md` §10），所以只在用的时候临时指定。
+ */
+const CHROME_CANDIDATES = [
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // macOS
+  "/usr/bin/google-chrome",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+];
+const PW_CANDIDATES = [
+  join(process.cwd(), "node_modules/playwright-core/index.js"), // 本目录装过
+  "/usr/lib/node_modules/playwright-core/index.js", // npm -g
+  "/usr/local/lib/node_modules/playwright-core/index.js",
+];
+
+/** 环境变量 > 候选路径 > 兜底字符串（兜底交给系统 PATH，失败时由 browser() 报清晰错误） */
+function resolveTool(envName, candidates, fallback, what) {
+  const fromEnv = process.env[envName];
+  if (fromEnv) {
+    if (!existsSync(fromEnv)) {
+      throw new Error(
+        `${envName} 指向的文件不存在：${fromEnv}` +
+          `\n（${what}；改成真实路径，或清掉这个变量改用自动查找）`,
+      );
+    }
+    return fromEnv;
+  }
+  return candidates.find((p) => existsSync(p)) || fallback;
+}
+
+const CHROME = resolveTool("E2E_CHROME", CHROME_CANDIDATES, "google-chrome", "浏览器可执行文件");
+const PW = resolveTool("PLAYWRIGHT_CORE", PW_CANDIDATES, "playwright-core", "playwright-core 的 index.js");
 
 const YEAR = 2026;
 
@@ -320,9 +346,32 @@ async function seed() {
 }
 
 async function browser() {
-  const mod = await import(PW);
+  let mod;
+  try {
+    mod = await import(PW);
+  } catch (err) {
+    throw new Error(
+      `加载 playwright-core 失败（当前解析到：${PW}）。\n` +
+        `本仓库故意不把 playwright 装进 package.json（见文件头注释），换机器要自己指定：\n\n` +
+        `  PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core/index.js node ci/mobile-print-check.mjs mobile\n` +
+        `（也可以在本目录临时装一个：pnpm add -D playwright-core；但别把 package.json 的改动提交）\n` +
+        `原始错误：${err?.message || err}`,
+    );
+  }
   const chromium = mod.chromium || mod.default?.chromium;
-  return chromium.launch({ executablePath: CHROME, headless: true });
+  if (!chromium) {
+    throw new Error(`playwright-core 里没有 chromium 导出（当前解析到：${PW}）——是不是指到了别的包？`);
+  }
+  try {
+    return await chromium.launch({ executablePath: CHROME, headless: true });
+  } catch (err) {
+    throw new Error(
+      `启动浏览器失败（executablePath=${CHROME}）。\n` +
+        `请用 E2E_CHROME 指到一个真实存在的 Chrome/Chromium：\n` +
+        `  E2E_CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" node ci/mobile-print-check.mjs mobile\n` +
+        `原始错误：${err?.message || err}`,
+    );
+  }
 }
 
 /** 用 /api/auth login 拿到的 cookie 直接进已登录态（headless 里不用走登录界面） */
@@ -729,6 +778,8 @@ async function printCheck() {
   console.log(JSON.stringify(results, null, 1));
   const bad = results.filter((r) => !r.ok);
   console.log(`\n合格 ${results.length - bad.length}/${results.length}` + (bad.length ? `，不合格：${bad.map((x) => x.name).join("、")}` : ""));
+  // 自检：有不合格用例（或一个都没跑）→ 非 0 退出，否则「合格 0/0」也会当作通过
+  if (bad.length || !results.length) process.exitCode = 1;
 }
 
 /** 调试：看某页为什么停在「加载中…」（打印 console 与失败请求） */
@@ -823,6 +874,10 @@ async function pageAudit() {
         path: `${outDir}/${kase.file}.pdf`,
       });
       const detail = pdfPageTexts(pdf);
+      // 自检：一页都解析不出来 = ci/print-pdf.mjs 的解析失效（换 Chrome 版本后内容流/CMap 变了）。
+      // 这时「0 页 / 0mm 留白」跟「排版很好」长得一模一样，必须按失败处理，不能当成结果。
+      if (!detail.length)
+        throw new Error("PDF 一页都没解析出来（ci/print-pdf.mjs 解析失效？换 Chrome 版本后内容流/CMap 变了）");
       rows.push({
         name: kase.name,
         pages: detail.length,
@@ -854,6 +909,11 @@ async function pageAudit() {
     for (const pg of r.detail) console.log(`    第${pg.page}页 首行「${String(pg.head).slice(0, 60)}」/ 末行「${String(pg.tail).slice(0, 40)}」`);
   }
   console.log("\n" + JSON.stringify(rows, null, 1));
+  // 自检：一个用例都没量出结果（全 error 或没匹配到用例）→ 非 0 退出，别让「什么都没量到」被当成通过
+  if (!rows.some((r) => !r.error)) {
+    console.error(`\n!! 没有任何用例量出结果（共 ${rows.length} 个）—— 检查 DATA_DIR / 端口 / 用例名过滤`);
+    process.exitCode = 1;
+  }
 }
 
 const cmd = process.argv[2];

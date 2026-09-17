@@ -14,11 +14,12 @@ import { AccountsCard } from "~/components/settings/accounts-card";
 import { BatchRules } from "~/components/settings/batch-rules";
 import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear, confirmRemoveYear } from "~/lib/dates";
-import { pushNasBackup, pullNasLedger, flushPendingLedger } from "~/lib/nas-sync";
+import { pushNasBackup } from "~/lib/nas-sync";
 import { nasEnabled } from "~/lib/nas-flag";
 import { backupKeep } from "~/lib/backup-keep";
 import { clearAllPhotos } from "~/lib/photos";
 import { authStatus, authOp } from "~/lib/auth";
+import { confirmLeaveUnsaved } from "~/lib/unsaved";
 
 function SettingsPage() {
   const store = useApp();
@@ -35,6 +36,9 @@ function SettingsPage() {
   // 备份 / 影像归入都是「点一下、等几秒」的操作：请求期间禁用按钮，
   // 否则连点两下会生成两份备份、或同时跑两遍归入（1.8.1）
   const [backingUp, setBackingUp] = React.useState(false);
+  // 备份内容回执（F2 / A13）：备份成功后写「已备份 N 人 / M 笔发放 / K 条报销 / J 份合同」，
+  // 让用户肉眼核对这份文件里到底有没有报销和合同
+  const [backupInfo, setBackupInfo] = React.useState("");
   const [adopting, setAdopting] = React.useState(false);
   
   React.useEffect(() => {
@@ -65,7 +69,7 @@ function SettingsPage() {
               const filled = Array.from({ length: 12 }, (_, i) => monthStatus(attendance, y, i + 1).filled > 0).filter(Boolean).length;
               return (
                 <li key={y} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line px-3 py-2">
-                  <button type="button" className="text-left text-sm" onClick={() => setYear(y)}>
+                  <button type="button" className="text-left text-sm" onClick={() => { if (!confirmLeaveUnsaved("换年份后这张月表会重新填")) return; setYear(y); }}>
                     <span className="font-medium">{y} 年</span>
                     <span className="ml-2 text-xs text-muted">
                       {filled}/12 月已录{y === year ? " · 当前" : ""}
@@ -171,8 +175,9 @@ function SettingsPage() {
                   if (backingUp) return;
                   setBackingUp(true);
                   try {
-                    const fname = await pushNasBackup();
-                    toast.success(`已备份到 data/backups/${fname}`);
+                    const r = await pushNasBackup();
+                    toast.success(`已备份到 data/backups/${r.filename}`);
+                    setBackupInfo(r.summary);
                   } catch {
                     toast.error("备份失败");
                   } finally {
@@ -247,6 +252,12 @@ function SettingsPage() {
               )
             )}
           </div>
+          {/* F2：备份内容回执 —— 「已备份 N 人 / M 笔发放 / K 条报销 / J 份合同」，肉眼核对 */}
+          {backupInfo ? (
+            <p className="mt-2 text-xs text-muted" data-testid="backup-info">
+              {backupInfo}
+            </p>
+          ) : null}
         </section>
       </Can>
       {/* 影像归入本台账：老版本的影像放在全局目录里，按台账分区后需要一次性归入 */}

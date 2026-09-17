@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { persistOn } from "~/lib/paths.server";
+import { DOC_CN, persistOn } from "~/lib/paths.server";
 import { docIdWritable, findDoc, removeDocFile, saveDoc } from "~/lib/assets.server";
-import { withTenant } from "~/lib/accounts.server";
+import { auditTenantDelete, gateTenant, needDenied, runInTenant, withTenant } from "~/lib/accounts.server";
 
 function kindOf(v: string | null) {
   if (v === "report" || v === "invoice" || v === "receipt" || v === "attendance" || v === "contract" || v === "expense" || v === "payout" || v === "insurance") return v;
@@ -63,6 +63,11 @@ export const Route = createFileRoute("/api/doc")({
       },
       PUT: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
+        // A4（1.8.14）：先鉴权（**不读 body**），读完 body 拿到 kind 再判该模块的编辑权限。
+        // 原来 `await request.formData()` 在前、withTenant 在后 —— 未登录的人反复发 50MB 上传
+        // 就能把内存吃满（CWE-770/400）。权限位（kindEdit(kind)）与 4xx 语义不变。
+        const t = await gateTenant(request);
+        if (t instanceof Response) return t;
         // 读 body 前先检查大小：合同/报量等文件单文件 50MB
         const len = Number(request.headers.get("content-length") || 0);
         if (len > 50 * 1024 * 1024) return Response.json({ error: "文件太大，最大 50MB" }, { status: 413 });
@@ -85,14 +90,12 @@ export const Route = createFileRoute("/api/doc")({
         if (file.size > 50 * 1024 * 1024) return Response.json({ error: "文件太大，最大 50MB" }, { status: 413 });
         const buf = Buffer.from(await file.arrayBuffer());
         const replace = String(form.get("replace") || "") === "1";
-        return withTenant(
-          request,
-          async () => {
-            const saved = await saveDoc(id, kind, buf, file.name, { replace });
-            return Response.json({ ok: true, fileName: saved || file.name });
-          },
-          kindEdit(kind),
-        );
+        const denied = await needDenied(request, t, kindEdit(kind));
+        if (denied) return denied;
+        return runInTenant(t, async () => {
+          const saved = await saveDoc(id, kind, buf, file.name, { replace });
+          return Response.json({ ok: true, fileName: saved || file.name });
+        });
       },
       DELETE: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
@@ -102,8 +105,14 @@ export const Route = createFileRoute("/api/doc")({
         if (!id || !kind) return Response.json({ ok: false }, { status: 400 });
         return withTenant(
           request,
-          async () => {
+          async (t) => {
             await removeDocFile(id, kind);
+            // A5（1.8.14）：删除单据影像必须在**服务端**留痕（客户端漏报/失败就查不出来了）
+            await auditTenantDelete(t, {
+              action: "删除影像",
+              module: "影像资料",
+              detail: `${DOC_CN[kind] || kind} ${id}（服务端记录）`,
+            });
             return Response.json({ ok: true });
           },
           kindEdit(kind),

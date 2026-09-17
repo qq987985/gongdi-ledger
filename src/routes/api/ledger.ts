@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { gzipSync } from "node:zlib";
 import { persistOn } from "~/lib/paths.server";
-import { ledgerRevisionValue, ledgerUnreadable, readLedger, writeLedger } from "~/lib/nas-fs.server";
+import { ledgerRevisionValue, ledgerUnreadable, readLedger, writeLedgerEx } from "~/lib/nas-fs.server";
 import { ledgerPayloadSummary, validateLedgerPayload } from "~/lib/ledger-schema.server";
 import { logServer } from "~/lib/log.server";
 import { withTenant } from "~/lib/accounts.server";
@@ -72,71 +72,78 @@ export const Route = createFileRoute("/api/ledger")({
       },
       PUT: async ({ request }) => {
         if (!persistOn()) return Response.json({ persist: false }, { status: 400 });
-        const encoding = request.headers.get("content-encoding");
-        const unknown = [...new Set(encodingTokens(encoding).filter((t) => !GZIP_ENCODINGS.has(t)))];
-        if (unknown.length) {
-          // 不认识的编码是「客户端发错了」：回 400 并说清楚，不让它进到解压/解析里变成 500
-          await logServer("warn", "台账写入被拒：不支持的 content-encoding", { encoding });
-          return Response.json(
-            {
-              error: `不支持的请求压缩格式（content-encoding: ${unknown.join(", ")}），请用 gzip 或不压缩`,
-              invalid: true,
-            },
-            { status: 400 },
-          );
-        }
-        let buf: Buffer;
-        // content-length 粗筛：压缩后的字节数已经超过上限时（gzip 不可能把数据压得比原样还大多少），
-        // 连 body 都不用读进来 —— 先挡住「客户端老实报了大体积」的情况
-        const maxBytes = ledgerMaxBytes();
-        const declared = Number(request.headers.get("content-length") || 0);
-        if (Number.isFinite(declared) && declared > maxBytes) {
-          await logServer("warn", "台账写入被拒：content-length 超过上限", {
-            contentLength: declared,
-            maxMb: Math.floor(maxBytes / 1024 / 1024),
-          });
-          return Response.json(
-            { error: `请求体超过服务器上限（${Math.floor(maxBytes / 1024 / 1024)}MB），已拒绝保存`, invalid: true },
-            { status: 413 },
-          );
-        }
-        try {
-          buf = Buffer.from(await request.arrayBuffer());
-        } catch {
-          return Response.json({ error: "读取请求体失败", invalid: true }, { status: 400 });
-        }
-        // 解压时用 maxOutputLength 限制**解压后**大小：100MB 全零压成 ~100KB 也进不来（解压炸弹）
-        const decoded = decodeRequestBody(buf, encoding, maxBytes);
-        if (!decoded.ok) {
-          // 超限是「内容太大」（413），格式错是「客户端发错了」（400）—— 两种都带可读原因、都不写盘
-          await logServer("warn", `台账写入被拒：${decoded.reason === "too-large" ? "解压/解析后超过上限" : "请求体解压失败"}`, {
-            encoding,
-            status: decoded.status,
-            maxMb: Math.floor(maxBytes / 1024 / 1024),
-            receivedBytes: buf.length,
-          });
-          return Response.json({ error: decoded.error, invalid: true, tooLarge: decoded.reason === "too-large" }, {
-            status: decoded.status,
-          });        }
-        // 非 JSON / 空 body 以前会直接抛到框架层变成 500；这里是"客户端发错了"，应该 400
-        const text = decoded.text;
-        let body: Record<string, unknown> & Partial<import("~/lib/types").LedgerState>;
-        try {
-          body = JSON.parse(text) as Record<string, unknown> & Partial<import("~/lib/types").LedgerState>;
-        } catch {
-          return Response.json({ error: "请求体不是合法 JSON", invalid: true }, { status: 400 });
-        }
-        // 结构校验：服务端过去只查权限、不看内容，一个客户端 bug 就能把整本台账写成 {}
-        const bad = validateLedgerPayload(body);
-        if (bad) {
-          await logServer("error", "台账写入被拒：结构不合法", { reason: bad, payload: ledgerPayloadSummary(body) });
-          return Response.json({ error: bad, invalid: true }, { status: 400 });
-        }
+        // A4（1.8.14）：鉴权必须发生在**读 body 之前**。原来先 `await request.arrayBuffer()`
+        // 把最多 32MB 读进内存、之后才 withTenant —— 未登录的人反复发大 body 就能吃满内存
+        // （CWE-770/400）。现在整个请求体处理都在鉴权后的回调里；权限位与 4xx 语义不变。
         return withTenant(
           request,
           async () => {
+            const encoding = request.headers.get("content-encoding");
+            const unknown = [...new Set(encodingTokens(encoding).filter((t) => !GZIP_ENCODINGS.has(t)))];
+            if (unknown.length) {
+              // 不认识的编码是「客户端发错了」：回 400 并说清楚，不让它进到解压/解析里变成 500
+              await logServer("warn", "台账写入被拒：不支持的 content-encoding", { encoding });
+              return Response.json(
+                {
+                  error: `不支持的请求压缩格式（content-encoding: ${unknown.join(", ")}），请用 gzip 或不压缩`,
+                  invalid: true,
+                },
+                { status: 400 },
+              );
+            }
+            let buf: Buffer;
+            // content-length 粗筛：压缩后的字节数已经超过上限时（gzip 不可能把数据压得比原样还大多少），
+            // 连 body 都不用读进来 —— 先挡住「客户端老实报了大体积」的情况
+            const maxBytes = ledgerMaxBytes();
+            const declared = Number(request.headers.get("content-length") || 0);
+            if (Number.isFinite(declared) && declared > maxBytes) {
+              await logServer("warn", "台账写入被拒：content-length 超过上限", {
+                contentLength: declared,
+                maxMb: Math.floor(maxBytes / 1024 / 1024),
+              });
+              return Response.json(
+                { error: `请求体超过服务器上限（${Math.floor(maxBytes / 1024 / 1024)}MB），已拒绝保存`, invalid: true },
+                { status: 413 },
+              );
+            }
+            try {
+              buf = Buffer.from(await request.arrayBuffer());
+            } catch {
+              return Response.json({ error: "读取请求体失败", invalid: true }, { status: 400 });
+            }
+            // 解压时用 maxOutputLength 限制**解压后**大小：100MB 全零压成 ~100KB 也进不来（解压炸弹）
+            const decoded = decodeRequestBody(buf, encoding, maxBytes);
+            if (!decoded.ok) {
+              // 超限是「内容太大」（413），格式错是「客户端发错了」（400）—— 两种都带可读原因、都不写盘
+              await logServer("warn", `台账写入被拒：${decoded.reason === "too-large" ? "解压/解析后超过上限" : "请求体解压失败"}`, {
+                encoding,
+                status: decoded.status,
+                maxMb: Math.floor(maxBytes / 1024 / 1024),
+                receivedBytes: buf.length,
+              });
+              return Response.json({ error: decoded.error, invalid: true, tooLarge: decoded.reason === "too-large" }, {
+                status: decoded.status,
+              });        }
+            // 非 JSON / 空 body 以前会直接抛到框架层变成 500；这里是"客户端发错了"，应该 400
+            const text = decoded.text;
+            let body: Record<string, unknown> & Partial<import("~/lib/types").LedgerState>;
+            try {
+              body = JSON.parse(text) as Record<string, unknown> & Partial<import("~/lib/types").LedgerState>;
+            } catch {
+              return Response.json({ error: "请求体不是合法 JSON", invalid: true }, { status: 400 });
+            }
+            // 结构校验：服务端过去只查权限、不看内容，一个客户端 bug 就能把整本台账写成 {}
+            const bad = validateLedgerPayload(body);
+            if (bad) {
+              await logServer("error", "台账写入被拒：结构不合法", { reason: bad, payload: ledgerPayloadSummary(body) });
+              return Response.json({ error: bad, invalid: true }, { status: 400 });
+            }
             const expected = request.headers.get("if-match");
-            const result = await writeLedger(body, expected === null ? undefined : expected);
+            // A2（1.8.14）：写成功后用**服务端读视图**的版本号当响应头（与 GET / CAS 同源）。
+            // 原来这里算的是 `ledgerRevisionValue(body)`（请求体的 hash），而 readLedger() 会补合同扫描件名
+            // 等只在视图里的字段 → 客户端存下的基准对不上，下一次保存必然假冲突 409，弹窗还诱导
+            // 用户点「以本机覆盖」（真丢别人的改动）。
+            const { result, revision } = await writeLedgerEx(body, expected === null ? undefined : expected);
             if (result === "unreadable") {
               await logServer("error", "拒绝覆盖损坏的台账文件", {});
               return Response.json({ error: CORRUPT_MSG, corrupt: true }, { status: 503 });
@@ -146,7 +153,7 @@ export const Route = createFileRoute("/api/ledger")({
               return Response.json({ error: "台账已被其他设备修改，请重新加载后再保存", conflict: true }, { status: 409 });
             }
             const response = Response.json({ ok: true });
-            response.headers.set("X-Ledger-Revision", ledgerRevisionValue(body));
+            if (revision) response.headers.set("X-Ledger-Revision", revision);
             return response;
           },
           "ledger.manage",

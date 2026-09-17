@@ -1,6 +1,12 @@
 import { uid } from "./utils";
 import { round2 } from "./wage";
 import { numOrWarn } from "./num";
+// 合同三型（ContractRecord / EntryKind / ContractEntry）的定义在 `./types`（唯一模型来源，§3）。
+// 为什么定义放那边（G2 / 专家评审 A2）：本文件要 wage 的 round2（值），wage 要 types 的 Person（类型），
+// types 原来又要本文件的合同类型 —— 三者互指形成 import 环（§12 红线）。
+// 类型下沉到叶子 types.ts 之后三个方向都是单向；这里再导出一次，调用点（~/lib/contracts / ./contracts）不受影响。
+import type { ContractEntry, ContractRecord, EntryKind } from "./types";
+export type { ContractEntry, ContractRecord, EntryKind } from "./types";
 
 export const CONTRACT_STATUSES = [
   "在建",
@@ -31,31 +37,6 @@ export function normalizeContractStatus(raw: unknown): string {
   if (/完成/.test(s)) return "完成";
   if (/结算/.test(s)) return "分包结算";
   return "在建";
-}
-
-export interface ContractRecord {
-  id: string;
-  year: number;
-  code: string;
-  name: string;
-  contractor: string;
-  subcontractor: string;
-  contractAmount: number;
-  taxRate: number;
-  reportTaxMode: string;
-  payRatio: number;
-  warrantyStart: string;
-  warrantyEnd: string;
-  hasDeposit: boolean;
-  depositAmount: number;
-  manager: string;
-  status: string;
-  prelimAmount: number;
-  settleReceivable: number;
-  remark: string;
-  hasPaper?: boolean;
-  noContractReason?: string;
-  scanFileName?: string;
 }
 
 export function emptyContract(year: number): ContractRecord {
@@ -99,29 +80,13 @@ export function splitTax(amount: number, taxRate: number, mode: string): TaxSpli
   return { entered: n, excl: n, incl: round2(n * (1 + rate)) };
 }
 
-export type EntryKind = "report" | "invoice" | "receipt";
-
-export interface ContractEntry {
-  id: string;
-  contractId: string;
-  kind: EntryKind;
-  date: string;
-  amount: number;
-  amountExcl: number;
-  taxRate: number;
-  workerPay: number;
-  workerPayDate: string;
-  payTo: "" | "worker" | "sub";
-  no: string;
-  remark: string;
-  fileName: string;
-  workerFileName: string;
-}
-
 export function normalizeEntry(e: Partial<ContractEntry> & { kind: EntryKind; contractId: string }): ContractEntry {
   // 明细金额可能来自 Excel 单元格 / 表单 / 旧版持久化数据（运行时是字符串），
   // 用容错解析：读不出来才按 0，并留一条 warn，不再静默把「1,200」写成 0。
-  const amount = numOrWarn(e.amount, 0, "合同明细.金额");
+  // 入库统一取整到分（专家评审 A-2，与报销/发放/工资同口径）：亚分金额会让
+  // 明细逐行之和与合同表尾合计差 0.01。这里是合同明细的唯一入口 ——
+  // store.addContractEntry / updateContractEntry 与 Excel 导入三条路径都经它。
+  const amount = round2(numOrWarn(e.amount, 0, "合同明细.金额"));
   const taxRate = numOrWarn(e.taxRate, 0, "合同明细.税率");
   let amountExcl = numOrWarn(e.amountExcl, 0, "合同明细.不含税金额");
   if (e.kind === "invoice" && amount && !amountExcl && taxRate > 0)

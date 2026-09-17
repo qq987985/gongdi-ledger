@@ -48,7 +48,9 @@ export const ledgerPayloadSchema = z
     schemaVersion: num.optional(),
     year: num.optional(),
     years: z.array(num).optional(),
-    accessHash: str.optional(),
+    // accessHash（A3，1.8.14）：**故意不写进 schema** —— 它是旧的「开机口令 hash」，
+    // 历史上还能直接登录成管理员。写入时由 nas-fs.server.ts 的 dropLegacyAccessHash 丢弃、
+    // 读视图里也不再返回；老客户端多发这个字段依然放行（passthrough），只是不再落盘。
     people: z.array(person).optional(),
     attendance: z.array(attendance).optional(),
     attendanceDocs: z.array(attendanceDoc).optional(),

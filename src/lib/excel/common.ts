@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import { uid } from "../utils";
 import { parseDateYmd } from "../dates";
 import { numOr, numOrWarn, parseNum, parseNumber } from "../num";
-import { receiverOf } from "../receiver";
+import { nameKey, receiverOf } from "../receiver";
 import type { Expense, Payment } from "../types";
 
 export { numOr, numOrWarn, parseNum, parseNumber };
@@ -320,7 +320,9 @@ export function planAttendanceImport<T extends { year?: number; month?: number; 
   return rows.map((row) => {
     const year = row.year || targetYear;
     const month = keepMonths ? row.month || targetMonth : targetMonth;
-    const conflict = existing.some((a) => a.year === year && a.month === month && a.name === row.name);
+    // 姓名比较两侧都过 nameKey（A-1）：Excel 导入的姓名已 trim，台账里的存量姓名可能带空格，
+    // 不对上就会把同一个人的同一月当成「新行」再插一遍
+    const conflict = existing.some((a) => a.year === year && a.month === month && nameKey(a.name) === nameKey(row.name));
     return { row, year, month, conflict };
   });
 }

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { persistOn } from "~/lib/paths.server";
 import { appendAudit, auditUnreadable, readAudit, writeAudit } from "~/lib/nas-fs.server";
 import { logServer } from "~/lib/log.server";
-import { resolveTenant, withTenant } from "~/lib/accounts.server";
+import { resolveTenant, auditTenantDelete, withTenant } from "~/lib/accounts.server";
 
 export const Route = createFileRoute("/api/audit")({
   server: {
@@ -88,12 +88,25 @@ export const Route = createFileRoute("/api/audit")({
         const url = new URL(request.url);
         const id = url.searchParams.get("id") || "";
         const ids = (url.searchParams.get("ids") || id).split(",").filter(Boolean);
-        return withTenant(request, async () => {
+        return withTenant(request, async (t) => {
           const list = await readAudit();
           if (!list.length)
             return Response.json({ error: "读取操作记录失败，已拒绝写入（避免清空历史）" }, { status: 409 });
-          await writeAudit(list.filter((e) => !ids.includes(e.id)));
-          return Response.json({ ok: true });
+          const doomed = list.filter((e) => ids.includes(e.id));
+          // A5（1.8.14）：删记录这件事本身必须先留痕（谁删了、删了几条、哪些 id），
+          // 而且这条留痕不能被同一次请求删掉 —— 先 appendAudit 写进文件，再重新读一遍列表做过滤；
+          // 新记录的 id 是服务端刚生成的、不在用户传来的 ids 里。
+          await auditTenantDelete(t, {
+            action: "删除操作记录",
+            module: "审计",
+            detail: `删除 ${doomed.length} 条：${doomed
+              .map((e) => e.id)
+              .join(",")
+              .slice(0, 280)}`,
+          });
+          const after = await readAudit();
+          await writeAudit(after.filter((e) => !ids.includes(e.id)));
+          return Response.json({ ok: true, removed: doomed.length });
         });
       },
     },

@@ -14,6 +14,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { countHits, expectMinHits } from "./min-hits";
 
 const repo = (p: string) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 const src = (p: string) => readFile(repo(p), "utf8");
@@ -31,7 +32,7 @@ test("约定：导出页写的每个 kind，服务端都要认识（防止「总
   const page = await src("src/routes/export.tsx");
   const server = await src("src/routes/api/file/$kind.ts");
   const kinds = [...page.matchAll(/kind:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]);
-  assert.equal(kinds.length >= 5, true, `导出页应列出多项导出，实际解析到 ${kinds.length}`);
+  expectMinHits("api 守卫：导出页列出的 kind 数", kinds.length, 5, "现有 9 个导出项");
   const missing = kinds.filter((k) => !server.includes(`"${k}"`));
   assert.deepEqual(missing, [], `这些 kind 客户端会请求、服务端却没有任何分支：${missing.join("、")}`);
 });
@@ -64,13 +65,17 @@ test("约定：所有读 body 的接口都要有 try/catch（非 JSON 不该变�
     "src/lib/accounts.server.ts",
   ];
   const bad: string[] = [];
+  let parseSites = 0;
   for (const f of files) {
     const s = stripComments(await src(f));
     for (const m of s.matchAll(/await request\.(json|formData)\(\)/g)) {
+      parseSites += 1;
       const before = s.slice(Math.max(0, (m.index ?? 0) - 220), m.index ?? 0);
       if (!/\btry\s*\{/.test(before)) bad.push(`${f}: ${m[0]}`);
     }
   }
+  // 扫描命中数下限自检（专家评审 C2）：文件改名/正则失效时下面这条会一条都扫不到而「假绿」
+  expectMinHits("api 守卫：await request.json()/formData() 的解析点数", parseSites, 5, "现有 8 处以上");
   assert.deepEqual(bad, [], `这些地方直接 await 解析 body，非 JSON 请求会 500：\n${bad.join("\n")}`);
 });
 

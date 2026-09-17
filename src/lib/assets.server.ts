@@ -7,7 +7,9 @@ import { existsSync } from "node:fs";
 import { extname, join, sep } from "node:path";
 import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { logServer } from "./log.server";
-import type { LedgerRead } from "./nas-fs.server";
+// 影像层**不 import 台账存储**（§12.2）：这个类型在叶子 `./types` 里定义。
+// 要台账内容时由调用方传入（`adoptLegacyAssets(led)`），不是反向依赖 nas-fs.server（G2 / 评审 A2）。
+import type { LedgerRead } from "./types";
 import {
   atomicWriteFile,
   bookAssetsRoot,

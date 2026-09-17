@@ -1,5 +1,6 @@
 import type * as XLSX from "xlsx";
 import { uid } from "../utils";
+import { round2 } from "../wage";
 import type { Payment } from "../types";
 import {
   isTotalRow,
@@ -24,7 +25,9 @@ export function rowToPayment(row: Row): Payment | null {
     owner,
     receiver,
     date: normalizeDate(pick(row, ["发放日期", "日期"])),
-    amount: parseNumber(pick(row, ["发放金额(元)", "发放金额", "金额"])),
+    // 导入端也取整到分（专家评审 A-2）：Excel 里是公式结果（如 1234.567）时，
+    // 不取整会让「已发小计 + 待发小计」与表尾总计差 0.01
+    amount: round2(parseNumber(pick(row, ["发放金额(元)", "发放金额", "金额"]))),
     source: pick(row, ["发放方", "来源"]),
     remark: pick(row, ["备注"]),
   };

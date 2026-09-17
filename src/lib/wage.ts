@@ -186,6 +186,28 @@ export function monthPay(
   };
 }
 
+/**
+ * 金额取整到分（**全库唯一实现**：展示 / 打印 / Excel / 工资计算都靠它）。
+ *
+ * 1.8.14 修（专家评审 B-1）：旧写法 `Math.round((n + Number.EPSILON) * 100) / 100`
+ * 的 EPSILON「修正」只在 `0 ≤ n < 2` 生效（`Number.EPSILON` 是绝对量，而浮点间距 ULP(n)
+ * 随量级增长 —— 实测 `2.675 + Number.EPSILON === 2.675`），且负数方向反
+ * （`Math.round(-100.5) === -100`，向 +∞ 取整）→ 半分进位在同一处给出三种结果：
+ *
+ *   round2(1.005) = 1.01    round2(8.075) = 8.07（应为 8.08）    round2(-1.005) = -1（应为 -1.01）
+ *
+ * 现在：取绝对值放大到「分」，补一个**半分钱量级**的容差 `1e-6`，再按符号还原 ——
+ * 与量级无关、负数对称（-1.005 → -1.01），并顺手消掉 `-0`
+ * （负数金额是常态：扣款 > 应发、开票 − 已付、未发为负）。
+ *
+ * 取舍：`1e-6`（= 1e-8 元）是「按十进制直觉半个分进位」的容差，代价是真值恰好
+ * `8.074999x` 也会进位成 8.08 —— 二进制浮点没有完美解，两害相权取「与十进制直觉一致」。
+ * 非有限数（NaN / Infinity）一律回 0，别让 NaN 传进金额链。
+ */
 export function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
+  if (!Number.isFinite(n)) return 0;
+  const sign = n < 0 ? -1 : 1;
+  const cents = Math.round(Math.abs(n) * 100 + 1e-6);
+  if (cents === 0) return 0;
+  return (sign * cents) / 100;
 }

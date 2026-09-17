@@ -7,7 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Input, Label } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { DocActions, prepareNamedFile, setDoc } from "~/components/doc-actions";
-import { money, formatCardNo, uid } from "~/lib/utils";
+import { uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
 import { round2 } from "~/lib/wage";
 import { expenseFormFromDraft } from "~/lib/expense-rules";
@@ -44,12 +44,13 @@ export function ExpenseEditor({
   names: string[];
   payees: any[];
   onCancel: () => void;
-  onSave: (row: any) => void;
+  /** 返回 false = 这次没存下去（只读账号被拦下）。此时**不许**复位脏标记 */
+  onSave: (row: any) => void | boolean;
   onDelete: () => void;
   onPrintSingle: (row: any) => void;
 }) {
   const [c, setC] = React.useState(() => expenseFormFromDraft(draft));
-  const { markDirty, requestClose } = useGuardedClose(onCancel);
+  const { markDirty, resetDirty, requestClose } = useGuardedClose(onCancel);
   // 1.8.8 E11：随 draft 重置本地副本。原来只在挂载时取一次初值，
   // 于是「编辑 A 时点新增报销」会把 A 的项目/金额带进新表单，保存后 A 被同 id 覆盖而消失。
   // 只要目标记录的 id 变了（新增每次 uid() 都是新的）就重新取初值。
@@ -124,11 +125,14 @@ export function ExpenseEditor({
     const saved = (await setDoc(vid, "expense", pack.file, { replace: pack.replace })) || pack.file.name;
     const next = { ...c, id: c.id || uid(), voucherId: vid, voucherFileName: saved };
     setC(next);
-    onSave(next);
+    // 一张凭证可能挂到同批多笔上：整批都存下去了才复位脏标记（B9）
+    let ok = true;
+    if (onSave(next) === false) ok = false;
     for (const e of group) {
       if (e.id === next.id) continue;
-      onSave({ ...e, voucherId: vid, voucherFileName: saved });
+      if (onSave({ ...e, voucherId: vid, voucherFileName: saved }) === false) ok = false;
     }
+    if (ok) resetDirty();
     toast.success(group.length > 1 ? `已保存购买凭证，并挂到勾选的 ${group.length} 笔` : `已保存 ${saved}`);
   }
   async function uploadPayout(file: File) {
@@ -155,11 +159,14 @@ export function ExpenseEditor({
       payoutDate: c.status === "已报销" ? c.payoutDate || localToday() : "",
     };
     setC(next);
-    onSave(next);
+    // 一张打款凭证同批共用：整批都存下去了才复位脏标记（B9）
+    let ok = true;
+    if (onSave(next) === false) ok = false;
     for (const e of group) {
       if (e.id === next.id) continue;
-      onSave({ ...e, payoutId: pid, payoutFileName: savedPay });
+      if (onSave({ ...e, payoutId: pid, payoutFileName: savedPay }) === false) ok = false;
     }
+    if (ok) resetDirty();
     toast.success(group.length > 1 ? `已保存打款凭证，同批 ${group.length} 笔共用` : `已保存 ${savedPay}`);
   }
   return (
@@ -199,13 +206,16 @@ export function ExpenseEditor({
                   return;
                 }
                 if (needsVoucher(c.payMethod) && !c.voucherFileName && !confirm("购买不是现金，还没上传凭证。仍要保存？")) return;
-                onSave({
-                  ...c,
-                  id: c.id || uid(),
-                  payAccount: formatPayAccount(c.payBank, c.payCardNo),
-                  payoutDate: c.status === "已报销" ? c.payoutDate || localToday() : "",
-                  amount: round2(c.amount || c.qty * c.price),
-                });
+                if (
+                  onSave({
+                    ...c,
+                    id: c.id || uid(),
+                    payAccount: formatPayAccount(c.payBank, c.payCardNo),
+                    payoutDate: c.status === "已报销" ? c.payoutDate || localToday() : "",
+                    amount: round2(c.amount || c.qty * c.price),
+                  }) !== false
+                )
+                  resetDirty();
               }}
             >
               保存报销信息
@@ -389,81 +399,3 @@ export function ExpenseEditor({
     </div>
   );
 }
-
-function ExpenseSheets({ rows, showVoucher }: { rows: any[]; showVoucher?: boolean }) {
-  if (!rows.length) return null;
-  const today = localToday();
-  const total = rows.reduce((s, e) => s + (e.amount || 0), 0);
-  const claimants = [...new Set(rows.map((e) => e.claimant).filter(Boolean))];
-  const forWhoms = [...new Set(rows.map((e) => e.forWhom).filter(Boolean))];
-  const banks = [...new Set(rows.map((e) => (e.payBank || "").trim()).filter(Boolean))];
-  const cards = [...new Set(rows.map((e) => (e.payCardNo || "").trim()).filter(Boolean))];
-  const cols = showVoucher ? ["序号", "项目", "购买时间", "金额", "备注", "票据"] : ["序号", "项目", "购买时间", "金额", "备注"];
-  const emptyCells = showVoucher ? 2 : 1;
-  return (
-    <div className="print-only space-y-8 text-black">
-      <article className="statement border border-black p-4">
-        <header className="border-b border-black pb-2 text-center">
-          <div className="text-2xl font-semibold tracking-widest">报销单</div>
-        </header>
-        <table className="mt-2 w-full border-collapse text-center text-xs">
-          <thead>
-            <tr>
-              {["报销人", "收款人", "开户行", "打款账户"].map((col) => (
-                <th key={col} className="border border-black px-1 py-1 font-medium">
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              {[claimants.join("、") || "—", forWhoms.join("、") || "—", banks.join("、") || "—", cards.map(formatCardNo).join("、") || "—"].map(
-                (v, i) => (
-                  <td key={i} className="border border-black px-1 py-1">
-                    {v}
-                  </td>
-                ),
-              )}
-            </tr>
-          </tbody>
-        </table>
-        <table className="mt-2 w-full border-collapse text-center text-xs">
-          <thead>
-            <tr>
-              {cols.map((col) => (
-                <th key={col} className="border border-black px-1 py-1 font-medium">
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((e, i) => {
-              const cells = [i + 1, e.name, e.period || e.date, money(e.amount), e.remark || ""];
-              if (showVoucher) cells.push(e.voucherFileName || (e.payMethod === "现金" ? "现金" : "—"));
-              return (
-                <tr key={e.id}>
-                  {cells.map((v, k) => (
-                    <td key={k} className="border border-black px-1 py-1">
-                      {v}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-            <tr>
-              {["合计", "", "", money(total), ...Array(emptyCells).fill("")].map((v, i) => (
-                <td key={i} className="border border-black px-1 py-1 font-medium">
-                  {v}
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-        <p className="mt-4 text-right text-xs">打印日期 {today}</p>
-      </article>
-    </div>
-  );
-}
-

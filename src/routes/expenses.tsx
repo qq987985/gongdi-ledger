@@ -498,7 +498,7 @@ function ExpensesPage() {
                 setCreating(false);
               }}
               onSave={(row: any) => {
-                if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
+                if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return false;
                 upsertExpense(row);
                 setEditing(row);
                 setCreating(false);

@@ -105,6 +105,58 @@ test("更新脚本：新容器启动失败时把老容器拉回来（回滚）�
   assert.match(UPDATER_SCRIPT, /已回滚到原容器/);
 });
 
+/**
+ * B4：`start` 返回 200 只说明「进程被拉起来了」。
+ * 没有就绪校验时，「起来就退出（数据目录写不了 / 环境变量不对）」和「Running 但没在监听」
+ * 都会走到「删老容器 + 删旧镜像 + 记更新成功」，用户看到「更新完页面打不开」且回不去。
+ */
+test("更新脚本：start 之后必须做就绪校验，通过了才删老容器与旧镜像（B4）", () => {
+  const startNext = UPDATER_SCRIPT.indexOf('created.Id+"/start"');
+  const ready = UPDATER_SCRIPT.indexOf("waitReady(created.Id");
+  const removeOld = UPDATER_SCRIPT.indexOf('job.oldId+"?force=true"');
+  const delImg = UPDATER_SCRIPT.indexOf('/images/"+encodeURIComponent(oldImage)');
+  assert.equal(ready > startNext, true, "就绪校验必须排在新容器启动之后");
+  assert.equal(removeOld > ready, true, "删老容器必须晚于就绪校验（否则新容器没起来就回不去了）");
+  assert.equal(delImg > ready, true, "删旧镜像同样必须晚于就绪校验");
+  assert.match(UPDATER_SCRIPT, /新容器已就绪/);
+});
+
+test("更新脚本：就绪校验要认「已退出 / 反复重启 / 健康检查」三种情况，并有稳定窗口兜底（B4）", () => {
+  assert.match(UPDATER_SCRIPT, /async function waitReady/, "就绪校验必须是轮询容器状态");
+  assert.match(UPDATER_SCRIPT, /s\.Running===false/, "容器已退出要判失败（带上 exit code，写进 update.log）");
+  assert.match(UPDATER_SCRIPT, /s\.Restarting/, "反复重启（起不来的典型形态）要判失败");
+  assert.match(UPDATER_SCRIPT, /health==="unhealthy"/, "有健康检查以它为准");
+  assert.match(UPDATER_SCRIPT, /health==="healthy"/);
+  assert.match(
+    UPDATER_SCRIPT,
+    /!health&&Date\.now\(\)>=stableAt/,
+    "更早的镜像没有 HEALTHCHECK：连续 Running 满一个稳定窗口才算就绪（不能只看一次）",
+  );
+  assert.match(UPDATER_SCRIPT, /READY_SECONDS=30/, "等待有上限，别把更新卡死");
+});
+
+test("更新脚本：就绪校验不通过要回滚，并在日志里说清「老容器还在」（B4）", () => {
+  const ready = UPDATER_SCRIPT.indexOf("waitReady(created.Id");
+  const block = UPDATER_SCRIPT.slice(ready, ready + 900);
+  assert.match(block, /!ready\.ok/, "必须有就绪失败的独立分支");
+  assert.match(block, /DELETE.*created\.Id.*force=true/, "失败先把新容器删掉");
+  assert.match(block, /job\.oldId\+"\/start"/, "再把老容器拉回来");
+  assert.match(block, /老容器 .* 仍在运行/, "日志要留下「老容器还在」这句话，用户才知道服务没断");
+  assert.match(block, /throw new Error\("新容器未就绪/, "要把原因抛出去（→ update.log + .gondi-update-error.txt）");
+});
+
+test("应用侧探针要晚于脚本自身的 2500ms 等待，否则探针等于白等（B4）", async () => {
+  const src = await readFile(fileURLToPath(new URL("../src/lib/update/apply.ts", import.meta.url)), "utf8");
+  const delays = [...UPDATER_SCRIPT.matchAll(/setTimeout\(r,(\d+)\)/g)].map((m) => Number(m[1]));
+  const scriptDelay = 2500;
+  assert.equal(delays.includes(scriptDelay), true, `脚本要先等 ${scriptDelay}ms 再动手（这条时序不能丢）`);
+  const probeMatch = src.match(/HELPER_PROBE_MS = (\d+) \+ (\d+)/);
+  assert.ok(probeMatch, "探针等待时间要写成「脚本延时 + 余量」，看得见两者的时序关系");
+  const probe = Number(probeMatch[1]) + Number(probeMatch[2]);
+  assert.equal(probe > scriptDelay, true, `探针等待（${probe}ms）必须大于脚本的 ${scriptDelay}ms`);
+  assert.match(src, /setTimeout\(r, HELPER_PROBE_MS\)/, "探针要用具名常量，别写魔法数字");
+});
+
 test("更新脚本：新容器先用临时名创建，老容器删掉后再改名接管", () => {
   assert.match(UPDATER_SCRIPT, /job\.name\+"-next"/, "先按临时名创建，避开名字占用");
   const rename = UPDATER_SCRIPT.indexOf("/rename?name=");

@@ -12,11 +12,18 @@ import { DocActions, prepareNamedFile, setDoc, attendanceBase } from "~/componen
 import { useApp } from "~/lib/store";
 import { derivedYears, monthStatus, nextYear } from "~/lib/dates";
 import { fallbackPayYear, summarizeYear } from "~/lib/attendance-summary";
+// B-12②（1.8.14）：负出勤天数的判定与文案唯一实现 —— 页面只负责显示与拦截
+import { canSaveMonthDays, negativeDayRows, negativeDaysNotice } from "~/lib/attendance-input";
 import { monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
 import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
+import { confirmLeaveUnsaved } from "~/lib/unsaved";
+import { useUnsavedChanges } from "~/components/unsaved-guard";
 import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import type { AttendanceDoc } from "~/lib/types";
+
+/** 唯一那句提示（F1 / A12）：离开会丢什么，说清楚 */
+const UNSAVED_MSG = "本月考勤有未保存的修改，离开就会丢失";
 
 function AttendancePage() {
   const store = useApp();
@@ -24,11 +31,14 @@ function AttendancePage() {
   const [month, setMonth] = React.useState<number | null>(null);
   const existing = attendance.filter((a) => a.year === year && a.month === (month || 0));
   const upcoming = nextYear(derivedYears(store));
-  // 月表是本地编辑、「保存本月」才落盘：切月/返回总览前要拦住未保存的修改
-  const monthDirtyRef = React.useRef(false);
+  // 月表是本地编辑、「保存本月」才落盘：切月 / 返回总览 / 底部导航 / 浏览器返回 / 刷新关标签 /
+  // 换台账 / 换年份，全部由这一处拦（lib/unsaved.ts + components/unsaved-guard.tsx）。
+  // 只读账号存不下去，不拦（否则「改不了还弹确认」只会让人以为保存成功了）。
+  const canEditMonth = useCanSave("attendance.edit");
+  const [monthDirty, setMonthDirty] = React.useState(false);
+  useUnsavedChanges(monthDirty, UNSAVED_MSG, canEditMonth);
   const leaveMonth = (action: () => void) => {
-    if (monthDirtyRef.current && !window.confirm("本月考勤有未保存的修改，确定离开吗？未保存的修改会丢失。")) return;
-    monthDirtyRef.current = false;
+    if (!confirmLeaveUnsaved()) return;
     action();
   };
   if (month == null)
@@ -73,7 +83,7 @@ function AttendancePage() {
           people={people}
           existing={existing}
           onDirtyChange={(d) => {
-            monthDirtyRef.current = d;
+            setMonthDirty(Boolean(d) && canEditMonth);
           }}
           onSave={(rows) => {
             // 只读账号不落盘、也不弹「已保存」（A 组报告第 17 项同源）
@@ -420,9 +430,14 @@ function MonthTable({
   const totalDeduction = calcRows.reduce((s, r) => s + (r.deduction || 0), 0);
   const missingRule = calcRows.filter((r) => r.known && !r.rule).length;
   const unknown = calcRows.filter((r) => !r.known).length;
+  // B-12②：负出勤天数（自己填的或 Excel 导入的存量数据）—— 月表上方列名字，保存前拦住
+  const negativeRows = negativeDayRows(rows);
+  const negativeNotice = negativeDaysNotice(rows);
   function patch(i: number, key: keyof MonthRow, value: string | number) {
     if (key === "days" && Number(value) > 31)
       toast.warning(`${rows[i]?.name || ""} 的出勤天数填了 ${value}，一个月最多 31 天，请核对`);
+    if (key === "days" && Number(value) < 0)
+      toast.warning(`${rows[i]?.name || ""} 的出勤天数是负数（${value}）：会算成负工资，也不会被年度汇总算作有内容`);
     setRows((prev) => {
       const next = prev.slice();
       const row = { ...next[i] };
@@ -467,6 +482,8 @@ function MonthTable({
         </p>
       ) : null}
       {unknown > 0 ? <p className="text-sm text-warn">有 {unknown} 人不在人员表，无法带入加班规则。请先在人员里添加。</p> : null}
+      {/* B-12②：负出勤天数不能静默（月表页脚会出负工资、年度汇总还会漏掉这个人） */}
+      {negativeRows.length > 0 ? <p className="text-sm text-warn">{negativeNotice}</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
         <div className="flex flex-wrap items-center gap-4">
           <span>
@@ -497,7 +514,21 @@ function MonthTable({
           ) : null}
         </div>
         {dirty ? <span className="text-xs text-warn">有未保存的修改</span> : null}
-        {canEditMonth ? <Button onClick={() => onSave(rows)}>保存本月</Button> : null}
+        {canEditMonth ? (
+          <Button
+            onClick={() => {
+              // B-12②：负数天数的月份不落盘（先把数改对，或删掉那一行）——
+              // 否则负工资会进台账，而且这条记录在年度汇总里等于不存在
+              if (!canSaveMonthDays(rows)) {
+                toast.error(negativeDaysNotice(rows));
+                return;
+              }
+              onSave(rows);
+            }}
+          >
+            保存本月
+          </Button>
+        ) : null}
       </div>
       <WideTable id="attendance-month">
         <table className="wide-table text-sm">
@@ -644,6 +675,10 @@ function MonthFiles({ year, month }: { year: number; month: number }) {
               }
               setRemark("");
               if (uploaded) toast.success(`已上传 ${uploaded} 份`);
+            } catch (err) {
+              // A11（专家评审）：原来只有 try/finally —— 上传失败（403 权限 / 413 文件太大）
+              // 界面毫无反应，用户以为传上去了
+              toast.error(err instanceof Error ? err.message : "上传失败，请检查网络后重试");
             } finally {
               setUploading(false);
             }

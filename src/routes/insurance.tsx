@@ -13,7 +13,16 @@ import { TplLink, InsuranceMemberImport } from "~/components/excel-import";
 import { DocActions, setDoc, renameFile } from "~/components/doc-actions";
 import { useGuardedClose } from "~/lib/confirm-close";
 import type { InsuranceMember, InsurancePolicy } from "~/lib/types";
-import { COMBINED_POLICY_NOTE, datePart, emptyMember, emptyPolicy, isActive, memberDays, prevDayEnd } from "~/lib/insurance";
+import {
+  COMBINED_POLICY_NOTE,
+  datePart,
+  emptyMember,
+  emptyPolicy,
+  isActive,
+  memberDays,
+  periodUnsetNotice,
+  prevDayEnd,
+} from "~/lib/insurance";
 import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
 import { ALL_BUCKETS } from "~/lib/buckets";
@@ -180,6 +189,9 @@ function InsurancePage() {
   const coverage = selected?.coverage || 0;
   const totalPremium = premiumPerPerson * headcount;
   const perPersonDaily = periodDays > 0 ? premiumPerPerson / periodDays : 0;
+  // B-12①（1.8.14）：保险期没填好 → 保险期天数 0 → 本单每人保费静默为 0。
+  // 口径不改，只在屏幕上把原因写出来（打印件表头也带一句，见下方 print-only）。
+  const periodNotice = periodUnsetNotice(selected);
   // 使用天数统一夹紧到保单期，手填越界不参与结算（唯一实现在 lib/insurance.ts）
   const calc = React.useMemo(() => memberCalc(selected), [selected?.id, selected?.periodStart, selected?.periodEnd, premiumPerPerson]);
   const md = calc.days;
@@ -408,6 +420,8 @@ function InsurancePage() {
               <p className="mt-1 text-xs text-subtle">
                 同一人被替换后又回来会分成多段，各段实际天数、保费自动累加（下表按段显示）。
               </p>
+              {/* B-12①：保险期算不出天数时，保费全为 0 不是「本来就该 0」，必须写明原因 */}
+              {periodNotice ? <p className="mt-2 text-sm text-warn">{periodNotice}</p> : null}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <select className="field-select h-9 w-auto" value={leader} onChange={(e) => setLeader(e.target.value)} aria-label="按队长筛选">
                   <option value={ALL_BUCKETS}>全部队长</option>
@@ -596,7 +610,15 @@ function InsurancePage() {
                         const base = parts.join("-") || "保险合同";
                         const named = renameFile(f, base);
                         const id = uid();
-                        const saved = (await setDoc(id, "insurance", named)) || named.name;
+                        // A11（专家评审）：保险合同上传原来没有 catch —— 服务端 413
+                        // 「文件太大，最大 50MB」/ 403 权限不足时界面毫无反应，用户以为传上去了
+                        let saved = "";
+                        try {
+                          saved = (await setDoc(id, "insurance", named)) || named.name;
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : "上传失败，请检查网络后重试");
+                          return;
+                        }
                         setPolicyEdit({ ...policyEdit, contracts: [...policyEdit.contracts, { id, fileName: saved }] });
                         toast.success(`已上传 ${saved}`);
                       }}
@@ -705,6 +727,8 @@ function InsurancePage() {
             <header className="border-b-2 border-black pb-2 text-center">
               <div className="text-xl font-semibold">团体保险人员清单</div>
               <div className="mt-0.5 text-[11px]">{COMBINED_POLICY_NOTE}</div>
+              {/* B-12①：纸面上也要写清「保费为什么全是 0」（保险期没填好），不能只有一串 0 */}
+              {periodNotice ? <div className="mt-0.5 text-[11px] font-semibold">{periodNotice}</div> : null}
             </header>
             <table className="mt-3 w-full border-collapse text-center text-sm">
               <thead>

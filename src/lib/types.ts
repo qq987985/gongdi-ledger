@@ -1,6 +1,58 @@
-import type { ContractRecord, ContractEntry } from "./contracts";
+/**
+ * 合同（含三类明细）的类型定义放**这里**，不放 `contracts.ts`（G2 / 专家评审 A2）。
+ *
+ * 为什么搬：`contracts.ts` 要用 `wage.ts` 的 `round2()`（值导入），`wage.ts` 要用本文件的
+ * `Person`（类型导入），而本文件原来又要 `contracts.ts` 的合同类型 —— 三者互相指，形成
+ * `types ↔ contracts ↔ wage` 的 import 环（§12「禁止循环依赖」；实测 `pnpm test`/`tsc` 都发现不了）。
+ * 根因是「类型定义长在实现模块里」：把这三个类型下沉到**叶子模块**（本文件不 import 任何东西）后，
+ * `contracts → types`（类型）、`contracts → wage`（值）、`wage → types`（类型）全是单向的。
+ * `contracts.ts` 仍原样再导出它们，历史调用点（`~/lib/contracts`）不用改。
+ *
+ * 回归守卫：`tests/structure-guards.test.ts`（断言本文件是叶子 + 环清单只剩 §12.3 允许的那一条）。
+ */
+export interface ContractRecord {
+  id: string;
+  year: number;
+  code: string;
+  name: string;
+  contractor: string;
+  subcontractor: string;
+  contractAmount: number;
+  taxRate: number;
+  reportTaxMode: string;
+  payRatio: number;
+  warrantyStart: string;
+  warrantyEnd: string;
+  hasDeposit: boolean;
+  depositAmount: number;
+  manager: string;
+  status: string;
+  prelimAmount: number;
+  settleReceivable: number;
+  remark: string;
+  hasPaper?: boolean;
+  noContractReason?: string;
+  scanFileName?: string;
+}
 
-export type { ContractRecord, ContractEntry, EntryKind } from "./contracts";
+export type EntryKind = "report" | "invoice" | "receipt";
+
+export interface ContractEntry {
+  id: string;
+  contractId: string;
+  kind: EntryKind;
+  date: string;
+  amount: number;
+  amountExcl: number;
+  taxRate: number;
+  workerPay: number;
+  workerPayDate: string;
+  payTo: "" | "worker" | "sub";
+  no: string;
+  remark: string;
+  fileName: string;
+  workerFileName: string;
+}
 
 export interface WageHistory {
   id: string;
@@ -123,6 +175,20 @@ export interface LedgerState {
   accessHash: string;
   /** 界面风格：classic = 原版，v2 = 新版仪表盘，apple = 苹果 Mac 风格，movie = MOVIEPILOT 白底彩色渐变 */
   uiStyle: "classic" | "v2" | "apple" | "movie";
+}
+
+/**
+ * 台账读取结果：empty = 还没有台账文件；unreadable = 文件在但读不出来（损坏/权限/IO）。
+ *
+ * 定义放本文件（叶子）而不是 `nas-fs.server.ts`（G2 / 专家评审 A2）：影像层 `assets.server.ts`
+ * 需要这个类型（`adoptLegacyAssets` 的入参），而台账存储层又要影像层的 `reconcileContractScans`
+ * —— 两边互指就是一个 import 环，并且违反 §12.2「影像层不 import 台账存储」。
+ * 类型下沉到叶子后，`assets → types`、`nas-fs → assets`、`nas-fs → types` 全单向。
+ * `nas-fs.server.ts` 仍再导出一次，历史调用点不受影响。
+ */
+export interface LedgerRead extends Partial<LedgerState> {
+  empty?: boolean;
+  unreadable?: boolean;
 }
 
 export interface AuditEntry {

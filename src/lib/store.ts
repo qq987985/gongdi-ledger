@@ -6,6 +6,11 @@ import { normalizeIdDate, parseIdCard } from "./idcard";
 import { derivedYears, nextYear, localToday } from "./dates";
 import { normalizeEntry, splitLegacyReceipts, type ContractEntry, type ContractRecord } from "./contracts";
 import { logOp } from "./audit";
+import { applyRenameToPeople, planRenamePerson, renameLogDetail, type RenameCounts } from "./rename-person";
+import { runMuted } from "./sync-mute";
+// 姓名比较键的唯一实现（A-1）：姓名是考勤 / 发放 / 人员表之间的关联键，**入库一律 trim** ——
+// 否则「张三 」与「张三」在年度表里会变成两行（一行「未发 = 全额」、一行「未发 = 负数」）
+import { nameKey } from "./receiver";
 import type { AttendanceDoc, AttendanceRow, Expense, InsuranceMember, InsurancePolicy, LedgerState, Payment, Person } from "./types";
 import { LEDGER_SCHEMA_VERSION } from "./types";
 
@@ -254,6 +259,11 @@ export interface AppActions {
   addYear: (y?: number) => number;
   removeYear: (y: number) => void;
   upsertPerson: (p: Person) => void;
+  /**
+   * 人员改名（事务式）：姓名是考勤/发放的关联键，改名必须与这些记录一起改（F3 / A14）。
+   * 同名冲突 / 空姓名时返回 `ok:false`，且**什么都不改**。
+   */
+  renamePerson: (id: string, name: string) => { ok: boolean; error?: string; counts?: RenameCounts };
   addPerson: (p: Partial<Person> & { name: string }) => void;
   removePeople: (ids: string[]) => void;
   replacePeople: (people: Person[]) => void;
@@ -303,7 +313,9 @@ export const useApp = create<AppStore>()(
         logOp("清空全部数据", "", "设置");
       },
       setYear: (year) => {
-        set({ year, years: derivedYears({ ...get(), year }) });
+        // 切年份只是**看**哪一年，不是改台账数据（B3）：静音执行 —— 不置 dirty、不触发整本上传，
+        // 只读账号也就不会因为切年份收到「没有保存整本台账的权限」。
+        runMuted(() => set({ year, years: derivedYears({ ...get(), year }) }));
       },
       addYear: (y) => {
         const existing = derivedYears(get());
@@ -337,6 +349,8 @@ export const useApp = create<AppStore>()(
         const people = get().people;
         const nextP = {
           ...p,
+          // 入库统一 trim 姓名（A-1）：姓名是考勤/发放的关联键
+          name: nameKey(p.name),
           idValidFrom: normalizeIdDate(p.idValidFrom),
           idValidTo: normalizeIdDate(p.idValidTo, true),
         };
@@ -344,14 +358,68 @@ export const useApp = create<AppStore>()(
         const pid = nextP.id?.trim();
         const i = pid ? people.findIndex((x) => x.id === pid) : -1;
         if (i >= 0) {
+          // 改名是**跨实体事务**：考勤/发放/参保人/报销人都按姓名关联，只改 people 会让它们脱钩
+          // （F3 / A14）。与 renamePerson 动作共用 lib/rename-person.ts，一处实现。
+          const plan = planRenamePerson(
+            {
+              people,
+              attendance: get().attendance,
+              payments: get().payments,
+              insuranceMembers: get().insuranceMembers || [],
+              expenses: get().expenses || [],
+            },
+            people[i].id,
+            nextP.name,
+          );
+          if (!plan.ok) {
+            // 同名冲突（或姓名为空）：整笔保存都不落 —— 宁可什么都不改，
+            // 也不能让考勤/发放挂在一个不存在的人名下
+            console.warn("[store] 改名被拒绝：", plan.error);
+            return;
+          }
           const next = people.slice();
-          next[i] = { ...nextP, id: people[i].id };
-          set({ people: next });
-          logOp("修改人员", nextP.name, "人员");
+          next[i] = { ...nextP, id: people[i].id, name: plan.newName };
+          set({
+            people: next,
+            attendance: plan.attendance,
+            payments: plan.payments,
+            insuranceMembers: plan.insuranceMembers,
+            expenses: plan.expenses,
+          });
+          logOp(
+            plan.oldName === plan.newName ? "修改人员" : "人员改名",
+            plan.oldName === plan.newName ? nextP.name : renameLogDetail(plan),
+            "人员",
+          );
         } else {
           set({ people: [...people, { ...nextP, id: pid || uid() }] });
           logOp("新增人员", nextP.name, "人员");
         }
+      },
+      renamePerson: (id, name) => {
+        const plan = planRenamePerson(
+          {
+            people: get().people,
+            attendance: get().attendance,
+            payments: get().payments,
+            insuranceMembers: get().insuranceMembers || [],
+            expenses: get().expenses || [],
+          },
+          id,
+          name,
+        );
+        if (!plan.ok) return { ok: false, error: plan.error };
+        if (plan.oldName !== plan.newName) {
+          set({
+            people: applyRenameToPeople(get().people, id, plan.newName),
+            attendance: plan.attendance,
+            payments: plan.payments,
+            insuranceMembers: plan.insuranceMembers,
+            expenses: plan.expenses,
+          });
+          logOp("人员改名", renameLogDetail(plan), "人员");
+        }
+        return { ok: true, counts: plan.counts };
       },
       addPerson: (p) => {
         set({
@@ -359,13 +427,14 @@ export const useApp = create<AppStore>()(
             ...get().people,
             {
               ...p,
+              name: nameKey(p.name), // 入库统一 trim（A-1）
               id: uid(),
               idValidFrom: normalizeIdDate(p.idValidFrom),
               idValidTo: normalizeIdDate(p.idValidTo, true),
             } as Person,
           ],
         });
-        logOp("新增人员", p.name, "人员");
+        logOp("新增人员", nameKey(p.name), "人员");
       },
       removePeople: (ids) => {
         const names = get()
@@ -381,6 +450,7 @@ export const useApp = create<AppStore>()(
             (p) =>
               ({
                 ...p,
+                name: nameKey(p.name), // Excel 导入 / 整本替换也统一 trim（A-1）
                 idValidFrom: normalizeIdDate(p.idValidFrom),
                 idValidTo: normalizeIdDate(p.idValidTo, true),
               }) as Person,
@@ -394,6 +464,7 @@ export const useApp = create<AppStore>()(
           .filter((r) => (r.name || "").trim())
           .map((r) => ({
             ...r,
+            name: nameKey(r.name), // 考勤姓名入库统一 trim（A-1）：否则年度表按姓名匹配不到这个人
             allowance: numIn(r.allowance, "考勤.补助"),
             deduction: numIn(r.deduction, "考勤.扣款"),
             id: uid(),
@@ -405,7 +476,9 @@ export const useApp = create<AppStore>()(
         logOp("保存月考勤", `${year}年${month}月 ${next.length}人`, "考勤");
       },
       replaceAttendance: (attendance) => {
-        set({ attendance, years: derivedYears({ ...get(), attendance }) });
+        // 整本导入的考勤姓名同样入库 trim（A-1）：不然与人员表的干净姓名对不上
+        const next = attendance.map((r) => ({ ...r, name: nameKey(r.name) }) as AttendanceRow);
+        set({ attendance: next, years: derivedYears({ ...get(), attendance: next }) });
         logOp("导入/替换考勤", `${attendance.length}条`, "考勤");
       },
       addAttendanceDoc: (d) =>
@@ -622,7 +695,8 @@ export const useApp = create<AppStore>()(
       },
       setInsuranceMembers: (members) => set({ insuranceMembers: members }),
       setAccessHash: (accessHash) => set({ accessHash }),
-      setUiStyle: (uiStyle) => set({ uiStyle }),
+      // 界面风格是**本机偏好**（不进 sliceState，也不上传）：同样静音，别为换主题推一次整本台账（B3）
+      setUiStyle: (uiStyle) => runMuted(() => set({ uiStyle })),
       setAll: (s) => set({ ...s, years: derivedYears(s) }),
     }),
     {

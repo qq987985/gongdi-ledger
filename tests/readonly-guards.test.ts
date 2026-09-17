@@ -10,8 +10,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { countHits, expectMinHits } from "./min-hits";
 
 const repo = (p: string) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 
@@ -28,7 +29,7 @@ function stripComments(s: string): string {
     .join("\n");
 }
 
-/** 有编辑/新增/删除入口的模块页面：都必须走 blockedWrite（或 DocActions 的 readOnly） */
+/** 有编辑/新增/删除入口的模块页面：都必须走 blockedWrite（或 DocActions/PhotoSlot 的 readOnly） */
 const EDIT_PAGES = [
   "src/routes/people.tsx",
   "src/routes/attendance.tsx",
@@ -37,19 +38,89 @@ const EDIT_PAGES = [
   "src/routes/expenses.tsx",
   "src/routes/insurance.tsx",
   "src/routes/photos.tsx",
+  // 1.8.14（专家评审 A10）：查询页也有写入口（传证件照 / 替换·删除考勤影像），
+  // 原来不在扫描清单里 —— 页面只判 query.view，只读账号点得动而服务端必 403（守卫假绿）
+  "src/routes/query.tsx",
 ];
+
+/** 写入口在子组件里（DocActions / PhotoSlot）的页面：必须显式按权限传 readOnly */
+const READONLY_PROP_PAGES = ["src/routes/files.tsx", "src/routes/query.tsx"];
 
 test("第 1 项：有编辑入口的页面必须调用 blockedWrite（只读账号不许再弹「已保存」）", async () => {
   const bad: string[] = [];
+  let hitBlockedWrite = 0;
   for (const f of EDIT_PAGES) {
     const text = stripComments(await src(f));
     if (!text.includes("blockedWrite(")) bad.push(`${f}: 没有 blockedWrite( 守卫`);
     if (!/from "~\/lib\/readonly"/.test(text)) bad.push(`${f}: 没有 import readonly 守卫`);
+    hitBlockedWrite += countHits(text, /blockedWrite\(/);
   }
   // 影像资料页用 DocActions 的 readOnly 隐藏「替换/删除」，同样要求显式传入
   const files = stripComments(await src("src/routes/files.tsx"));
   if (!/readOnly=\{!canEdit/.test(files)) bad.push("src/routes/files.tsx: DocActions 没有按权限传 readOnly");
+  // ── 扫描命中数下限自检（专家评审 C2）：清单漏了页面 / 文件被搬家 / 正则失效时，
+  //    上面两个 if 会一条都不触发而「假绿」。这里把「该扫到多少」钉死。
+  expectMinHits("只读守卫：EDIT_PAGES 清单里的页面数", EDIT_PAGES.length, 8, "有编辑入口的页面现有 8 个");
+  expectMinHits(
+    "只读守卫：实际含 blockedWrite( 的调用点数",
+    hitBlockedWrite,
+    8,
+    "8 个页面每页至少一处，实际 10+ 处",
+  );
   assert.deepEqual(bad, [], `只读账号的改动存不下去，必须拦在入口：\n${bad.join("\n")}`);
+});
+
+test("扫描清单自检：源码里有写入口的页面不许漏出 EDIT_PAGES（防清单漏项假绿）", async () => {
+  // 这条专治「清单漏项」：A10 的查询页当时就是**用了 blockedWrite 却没在清单里**，
+  // 于是守卫扫不到它、只读账号的编辑入口全开（评审实测到的假绿之一）。
+  // 规则：src/routes 下任何调用了 blockedWrite( 的页面，都必须出现在 EDIT_PAGES 里。
+  const routes = (await readdir(repo("src/routes"))).filter((f) => /\.tsx$/.test(f));
+  expectMinHits("扫描清单自检：扫描到的路由文件数", routes.length, 12, "src/routes 下现有 15 个页面（api/ 在子目录里）");
+  const withBlockedWrite: string[] = [];
+  for (const f of routes) {
+    const text = stripComments(await src(`src/routes/${f}`));
+    if (countHits(text, /blockedWrite\(/)) withBlockedWrite.push(`src/routes/${f}`);
+  }
+  expectMinHits(
+    "扫描清单自检：含 blockedWrite( 的页面数",
+    withBlockedWrite.length,
+    6,
+    "写入口收在子组件里的页面（如 files.tsx）不算，现有 8 个",
+  );
+  const missing = withBlockedWrite.filter((f) => !EDIT_PAGES.includes(f));
+  assert.deepEqual(
+    missing,
+    [],
+    `这些页面已经用了 blockedWrite(，却不在 EDIT_PAGES 里 —— 守卫扫不到它们（假绿）：\n` +
+      `${missing.join("\n")}\n把它加进 tests/readonly-guards.test.ts 的 EDIT_PAGES。`,
+  );
+});
+
+test("第 1 项：DocActions / PhotoSlot 的写入口必须按权限传 readOnly（查询页 A10）", async () => {
+  const bad: string[] = [];
+  for (const f of READONLY_PROP_PAGES) {
+    const text = stripComments(await src(f));
+    if (!/readOnly=\{!canEdit/.test(text)) bad.push(`${f}: 没有任何 readOnly={!canEdit…} 传入`);
+  }
+  // 查询页两类入口分别是 photos.edit（照片）与 attendance.edit（考勤影像）：
+  // 都必须走 canSaveToServer 同源判定（useCanSave 内部就是它，且随权限变化重渲染）
+  const query = stripComments(await src("src/routes/query.tsx"));
+  for (const perm of ["photos.edit", "attendance.edit"]) {
+    if (!query.includes(`useCanSave("${perm}")`))
+      bad.push(`src/routes/query.tsx: 没有用 useCanSave("${perm}") 判定可写`);
+  }
+  assert.match(
+    stripComments(await src("src/components/can.tsx")),
+    /canSaveToServer\(perm\)/,
+    "useCanSave 的判据必须是 lib/readonly 的 canSaveToServer（不许另写一套判据）",
+  );
+  if (!/readOnly=\{!canEditPhotos\}/.test(query)) bad.push("src/routes/query.tsx: PhotoSlot 没有传 readOnly");
+  if (!/readOnly=\{!canEditDocs\}/.test(query)) bad.push("src/routes/query.tsx: DocActions 没有传 readOnly");
+  // PhotoSlot 组件本身必须真的支持这个入参（否则传了也没用）
+  const slot = stripComments(await src("src/components/photo-slot.tsx"));
+  assert.match(slot, /readOnly\?: boolean/, "PhotoSlot 必须声明 readOnly 入参（A10）");
+  assert.match(slot, /readOnly = false/, "PhotoSlot 的 readOnly 要有默认值（老调用点不受影响）");
+  assert.deepEqual(bad, [], `只读账号不该看到编辑入口：\n${bad.join("\n")}`);
 });
 
 test("第 1 项：出现「已保存/已添加/已删除」成功提示的页面必须有写入守卫", async () => {
@@ -84,7 +155,14 @@ test("第 2 项：换账号/换台账/退出登录必须清本机台账缓存，
   assert.match(shell, /checkCacheOwner/, "进系统时要按「账号::台账」判断缓存归属");
 
   const switcher = stripComments(await src("src/components/shell/book-switcher.tsx"));
-  assert.match(switcher, /dropLocalLedger\(/, "切换台账要先丢掉上一本的残留");
+  // G1（1.8.14）：切册的「作废在途拉取 + 清本机 + 拉新册」下沉到 nas-sync 的唯一入口 switchBook ——
+  // 这里改成「调用点必须走那个入口」+「入口（enterBookAfterTransition）真的做了这三步」，
+  // 比原来只认调用点里出现 dropLocalLedger( 更强（原来只要文件里出现这个词就绿）。
+  assert.match(switcher, /switchBook\(/, "左侧下拉切台账必须走 nas-sync.switchBook（顺序唯一实现）");
+  const switchBody = sync.slice(sync.indexOf("async function enterBookAfterTransition"), sync.indexOf("export async function switchBook"));
+  assert.match(switchBody, /invalidateInFlightPulls\(/, "切册必须作废在途拉取（G1：迟到响应不许覆盖新册）");
+  assert.match(switchBody, /dropLocalLedger\(/, "切换台账要先丢掉上一本的残留");
+  assert.match(switchBody, /await pullNasLedger\(\)/, "切完必须拉目标台账");
 });
 
 test("第 3 项：改密码失败必须有界面提示（不许静默 unhandledrejection）", async () => {
@@ -98,7 +176,11 @@ test("第 3 项：改密码失败必须有界面提示（不许静默 unhandledr
 
 test("第 4 项：新建/改名/删除台账后必须派发 gongdi-books（左侧下拉立即同步）", async () => {
   const card = stripComments(await src("src/components/settings/accounts-card.tsx"));
-  const create = card.slice(card.indexOf('authOp("createBook"') - 200, card.indexOf('authOp("createBook"') + 500);
+  // G1（1.8.14）：createBook 的 authOp 调用下沉到 nas-sync.createBookAndEnter，
+  // 这里改认「走唯一入口」+「入口之后真的广播了 gongdi-books」（原来按 authOp("createBook" 定位，
+  // 下沉后会 indexOf = -1，守卫会静默扫了个空片段 —— 属于评审点名的「假绿」）。
+  assert.match(card, /createBookAndEnter\(/, "设置页新建台账必须走 nas-sync.createBookAndEnter");
+  const create = card.slice(card.indexOf("createBookAndEnter("), card.indexOf("createBookAndEnter(") + 500);
   assert.match(create, /gongdi-books/, "新建台账后必须 dispatchEvent(new Event(\"gongdi-books\"))");
   const switcher = stripComments(await src("src/components/shell/book-switcher.tsx"));
   assert.match(switcher, /gongdi-books/, "台账下拉自己的建/改名也要广播");

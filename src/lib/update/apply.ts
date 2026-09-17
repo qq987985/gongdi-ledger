@@ -23,6 +23,17 @@ import {
 import { dockerReq, imageIdOf, pullImage, sameImageId, selfContainer, uniqueImages } from "./docker";
 import { UPDATER_SCRIPT } from "./updater-script";
 
+/**
+ * 更新容器存活探针的等待时间（毫秒）。
+ *
+ * 更新脚本自己先 `setTimeout(r,2500)` 才开始干活（目的是把 HTTP 响应先送回浏览器，
+ * 见 updater-script.ts；那条时序被 tests/update-script.test.ts 盯着）。
+ * 探针必须比它**晚**一点：原来写 2000ms，等于在脚本还没开工时就去查状态，只能抓住
+ * 「node 解析阶段就退出」这一类；脚本开工之后的失败由脚本自己的就绪校验兜住（1.8.14）。
+ * 改脚本那段延时时记得同步这里（tests/update-script.test.ts 会断言两者的大小关系）。
+ */
+const HELPER_PROBE_MS = 2500 + 700;
+
 async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; restarting?: boolean; imageVersion?: string }> {
   if (!(await hasDockerSock())) {
     await appendUpdateLog("[应用] 放弃自动更新：没有 /var/run/docker.sock（容器未挂载）");
@@ -148,8 +159,9 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
   });
   await dockerReq("POST", `/containers/${helper.Id}/start`);
   // 更新容器必须是真的在跑：以前它因脚本语法错误/挂载不对而瞬间退出，应用侧却回「已受理」，
-  // 用户看到的就是「更新说成功、什么都没变」。这里等两秒看它是否还活着，顺便带回它自己的日志。
-  await new Promise((r) => setTimeout(r, 2000));
+  // 用户看到的就是「更新说成功、什么都没变」。这里等 HELPER_PROBE_MS 看它是否还活着，顺便带回它自己的日志。
+  // （只覆盖「启动即退出」；换容器之后新容器是否真的在服务，由脚本里的就绪校验负责。）
+  await new Promise((r) => setTimeout(r, HELPER_PROBE_MS));
   const helperState = await dockerReq("GET", `/containers/${helper.Id}/json`).catch(() => null);
   if (helperState?.State?.Running === false) {
     const code = String(helperState.State.ExitCode ?? "?");
@@ -163,7 +175,9 @@ async function applyDockerUpdate(): Promise<{ ok: boolean; error?: string; resta
     );
   }
   await logServer("info", "已启动更新容器，稍后自动替换", { image, helper: helper.Id });
-  await appendUpdateLog(`[应用] 已启动更新容器，约 10 秒后替换 ${name}（镜像 ${image}）`);
+  await appendUpdateLog(
+    `[应用] 已启动更新容器，约 20 秒后替换 ${name}（替换前会先确认新容器真的在服务，不通过就回滚）（镜像 ${image}）`,
+  );
   return { ok: true, restarting: true, imageVersion: pickedVersion };
 }
 

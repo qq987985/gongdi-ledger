@@ -342,7 +342,7 @@ function ContractsPage() {
                 setCreating(false);
               }}
               onSave={(c) => {
-                if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return;
+                if (blockedWrite("contracts.edit", permLabel("contracts.edit"))) return false;
                 upsertContract(c);
                 setEditing(c);
                 setCreating(false);

@@ -16,6 +16,7 @@ import { isProxyPaid } from "../src/lib/payments-stats";
 import { paymentKey } from "../src/lib/excel/common";
 import { OT_RULE_UNSET_LABEL, parseOtRule } from "../src/lib/wage";
 import { expenseFormFromDraft } from "../src/lib/expense-rules";
+import { countHits, expectMinHits, expectRegexCatches } from "./min-hits";
 
 const repo = (p: string) => resolve(dirname(fileURLToPath(import.meta.url)), "..", p);
 const read = (p: string) => readFile(join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), p), "utf8");
@@ -53,12 +54,23 @@ test("G04 源码守卫：列表/打印/工资条不许再用裸比较 owner !== 
     "src/components/payment-sheets.tsx",
     "src/routes/query.tsx",
   ];
+  const NAKED_OWNER_RECEIVER = /\b[\w.]*owner\b\s*!==?\s*\b[\w.]*receiver\b/g;
+  const NAKED_RECEIVER_OWNER = /\b[\w.]*receiver\b\s*!==?\s*\b[\w.]*owner\b/g;
   const bad: string[] = [];
+  let receiverHits = 0;
   for (const f of files) {
     const src = await read(f);
-    for (const m of src.matchAll(/\b[\w.]*owner\b\s*!==?\s*\b[\w.]*receiver\b/g)) bad.push(`${f}: ${m[0]}`);
-    for (const m of src.matchAll(/\b[\w.]*receiver\b\s*!==?\s*\b[\w.]*owner\b/g)) bad.push(`${f}: ${m[0]}`);
+    // 被扫文件必须真的在处理收款人（否则「0 命中」可能是扫了个空文件/换名后的文件）
+    receiverHits += countHits(src, /receiverOf\(|isProxyReceiver\(/);
+    for (const m of src.matchAll(NAKED_OWNER_RECEIVER)) bad.push(`${f}: ${m[0]}`);
+    for (const m of src.matchAll(NAKED_RECEIVER_OWNER)) bad.push(`${f}: ${m[0]}`);
   }
+  // ── 自检（专家评审 C2）：这条守卫的失败条件是「命中坏写法」，命中 0 处时是绿的 ——
+  //    Code Reviewer 实测这里的正则**三份文件 0 命中**，谁都不知道是干净还是失效。
+  //    ① 坏样本必须能被这两条正则抓到（正则本身是好的）；② 被扫文件必须真的在判收款人。
+  expectRegexCatches(NAKED_OWNER_RECEIVER, "const mark = p.owner !== p.receiver;", "G04 裸比较正则（owner !== receiver）");
+  expectRegexCatches(NAKED_RECEIVER_OWNER, "const mark = p.receiver !== p.owner;", "G04 裸比较正则（receiver !== owner）");
+  expectMinHits("G04 守卫：三份受管文件里 receiverOf/isProxyReceiver 的调用点数", receiverHits, 3, "每份文件至少一处");
   assert.deepEqual(bad, [], `「代收」判定必须统一走 receiverOf()/isProxyReceiver()：\n${bad.join("\n")}`);
   const sheets = await read("src/components/payment-sheets.tsx");
   assert.match(sheets, /isProxyReceiver\(p\)/, "打印明细的「（代收）」标记要走同一判定");
@@ -117,6 +129,7 @@ test("E11/P19 源码守卫：编辑弹窗的本地副本必须随目标记录 id
     const src = await read(file);
     assert.match(src, re, `${file} 缺「随目标记录 id 重置本地副本」的同步 effect`);
   }
+  expectMinHits("E11/P19 守卫：受管的编辑弹窗文件数", editors.length, 4, "现有 4 个本地副本型编辑器");
   // 初值只准有一处实现（挂载与重置共用），避免两边漂移
   const expense = await read("src/components/expense-editor.tsx");
   assert.equal((expense.match(/expenseFormFromDraft\(draft\)/g) || []).length, 2, "挂载 + 重置都走同一函数");

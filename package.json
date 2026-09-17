@@ -1,8 +1,11 @@
 {
   "name": "gongdi-ledger",
   "private": true,
-  "version": "1.8.13",
+  "version": "1.8.14",
   "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "vite dev --port 3000",
     "build": "vite build",

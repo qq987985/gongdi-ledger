@@ -57,8 +57,10 @@ export interface PaymentFilters {
  * Excel 去重键、发放页列表徽标、打印清单、工资条共用同一实现（B 组 D3/D4：
  * 以前各写各的 —— 导入多一条、空收款人被标成「代收」）。这里保留转发出口，老引用不用改。
  */
-import { receiverOf } from "./receiver";
-export { receiverOf, isProxyReceiver } from "./receiver";
+import { ownerKey, receiverOf } from "./receiver";
+// 1.8.14（A-1）：`nameKey` / `ownerKey` 也从这个转发出口可见 —— 页面只用一处 import，
+// 别再各写 `(x.owner || "").trim()`（姓名比较键唯一实现在 receiver.ts）。
+export { receiverOf, isProxyReceiver, nameKey, ownerKey } from "./receiver";
 
 /**
  * 已发放（汇总口径，1.8.6）：**有发放日期即算**，按实际收款人计入其名下，含代发/代收。
@@ -79,7 +81,7 @@ export function isPending(p: Pick<Payment, "date">): boolean {
  * ② 「其中代发」的子集统计（见 `isProxyPaid`）。**不用它判「已发放」**（用 `isPaid`）。
  */
 export function isPaidSelf(p: Pick<Payment, "date" | "owner" | "receiver">): boolean {
-  return Boolean(p.date) && (p.owner || "").trim() === receiverOf(p);
+  return Boolean(p.date) && ownerKey(p) === receiverOf(p);
 }
 
 /**
@@ -191,7 +193,7 @@ export function byOwnerRows(rows: Payment[]): OwnerRow[] {
   const map = new Map<string, OwnerRow>();
   for (const p of rows) {
     if (!isPaid(p)) continue;
-    const owner = (p.owner || "").trim();
+    const owner = ownerKey(p);
     const cur = map.get(owner) || { owner, kind: "person" as RowKind, count: 0, amount: 0, proxyCount: 0, proxyAmt: 0 };
     cur.count += 1;
     cur.amount += p.amount || 0;
@@ -214,7 +216,7 @@ export function byOwnerRows(rows: Payment[]): OwnerRow[] {
  * （含他的已发、他名下的代发、他名下的待发放 —— 代发本来就算在他已发里）。
  */
 export function scopeRows(rows: Payment[], owner: string): Payment[] {
-  return owner === ALL_BUCKETS ? rows : rows.filter((p) => inBucket((p.owner || "").trim(), owner));
+  return owner === ALL_BUCKETS ? rows : rows.filter((p) => inBucket(ownerKey(p), owner));
 }
 
 /** 把「待发放」一组接到人员行后面（单列，不进任何人的已发） */
@@ -251,7 +253,7 @@ export function sourceBuckets(ranged: { source?: string }[]): Bucket[] {
  * 明细清单把待发放也归到实际收款人名下，所以只存在待发的人也要能单独打。
  */
 export function printOwnerBuckets(rows: Payment[]): Bucket[] {
-  return groupBuckets(rows.map((p) => (p.owner || "").trim()), "（未填实际收款人）");
+  return groupBuckets(rows.map((p) => ownerKey(p)), "（未填实际收款人）");
 }
 
 /**
@@ -296,7 +298,7 @@ export function detailSections(rows: Payment[], owner: string): DetailSection[] 
   const scope = scopeRows(rows, owner);
   const groups = new Map<string, Payment[]>();
   for (const p of scope) {
-    const key = (p.owner || "").trim();
+    const key = ownerKey(p);
     const list = groups.get(key);
     if (list) list.push(p);
     else groups.set(key, [p]);

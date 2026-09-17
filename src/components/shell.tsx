@@ -11,6 +11,7 @@ import { Brand, NavLink } from "./shell/brand";
 import { BookSwitcher } from "./shell/book-switcher";
 import { YearSwitcher } from "./shell/year-switcher";
 import { VersionLog } from "./shell/version-log";
+import { SyncUnsyncedBanner } from "./shell/sync-banner";
 import { AcctLogin, BrokenAccountsScreen, LoginScreen, NoBookScreen, SetupScreen } from "./shell/screens";
 
 function useHydrateStore() {
@@ -256,6 +257,9 @@ export function AppShell() {
               ) : null}
             </nav>
           ) : null}
+          {/* 「有改动没存到服务器」时持续显示（B2）：全应用只挂这一处，失败一次就出现，
+              保存成功 / 换账号换台账自动收掉；打印态不印（组件内 no-print） */}
+          <SyncUnsyncedBanner />
           {/* 手机端底部有一条 fixed 导航（min-h-12 + 安全区）：主内容必须留出等高下内边距，
               否则最后一行内容会永久压在导航下面点不到（1.8.4 移动端复测实测） */}
           <main className="mx-auto w-full max-w-7xl px-3 pt-4 pb-20 md:px-8 md:pt-6 md:pb-6">

@@ -14,6 +14,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { countHits, expectMinHits, expectRegexCatches } from "./min-hits";
 
 const repo = (p: string) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 
@@ -38,11 +39,21 @@ async function uiSources(): Promise<{ file: string; text: string }[]> {
 }
 
 test("约定：用了 useGuardedClose 的文件，按钮不得直接 onClick={onClose/onCancel}（防误关绕过）", async () => {
+  const AROUND_CLOSE = /onClick=\{(onClose|onCancel)\}/g;
   const bad: string[] = [];
+  let guarded = 0;
+  let requestCloseHits = 0;
   for (const { file, text } of await uiSources()) {
     if (!text.includes("useGuardedClose")) continue;
-    for (const m of text.matchAll(/onClick=\{(onClose|onCancel)\}/g)) bad.push(`${file}: ${m[0]}`);
+    guarded += 1;
+    requestCloseHits += countHits(text, /requestClose\(/);
+    for (const m of text.matchAll(AROUND_CLOSE)) bad.push(`${file}: ${m[0]}`);
   }
+  // ── 扫描命中数下限自检（专家评审 C2）：这条守卫失败条件是「命中坏写法」，
+  //    所以列表换名 / 正则失效 / 目录读空时它会静默变绿。下面三条把它钉住。
+  expectMinHits("ui 守卫：用了 useGuardedClose 的文件数", guarded, 5, "现有 7 个（发放/报销/合同/保险/人员页 + 两个编辑器）");
+  expectMinHits("ui 守卫：requestClose( 调用点数（正常关法要有）", requestCloseHits, 3, "现有 4 处");
+  expectRegexCatches(AROUND_CLOSE, '<Button onClick={onClose}>关闭</Button>', "防误关守卫的坏写法正则");
   assert.deepEqual(
     bad,
     [],
@@ -52,18 +63,28 @@ test("约定：用了 useGuardedClose 的文件，按钮不得直接 onClick={on
 
 test("约定：金额取整只有 wage.ts 的 round2（页面/组件不得再定义或手写 Math.round(x*100)/100）", async () => {
   const bad: string[] = [];
-  for (const { file, text } of await uiSources()) {
+  const sources = await uiSources();
+  let round2Uses = 0;
+  for (const { file, text } of sources) {
     if (/function round2\s*\(/.test(text)) bad.push(`${file}: 本地定义了 round2`);
+    round2Uses += countHits(text, /round2\s*\(/);
     for (const m of text.matchAll(/Math\.round\([^)]*\*\s*100\)\s*\/\s*100/g)) bad.push(`${file}: 手写取整 ${m[0]}`);
   }
+  // 自检：扫到的文件数与「真在用 round2 的地方」都不能是 0，否则这条守卫什么都没看
+  expectMinHits("ui 守卫：扫到的页面/组件文件数", sources.length, 20, "src/routes + src/components 共 29 个");
+  expectMinHits("ui 守卫：round2( 的使用点数（唯一实现的正面证据）", round2Uses, 10, "现有 30+ 处");
   assert.deepEqual(bad, [], `金额取整应统一 import { round2 } from "~/lib/wage"：\n${bad.join("\n")}`);
 });
 
 test("约定：当天日期一律 localToday()（页面/组件不得定义本地 today 函数）", async () => {
   const bad: string[] = [];
-  for (const { file, text } of await uiSources()) {
+  const sources = await uiSources();
+  let localTodayHits = 0;
+  for (const { file, text } of sources) {
+    localTodayHits += countHits(text, /localToday\(/);
     for (const m of text.matchAll(/function (today|todayYmd|nowYmd|todayStr)\s*\(/g)) bad.push(`${file}: ${m[0]}`);
   }
+  expectMinHits("ui 守卫：localToday( 的使用点数（唯一实现的正面证据）", localTodayHits, 10, "现有 30+ 处");
   assert.deepEqual(bad, [], `当天日期应统一 import { localToday } from "~/lib/dates"：\n${bad.join("\n")}`);
 });
 
@@ -210,7 +231,7 @@ test("约定：含 window.print() 的页面必须「屏幕内容 no-print + 打�
     if (file.startsWith("src/components/") && /\bprint:hidden\b/.test(text)) continue;
     bad.push(`${file}: ${issue}`);
   }
-  assert.equal(checked >= 5, true, `应扫描到多个打印入口，实际 ${checked} 个（正则可能失效）`);
+  expectMinHits("ui 守卫：扫描到的打印入口页面数", checked, 5, "现有 6 处 window.print()");
   assert.deepEqual(
     bad,
     [],
@@ -227,7 +248,7 @@ test("约定：弹窗面板不许用裸 max-h-screen（375×667 下 100vh 高于
     checked += 1;
     for (const m of text.matchAll(/className="([^"]*\bmax-h-screen\b[^"]*)"/g)) bad.push(`${file}: ${m[1]}`);
   }
-  assert.equal(checked >= 4, true, `应扫描到多个弹窗文件，实际 ${checked} 个（正则可能失效）`);
+  expectMinHits("ui 守卫：扫描到的弹窗文件数", checked, 4, "现有 8 个含 fixed inset-0 的弹窗");
   assert.deepEqual(
     bad,
     [],
@@ -341,7 +362,7 @@ test("约定：打印件容器不许用 min-h-screen/min-h-dvh，也不许用容
     for (const m of text.matchAll(/className="([^"]*break-inside-avoid[^"]*)"/g)) bad.push(`${file}: 容器级 break-inside-avoid（class）`);
     for (const m of text.matchAll(/break-inside\s*:\s*avoid|breakInside\s*:\s*["']avoid["']/g)) bad.push(`${file}: 内联 ${m[0]}`);
   }
-  assert.equal(sheets >= 4, true, `应扫描到多个打印件文件，实际 ${sheets} 个（正则可能失效）`);
+  expectMinHits("ui 守卫：扫描到的打印件文件数（含 print-only）", sheets, 4, "现有 5 个");
   assert.deepEqual(
     bad,
     [],

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
-import { Need } from "~/components/can";
+import { Need, useCanSave } from "~/components/can";
 import { YmPick, ymKey, monthsInRange, rangeLabel } from "~/components/ym-pick";
 import { PhotoSlot } from "~/components/photo-slot";
 import { DocActions } from "~/components/doc-actions";
@@ -13,7 +13,10 @@ import { derivedYears } from "~/lib/dates";
 import { monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
 import { hasContent } from "~/lib/work";
 import { groupBuckets } from "~/lib/buckets";
-import { isPaidSelf, isProxyReceiver, receiverOf } from "~/lib/payments-stats";
+// 收款人判定（receiverOf / isProxyReceiver）与姓名比较键（nameKey / ownerKey）都只有一处实现
+import { isPaidSelf, isProxyReceiver, nameKey, ownerKey, receiverOf } from "~/lib/payments-stats";
+import { permLabel } from "~/lib/perms";
+import { blockedWrite } from "~/lib/readonly";
 import { overAgeLabel } from "~/lib/idcard";
 import { money, copyText } from "~/lib/utils";
 import type { Person, Payment, AttendanceRow } from "~/lib/types";
@@ -72,12 +75,16 @@ function buildSlips({
   dateTo: string;
 }) {
   return names
-    .map((name) => {
-      const p = people.find((x) => x.name === name);
+    .map((rawName) => {
+      // 工资条是「单人视角」：姓名与收款人的比较全部走 nameKey / ownerKey / receiverOf
+      // （A-1 + B-10）—— 这里原来是第 3/4 套裸比较（x.owner !== name），
+      // 姓名带尾空格的人在工资条里一行也查不到
+      const name = nameKey(rawName);
+      const p = people.find((x) => nameKey(x.name) === name);
       if (!p) return null;
       const months: any[] = [];
       for (const { year, month } of span) {
-        const a = attendance.find((x) => x.year === year && x.month === month && x.name === name);
+        const a = attendance.find((x) => x.year === year && x.month === month && nameKey(x.name) === name);
         // 「有内容」= 有工天/加班/补助/扣款，或只有备注（如整月「工伤休息」）：
         // 与月度表/年度汇总/Excel 同口径，只填备注的人不再从工资条里消失
         if (!hasContent(a)) continue;
@@ -98,7 +105,8 @@ function buildSlips({
       }
       const pays = payments
         .filter((x) => {
-          if (x.owner !== name && x.receiver !== name) return false;
+          // 「这笔钱与他有关」= 他名下的钱（owner）或别人名下由他代收的钱（receiverOf，空=本人）
+          if (ownerKey(x) !== name && receiverOf(x) !== name) return false;
           const d = x.date || "";
           if (!d) return false;
           if (dateFrom && d < dateFrom) return false;
@@ -124,9 +132,9 @@ function buildSlips({
       // ⚠️ 这不是发放页/年度表/总览 KPI 的汇总口径：那边「已发放」按实际收款人计入、**含代发**（1.8.6 纠正）。
       // 代收他人的钱记在 collected 里单列，否则工资条上会出现负数未打款。
       const paid = pays.filter(isPaidSelf).reduce((s: number, x: any) => s + x.amount, 0);
-      const collected = pays.filter((x: any) => x.owner !== name).reduce((s: number, x: any) => s + x.amount, 0);
+      const collected = pays.filter((x: any) => ownerKey(x) !== name).reduce((s: number, x: any) => s + x.amount, 0);
       // 本人名下的钱但由别人代领：单人视角下「他本人没拿到」，单列说明，不让它静默消失
-      const proxyOut = pays.filter((x: any) => x.owner === name && !isPaidSelf(x)).reduce((s: number, x: any) => s + x.amount, 0);
+      const proxyOut = pays.filter((x: any) => ownerKey(x) === name && !isPaidSelf(x)).reduce((s: number, x: any) => s + x.amount, 0);
       return {
         person: p,
         hasHistory: (p.wageHistory || []).some((h) => (h.fromDate || "").trim() !== ""),
@@ -268,7 +276,7 @@ function PayslipSheets({
                       <tr key={`${x.date}-${i}`}>
                         <td className="border border-black px-1 py-1">{x.date}</td>
                         <td className="border border-black px-1 py-1">{money(x.amount)}</td>
-                        <td className="border border-black px-1 py-1">{receiverOf(x) === s.person.name ? "本人" : `${receiverOf(x)}代收`}</td>
+                        <td className="border border-black px-1 py-1">{receiverOf(x) === nameKey(s.person.name) ? "本人" : `${receiverOf(x)}代收`}</td>
                         <td className="border border-black px-1 py-1">{x.source}</td>
                         <td className="border border-black px-1 py-1 text-left">{x.remark}</td>
                       </tr>
@@ -320,6 +328,12 @@ function QueryPage() {
   const { year, people, attendance, attendanceDocs, payments, patchAttendanceDoc, removeAttendanceDocs } = store;
   const years = derivedYears(store);
   const yearOpts = years.length ? years : [year];
+  // A10（2026-09-17 专家评审）：查询页原来只看 query.view，只读账号也能点「传照片 / 替换考勤影像」，
+  // 而服务端 /api/photo 要 photos.edit、/api/doc 要 attendance.edit —— 点下去必回 403。
+  // 用 useCanSave（判据 = lib/readonly 的 canSaveToServer：canManageLedger 且该模块 .edit，
+  // 且会随权限变化重渲染）：存不下去就不给入口。
+  const canEditPhotos = useCanSave("photos.edit");
+  const canEditDocs = useCanSave("attendance.edit");
   const [name, setName] = React.useState("");
   const [printNames, setPrintNames] = React.useState<string[]>([]);
   const [printMode, setPrintMode] = React.useState<"wage" | "both" | "pays">("both");
@@ -330,7 +344,8 @@ function QueryPage() {
   const [toY, setToY] = React.useState(year);
   const [toM, setToM] = React.useState(12);
   const [toD, setToD] = React.useState(31);
-  const p = people.find((x) => x.name === name);
+  const personKey = nameKey(name);
+  const p = people.find((x) => nameKey(x.name) === personKey);
   const span = React.useMemo(() => monthsInRange(fromY, fromM, toY, toM), [fromY, fromM, toY, toM]);
   const swapped = ymKey(fromY, fromM) > ymKey(toY, toM);
   // 日期字符串（YYYY-MM-DD）比较：无时区问题；日 clamp 到当月最后一天（防 2 月 31 溢出到下月）
@@ -338,7 +353,7 @@ function QueryPage() {
   const startDate = `${fromY}-${pad2(fromM)}-${pad2(Math.min(fromD, new Date(fromY, fromM, 0).getDate()))}`;
   const endDate = `${toY}-${pad2(toM)}-${pad2(Math.min(toD, new Date(toY, toM, 0).getDate()))}`;
   const rows = span.map(({ year: y, month: m }) => {
-    const a = attendance.find((x) => x.year === y && x.month === m && x.name === name);
+    const a = attendance.find((x) => x.year === y && x.month === m && nameKey(x.name) === personKey);
     const wage = getWageAt(p, y, m);
     const calc = monthPay(a, wage);
     return {
@@ -357,12 +372,12 @@ function QueryPage() {
   const start = span[0];
   const end = span[span.length - 1];
   const pays = payments.filter((x) => {
-    if (x.owner !== name && x.receiver !== name) return false;
+    if (ownerKey(x) !== personKey && receiverOf(x) !== personKey) return false;
     const d = x.date || "";
     if (!d) return false;
     return d >= startDate && d <= endDate;
   });
-  const paidAsOwner = pays.filter((x) => x.owner === name).reduce((s, x) => s + x.amount, 0);
+  const paidAsOwner = pays.filter((x) => ownerKey(x) === personKey).reduce((s, x) => s + x.amount, 0);
   const rangeLabelText = rangeLabel(fromY, fromM, toY, toM);
   const slips = React.useMemo(
     () => buildSlips({ people, names: printNames, span, attendance, payments, dateFrom: startDate, dateTo: endDate }),
@@ -534,9 +549,9 @@ function QueryPage() {
                 <CopyField label="加班规则" value={parseOtRule(p.otRule).label} />
               </div>
               <div className="grid gap-4 md:grid-cols-3">
-                <PhotoSlot name={p.name} kind="id" />
-                <PhotoSlot name={p.name} kind="bank" />
-                <PhotoSlot name={p.name} kind="ic" />
+                <PhotoSlot name={p.name} kind="id" readOnly={!canEditPhotos} />
+                <PhotoSlot name={p.name} kind="bank" readOnly={!canEditPhotos} />
+                <PhotoSlot name={p.name} kind="ic" readOnly={!canEditPhotos} />
               </div>
               <section className="rounded-xl border border-line bg-surface p-4">
                 <h3 className="text-sm font-semibold">
@@ -623,10 +638,19 @@ function QueryPage() {
                           id={d.id}
                           kind="attendance"
                           fileName={d.fileName}
+                          readOnly={!canEditDocs}
                           suggest={`考勤-${d.year}年${d.month}月`}
                           taken={(attendanceDocs || []).map((x) => x.fileName)}
-                          onReplaced={(name) => patchAttendanceDoc(d.id, { fileName: name })}
-                          onDeleted={() => removeAttendanceDocs([d.id])}
+                          onReplaced={(name) => {
+                            // 兜底（与人员页同写法）：DocActions 在只读账号下已隐藏「替换」，
+                            // 万一 readOnly 传错也绝不让它一路写到服务端（那里必回 403）
+                            if (blockedWrite("attendance.edit", permLabel("attendance.edit"))) return;
+                            patchAttendanceDoc(d.id, { fileName: name });
+                          }}
+                          onDeleted={() => {
+                            if (blockedWrite("attendance.edit", permLabel("attendance.edit"))) return;
+                            removeAttendanceDocs([d.id]);
+                          }}
                         />
                       </li>
                     ))}

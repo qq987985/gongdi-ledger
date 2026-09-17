@@ -196,18 +196,22 @@ test("守卫：createBook 门禁必须走 book-quota 的唯一实现，且只对
   );
 });
 
-test("守卫：两个新建台账入口都要 try/catch 并原样显示服务端文案", async () => {
+test("守卫：两个新建台账入口都要原样显示服务端文案（1.8.14：下沉到 createBookAndEnter）", async () => {
   for (const file of ["src/components/settings/accounts-card.tsx", "src/components/shell/book-switcher.tsx"]) {
     const src = stripComments(await readFile(repo(file), "utf8"));
-    const idx = src.indexOf('authOp("createBook"');
-    assert.ok(idx > 0, `${file} 里必须有 createBook 入口`);
-    // 往前找最近的 try（catch 在其后不远）
-    const around = src.slice(Math.max(0, idx - 600), idx + 700);
-    assert.match(around, /try\s*\{/, `${file} 的 createBook 必须在 try 里（否则超限 400 是 unhandledrejection，界面什么都不显示）`);
-    assert.match(around, /catch\s*\(/, `${file} 的 createBook 必须有 catch`);
-    assert.match(around, /toast\.error\(/, `${file} 必须 toast.error 把服务端文案显示出来`);
-    assert.match(around, /\.message/, `${file} 必须用 err.message（服务端原文「已达上限…」），不能自己拼一句`);
+    const idx = src.indexOf("createBookAndEnter(");
+    assert.ok(idx > 0, `${file} 里必须有新建台账入口（nas-sync.createBookAndEnter）`);
+    const around = src.slice(Math.max(0, idx - 400), idx + 700);
+    // 超限 400 的文案要**原样**显示：读结果里的 reason（它来自 authOp 抛出的 err.message）
+    assert.match(around, /status === "failed"/, `${file} 必须读新建结果（失败就不许当成功继续）`);
+    assert.match(around, /toast\.error\(r\.reason\)/, `${file} 必须把服务端文案原样 toast 出来（否则超限 400 界面什么都不显示）`);
+    assert.doesNotMatch(around, /已达上限/, `${file} 不许自己拼一句超限文案`);
   }
+  // 文案原样传递的唯一实现：createBookAndEnter 把 authOp 的 err.message 原样带回
+  const sync = stripComments(await readFile(repo("src/lib/nas-sync.ts"), "utf8"));
+  const body = sync.slice(sync.indexOf("export async function createBookAndEnter"), sync.indexOf("export async function deleteBook"));
+  assert.match(body, /err instanceof Error \? err\.message/, "createBookAndEnter 必须把服务端文案（err.message）原样带回");
+  assert.doesNotMatch(body, /已达上限/, "不许自己拼文案（唯一来源是服务端 book-quota.ownedBooksLimitMessage）");
   // 文案唯一来源：除 book-quota.ts 外，源码里不许再写死「已达上限」这句
   const src = stripComments(await readFile(repo("src/lib/accounts.server.ts"), "utf8"));
   assert.equal(src.includes("已达上限"), false, "服务端不得再手写一份超限文案（要用 ownedBooksLimitMessage）");

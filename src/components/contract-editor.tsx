@@ -59,7 +59,8 @@ export function ContractEditor({
   creating: boolean;
   entries: ContractEntry[];
   onCancel: () => void;
-  onSave: (c: ContractRecord) => void;
+  /** 返回 false = 这次没存下去（只读账号被拦下）。此时**不许**复位脏标记 */
+  onSave: (c: ContractRecord) => void | boolean;
   onDelete?: () => void;
   onAddEntry: (e: ContractEntry) => void;
   onUpdateEntry: (e: ContractEntry) => void;
@@ -67,8 +68,13 @@ export function ContractEditor({
 }) {
   const [c, setC] = React.useState(draft);
   const roll = contractRollup(c, entries);
-  const { markDirty, requestClose } = useGuardedClose(onCancel);
+  const { markDirty, resetDirty, requestClose } = useGuardedClose(onCancel);
   const dirtyRef = React.useRef(false);
+  /** 合同表单存下去了：两层脏标记一起复位（本组件的 dirtyRef 管扫描件上传确认，B9 管关闭确认） */
+  function markSaved() {
+    dirtyRef.current = false;
+    resetDirty();
+  }
   // 1.8.8（B 组 E11/P19 同类排查）：随 draft 重置本地副本。
   // 原来只在挂载时取一次初值 —— 「编辑合同 A 时点新增合同」会把 A 的项目名/金额带进新表单，
   // 保存后按同一个 id 覆盖，A 整条丢失。目标记录 id 变了（新增每次 uid() 都是新的）就重新取初值。
@@ -143,7 +149,7 @@ export function ContractEditor({
                   })
                 )
                   return;
-                onSave(c);
+                if (onSave(c) !== false) markSaved();
               }}
             >
               保存合同信息
@@ -237,7 +243,7 @@ export function ContractEditor({
             if (dirtyRef.current && !confirm("刚才改的合同信息（金额/税率等）还没保存。上传扫描件会把它们一并保存，确定继续吗？")) return;
             const next = { ...c, scanFileName: name };
             setC(next);
-            onSave(next);
+            if (onSave(next) !== false) markSaved();
           }}
         />
         <div className="grid gap-4 xl:grid-cols-3">

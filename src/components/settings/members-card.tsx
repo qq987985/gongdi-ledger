@@ -72,7 +72,14 @@ export function MembersCard() {
                     type="button"
                     onClick={async () => {
                       if (!confirm(`把 ${m.name} 移出这套台账？`)) return;
-                      await authOp("removeMember", { id: bookId, userId: m.userId });
+                      // A11（专家评审）：写操作必须有 catch —— authOp 失败是抛错，
+                      // 原来这里没有 catch，界面一声不响（只留一条 unhandledrejection）
+                      try {
+                        await authOp("removeMember", { id: bookId, userId: m.userId });
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "移出失败，请重试");
+                        return;
+                      }
                       await load();
                       toast.success("已移除");
                     }}
@@ -87,7 +94,12 @@ export function MembersCard() {
                 checks={checks}
                 setChecks={setChecks}
                 onSave={async () => {
-                  await authOp("setMember", { id: bookId, userId: m.userId, perms: checks.join(",") });
+                  try {
+                    await authOp("setMember", { id: bookId, userId: m.userId, perms: checks.join(",") });
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "权限保存失败，请重试");
+                    return;
+                  }
                   setEditId("");
                   await load();
                   toast.success("权限已保存");
@@ -124,7 +136,12 @@ export function MembersCard() {
           type="button"
           onClick={async () => {
             if (!pick) return;
-            await authOp("addMember", { id: bookId, userId: pick, preset });
+            try {
+              await authOp("addMember", { id: bookId, userId: pick, preset });
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "加入失败，请重试");
+              return;
+            }
             setPick("");
             await load();
             toast.success("已加入这套台账");

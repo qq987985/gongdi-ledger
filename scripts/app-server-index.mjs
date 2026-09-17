@@ -5,10 +5,22 @@
  */
 import { createServer } from "node:http";
 import { readFile, stat, mkdir } from "node:fs/promises";
-import { appendFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import handler from "./server.js";
+// 日志核心与应用侧（src/lib/log.server.ts）**共用同一份实现**：级别 / 保留天数 / 单文件上限 /
+// 滚动 / 慢请求门槛只在这里读环境变量，两边不许再各复刻一套（见 scripts/log-core.mjs 顶部注释）。
+import {
+  enqueueLogLine,
+  flushLogs,
+  formatLogLine,
+  parseLogLevel,
+  parseSlowMs,
+  pruneOldLogs,
+  shouldLog,
+  stdoutLog,
+} from "./log-core.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = resolve(join(here, "..", "public"));
@@ -131,127 +143,24 @@ async function nodeFetch(req) {
  */
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 52 * 1024 * 1024);
 
-// ───────────────── 日志开关（与 src/lib/log.server.ts 同一套语义） ─────────────────
-// 启动器在 Docker 里只带 app/（不能 import src/），所以这几个判断在这里复刻了一份最小实现。
-// 应用进程内的日志走 src/lib/log.server.ts（同样认这几个环境变量）。
-
-/** LOG_LEVEL=debug|info|warn|error，默认 info；低于该级别的事件既不写文件也不打 stdout */
-const LOG_LEVELS = ["debug", "info", "warn", "error"];
-const MIN_LOG_LEVEL = (() => {
-  const v = String(process.env.LOG_LEVEL ?? "").trim().toLowerCase();
-  return LOG_LEVELS.includes(v) ? v : "info";
-})();
-function shouldLog(level) {
-  const i = LOG_LEVELS.indexOf(level);
-  return i >= 0 && i >= LOG_LEVELS.indexOf(MIN_LOG_LEVEL);
-}
-
-/** LOG_KEEP_DAYS：data/logs 只保留最近 N 天（默认 14），非法值走默认 */
-function keepDays() {
-  const n = Math.floor(Number(String(process.env.LOG_KEEP_DAYS ?? "").trim()));
-  return Number.isFinite(n) && n >= 1 ? Math.min(n, 3650) : 14;
-}
-
-/** LOG_MAX_MB：单天日志文件上限（默认 8MB），非法值走默认 */
-function maxLogMb() {
-  const n = Number(String(process.env.LOG_MAX_MB ?? "").trim());
-  return Number.isFinite(n) && n > 0 ? Math.min(n, 10240) : 8;
-}
-function maxLogBytes() {
-  return maxLogMb() * 1024 * 1024;
-}
-
-/** SLOW_MS：请求耗时达到该毫秒数就记「慢请求」（默认 2000） */
-const SLOW_MS = (() => {
-  const n = Number(String(process.env.SLOW_MS ?? "").trim());
-  return Number.isFinite(n) && n >= 0 ? n : 2000;
-})();
-
-/** 只删形如 YYYY-MM-DD.log 且超过保留期的文件；update.log 等一律不碰 */
-const DATED_LOG_RE = /^\d{4}-\d{2}-\d{2}\.log$/;
-const PROTECTED_LOGS = ["update.log"];
-function isExpiredLogName(name, today) {
-  if (typeof name !== "string" || PROTECTED_LOGS.includes(name) || !DATED_LOG_RE.test(name)) return false;
-  const day = name.slice(0, 10);
-  if (!Number.isFinite(Date.parse(`${day}T00:00:00.000Z`))) return false;
-  const cutoff = new Date(`${today}T00:00:00.000Z`);
-  cutoff.setUTCDate(cutoff.getUTCDate() - (keepDays() - 1));
-  return day < cutoff.toISOString().slice(0, 10);
-}
+// ───────────────── 日志（与应用侧共用 scripts/log-core.mjs 的同一份实现） ─────────────────
+// 启动器在 Docker 里只带 app/（不能 import src/ 下的 TypeScript），所以核心逻辑放在 log-core.mjs：
+// 级别 / 保留天数 / 单文件上限 / 滚动 / 慢请求门槛都在那里定义，**这里不许再复刻第二套**
+// （曾经就是两套：应用侧 1.8.4 起超限滚动 .log.N，启动器却停写当天文件且不认 .log.N）。
 
 const logsDir = join(dataDir, "logs");
-let lastCleanupDay = null;
-/** 当天已写字节数（-1=还没探测过）；capped 表示当天已达上限、停止写文件 */
-let logState = { day: "", bytes: -1, capped: false };
 
-/**
- * 清理过期日志：只在**进程启动后的第一次写**（lastCleanupDay=null）
- * 与**每天第一次写**时跑，不放在每次写的热路径上扫目录。
- */
-function pruneOldLogs(today) {
-  try {
-    for (const name of readdirSync(logsDir)) {
-      if (!isExpiredLogName(name, today)) continue;
-      try {
-        unlinkSync(join(logsDir, name));
-      } catch {}
-    }
-  } catch {}
-}
-
-/** 唯一的日志出口：stdout + data/logs/YYYY-MM-DD.log（NAS 上直接能看） */
+/** 唯一的日志出口：stdout + data/logs/YYYY-MM-DD.log（NAS 上直接能看，超限滚动不停写） */
 function logLine(level, event, detail = {}) {
-  if (!shouldLog(level)) return;
-  let line;
+  if (!shouldLog(level, parseLogLevel(process.env.LOG_LEVEL))) return;
+  const line = formatLogLine(level, event, detail);
+  stdoutLog(level, line);
   try {
-    line = JSON.stringify({ at: new Date().toISOString(), level, event, ...detail });
-  } catch {
-    line = JSON.stringify({ at: new Date().toISOString(), level, event, detail: "[无法序列化]" });
-  }
-  try {
-    if (level === "error") console.error(line);
-    else if (level === "warn") console.warn(line);
-    else if (level === "debug") console.debug(line);
-    else console.log(line);
-  } catch {}
-  try {
-    const now = new Date();
-    const today = now.toISOString().slice(0, 10);
     mkdirSync(logsDir, { recursive: true });
-    if (lastCleanupDay !== today) {
-      lastCleanupDay = today;
-      pruneOldLogs(today);
-    }
-    if (logState.day !== today) logState = { day: today, bytes: -1, capped: false };
-    if (logState.capped) return;
-    const file = join(logsDir, `${today}.log`);
-    if (logState.bytes < 0) {
-      try {
-        logState.bytes = statSync(file).size;
-      } catch {
-        logState.bytes = 0;
-      }
-    }
-    const size = Buffer.byteLength(line, "utf8") + 1;
-    const max = maxLogBytes();
-    if (logState.bytes + size > max) {
-      // 单文件上限：停止写当天文件（不轮转 .log.1——那会在 NAS 上再堆一份没人清的日志）
-      // 这条提示是保险丝，不随 LOG_LEVEL 静音（否则文件被撑满时一点痕迹都没有）
-      logState.capped = true;
-      console.warn(
-        JSON.stringify({
-          at: now.toISOString(),
-          level: "warn",
-          event: "当天日志已达上限，今天不再写文件",
-          file,
-          maxMb: maxLogMb(),
-        }),
-      );
-      return;
-    }
-    appendFileSync(file, `${line}\n`, "utf8");
-    logState.bytes += size;
   } catch {}
+  // 落盘走 log-core：进程内串行、达上限滚动到 .log.N、跨天/首次写触发保留策略清理。
+  // 不 await（日志不能挡请求），但绝不抛出。
+  return enqueueLogLine(logsDir, line).catch(() => {});
 }
 
 /** 只取路径：丢掉查询串（台账查询里可能带身份证/关键字）与 Cookie，绝不记录敏感值 */
@@ -271,16 +180,17 @@ function recordRequest(req, res, startedAt) {
     const method = req.method || "-";
     const path = safePath(req.url);
     if (status >= 500) logLine("error", "HTTP 5xx", { method, path, status, ms });
-    else if (ms >= SLOW_MS) logLine("warn", "慢请求", { method, path, status, ms });
+    // SLOW_MS 必须为正数：未设置时它曾经被解析成 0（Number("") === 0），
+    // 于是每个请求（含静态资源）都记一条「慢请求」，把真正要看的 5xx/真慢请求淹没。
+    else if (ms >= parseSlowMs(process.env.SLOW_MS)) logLine("warn", "慢请求", { method, path, status, ms });
   } catch {}
 }
 
-// 进程启动时清理一次过期日志（另一次在「每天第一次写日志」时）
+// 进程启动时清理一次过期日志（另一次在「每天第一次写日志」时，由 log-core 判断）
 try {
   mkdirSync(logsDir, { recursive: true });
-  lastCleanupDay = new Date().toISOString().slice(0, 10);
-  pruneOldLogs(lastCleanupDay);
 } catch {}
+void pruneOldLogs(logsDir).catch(() => {});
 
 // 未捕获异常原来只进 stdout：NAS 上按日期翻 data/logs 是空的，事后查不到任何 500
 process.on("uncaughtException", (err) => logLine("error", "未捕获异常", { error: String((err && err.stack) || err) }));
@@ -399,5 +309,36 @@ const host = process.env.HOST || process.env.NITRO_HOST || "0.0.0.0";
 server.listen(port, host, () => {
   console.log(`➜ Listening on: http://localhost:${port}/ (${host})`);
   // 启动留痕：NAS 上翻当天日志时能看到「服务什么时候起过」，也顺带证明日志通道是通的
-  logLine("info", "服务启动", { port, host, node: process.version, slowMs: SLOW_MS, logLevel: MIN_LOG_LEVEL });
+  logLine("info", "服务启动", {
+    port,
+    host,
+    node: process.version,
+    // 这两个值都从 log-core 的解析函数来：启动行自报的阈值必须与实际判定一致
+    // （曾经自报 slowMs:0 还照记每一条请求为「慢请求」）
+    slowMs: parseSlowMs(process.env.SLOW_MS),
+    logLevel: parseLogLevel(process.env.LOG_LEVEL),
+  });
 });
+
+// 优雅退出：Dockerfile 的 CMD 用 `exec node …` 让 PID 1 是 node，`docker stop` 的 SIGTERM 才到得了这里。
+// 不做这件事时：进程被直接终止 → 在飞的整本快照保存被中断（数据不会写坏：临时文件 + rename 是原子的，
+// 但那次保存丢失、临时文件可能残留），最后几条日志（往往是最关键的 5xx/异常）也随进程一起消失。
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logLine("info", "收到退出信号，停止接收新请求并等待在途请求结束", { signal });
+  // keep-alive 的空闲连接会拖住 server.close，主动断掉它们（在途请求不受影响）
+  try {
+    server.closeIdleConnections?.();
+  } catch {}
+  // 先把日志队列排干，再退出；5 秒兜底防止某个挂住的连接把容器卡在退出中
+  const done = () => void flushLogs().finally(() => process.exit(0));
+  try {
+    server.close(done);
+  } catch {
+    done();
+  }
+  setTimeout(done, 5000).unref();
+}
+for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => shutdown(signal));

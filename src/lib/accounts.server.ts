@@ -53,6 +53,12 @@ export interface Tenant {
   books: BookRecord[];
   perms: string[];
   all: AccountsFile;
+  /**
+   * 请求**显式指定**的台账（`x-book` 头或 cookie `gongdi_b`）不存在 / 当前用户不可访问（A1，1.8.14）。
+   * 这时 `bookId` 为空，且**绝不能**回落成「该用户的第一本台账」——
+   * 被移出某册 / 册子被删后客户端还带着旧 cookie，回落会让整本快照写进另一本台账（跨册数据污染）。
+   */
+  bookDenied?: boolean;
 }
 
 function accountsPath(): string {
@@ -99,7 +105,8 @@ async function verifyStoredHash(stored: string, raw: string): Promise<boolean> {
       return false;
     }
   }
-  // 旧格式：sha256("gongdi-ledger::" + pwd)（与历史客户端门禁一致）
+  // 旧格式：sha256("gongdi-ledger::" + pwd)。**只为「已经是旧 hash 的账号」兼容**（A3）：
+  // 首启不再由台账 accessHash 造新账号，且用户登录成功后会被静默升级成加盐 scrypt。
   return createHash("sha256").update(`gongdi-ledger::${t}`).digest("hex") === stored;
 }
 
@@ -209,15 +216,11 @@ export async function ensureAccounts(): Promise<AccountsFile> {
       salted = true;
     }
   if (salted) await writeFileShape(data);
-  if (!data.users.length) {
-    const admin = await adminFromOldLedger();
-    if (admin) {
-      const books = data.books.length
-        ? data.books.map((b) => ({ ...b, ownerId: b.ownerId || admin.id }))
-        : [{ id: "default", name: "默认台账", ownerId: admin.id }];
-      data = { users: [admin], books: books.map(normBook) };
-    }
-  }
+  // A3（1.8.14）：不再从旧台账的 accessHash 造管理员 —— 那个值是
+  // sha256("gongdi-ledger::" + 开机口令)，能读到台账的人就能拿它登录成管理员（CWE-916/759/522）。
+  // 现在一律要求显式创建管理员（前端 needSetup → 「创建管理员」），或走「已是旧 hash 的账号」的兼容登录；
+  // 这里只留一条可读日志，说明升级后为什么没有自动建号。
+  if (!data.users.length) await logLegacyAccessHashNotice();
   const next = await recoverBooksFromDisk(data);
   if ((persistOn() && !existsSync(accountsPath())) || JSON.stringify(data) !== JSON.stringify(next))
     await writeFileShape(next);
@@ -229,18 +232,25 @@ export async function ensureAccounts(): Promise<AccountsFile> {
   return next;
 }
 
-async function adminFromOldLedger(): Promise<UserRecord | null> {
+/**
+ * 老升级路径的提示（A3，1.8.14）：台账里还留着旧字段 `accessHash`、而账户库为空时，
+ * 记一条**可读**的日志，而不是拿它自动建管理员。升级引导由前端 needSetup（「创建管理员」页）负责，
+ * 这里只保证排查现场时能看出原因 —— `accessHash` 不再具备任何凭据效力。
+ */
+async function logLegacyAccessHashNotice(): Promise<void> {
   const root = dataDir();
-  if (!root) return null;
+  if (!root) return;
   for (const f of [join(root, "books", "default", "ledger.json"), join(root, "ledger.json")]) {
     if (!existsSync(f)) continue;
     try {
-      const raw = JSON.parse(await readFile(f, "utf8"));
-      if (raw.accessHash)
-        return { id: "admin", username: "admin", name: "管理员", hash: raw.accessHash, role: "admin" };
+      const raw = JSON.parse(await readFile(f, "utf8")) as { accessHash?: unknown };
+      if (raw?.accessHash)
+        await logServer("warn", "检测到旧版台账里的 accessHash：已不再自动创建管理员", {
+          path: f,
+          hint: "请在「创建管理员」页面显式设置账号；已有账号可用原口令登录（成功后自动升级为加盐哈希）",
+        });
     } catch {}
   }
-  return null;
 }
 
 async function recoverBooksFromDisk(cur: AccountsFile): Promise<AccountsFile> {
@@ -298,11 +308,15 @@ export async function resolveTenant(request: Request): Promise<Tenant> {
   const c = cookies(request);
   const userId = request.headers.get("x-user") || c.gongdi_u || "";
   const token = request.headers.get("x-token") || c.gongdi_t || "";
-  const bookId = request.headers.get("x-book") || c.gongdi_b || "default";
+  // 「显式指定了哪本册子」与「完全没指定」必须区别对待（A1，1.8.14）：
+  // 没指定（老 cookie / 老客户端）才允许回落第一本；指定了却不可访问时一律拒绝，
+  // 不回落 —— 否则被移出某册后，带着旧 cookie 的整本快照会静默写进另一本台账。
+  const requestedBook = (request.headers.get("x-book") || c.gongdi_b || "").trim();
   const user = data.users.find((u) => u.id === userId) || null;
   const ok = Boolean(user && !user.disabled && token && token === (await sessionToken(user)));
   const mine = ok && user ? booksOf(user, data.books) : [];
-  const book = mine.find((b) => b.id === bookId) || mine[0] || null;
+  const explicit = requestedBook ? mine.find((b) => b.id === requestedBook) || null : null;
+  const book = requestedBook ? explicit : mine[0] || null;
   const perms = ok && user ? permsOf(user, book) : [];
   return {
     needSetup: !accountsBroken && data.users.length === 0,
@@ -313,6 +327,7 @@ export async function resolveTenant(request: Request): Promise<Tenant> {
     books: mine,
     perms,
     all: data,
+    bookDenied: Boolean(ok && user && requestedBook && !explicit),
   };
 }
 
@@ -357,6 +372,32 @@ async function logAuth(
       module,
       error: e instanceof Error ? e.message : String(e),
     });
+  }
+}
+
+/**
+ * 删除类操作的服务端留痕（A5，1.8.14）。
+ *
+ * 为什么在服务端也要记一条：客户端的 `logOp()` 会漏报 —— 会话过期、网络失败、前端某个
+ * 删除入口忘了调，事后就查不出「谁把证件照/单据影像删了」。留痕里写清是谁（tenant）、删了什么。
+ *
+ * 留痕失败**不能**让删除本身变成 500（用户会以为没删掉）：只记日志 ——
+ * 审计文件读不出来时 `appendAudit` 内部也会再记一条「写入被拒」。
+ */
+export async function auditTenantDelete(
+  t: Tenant,
+  row: { action: string; module: string; detail: string },
+): Promise<void> {
+  try {
+    await appendAudit({
+      userId: t.user?.id || "",
+      userName: t.user?.name || t.user?.username || "",
+      action: row.action,
+      module: row.module,
+      detail: row.detail,
+    });
+  } catch (err) {
+    await logServer("error", "删除操作留痕失败", { action: row.action, error: String(err) });
   }
 }
 
@@ -737,24 +778,41 @@ function checkNeed(perms: string[] | undefined, need: string): boolean {
 }
 
 /**
- * 权限门禁 + 台账上下文。
+ * 租户 + 权限门禁（**不读请求体**，A4/1.8.14）。
  *
- * `fn` 会拿到解析好的 tenant（1.8.7 起）：导出这类「先鉴权、再写操作记录」的路由
- * 需要知道是谁在导（原来只能再 resolveTenant 一次，白读一遍 accounts.json）。
- * 老调用点写 `async () => …` 依然合法（参数少写不影响类型）。
+ * 为什么单独抽出来：`PUT /api/photo`、`PUT /api/doc` 这类上传接口的权限位取决于 body 里的
+ * `kind`，原来只能「先 `await request.formData()` 把最多 50MB 读进内存、再鉴权」——
+ * 未登录的人可以反复灌内存（CWE-770/400）。现在拆成两段：
+ *   ① `gateTenant(request)`：先做鉴权与台账上下文（不碰 body），拿到 tenant；
+ *   ② 读完 body 拿到 kind 后，用 `needDenied(request, tenant, need)` 补判具体权限。
+ * 返回值是 `Response` 表示已拒绝，调用方直接 `return` 它。
  */
-export async function withTenant(
-  request: Request,
-  fn: (tenant: Tenant) => Response | Promise<Response>,
-  need?: NeedSpec,
-): Promise<Response> {
-  if (!persistOn()) return fn({} as Tenant);
+export async function gateTenant(request: Request, need?: NeedSpec): Promise<Tenant | Response> {
+  if (!persistOn()) return {} as Tenant;
   const t = await resolveTenant(request);
   if (t.broken) return Response.json({ error: ACCOUNTS_BROKEN_MSG, broken: true }, { status: 503 });
   if (t.needSetup) return Response.json({ error: "need setup", needSetup: true }, { status: 401 });
   if (!t.user) return Response.json({ error: "login" }, { status: 401 });
-  if (!t.bookId)
+  if (!t.bookId) {
+    // A1：显式请求的台账不可访问/不存在时**不回落**，明确告诉客户端「这本册子用不了」。
+    // 客户端据此提示并让用户重新选台账（并停止把本机数据推回服务器）。
+    if (t.bookDenied)
+      return Response.json(
+        {
+          error: "这本台账不存在或你已不是它的成员（可能已被删除或移除），请重新选择台账",
+          bookDenied: true,
+        },
+        { status: 404 },
+      );
     return Response.json({ error: "还没有台账，请让管理员把你加入", noBook: true }, { status: 403 });
+  }
+  const denied = await permReject(request, t, need);
+  if (denied) return denied;
+  return t;
+}
+
+/** 权限位检查（供 `gateTenant` 与「读完 body 再判权限」的接口复用） */
+async function permReject(request: Request, t: Tenant, need?: NeedSpec): Promise<Response | null> {
   const needs = need === undefined ? [] : Array.isArray(need) ? need : [need];
   for (const n of needs) {
     if (checkNeed(t.perms, n)) continue;
@@ -762,12 +820,43 @@ export async function withTenant(
       need: n,
       route: new URL(request.url).pathname,
       method: request.method,
-      user: t.user.username,
+      user: t.user?.username,
       book: t.bookId,
     });
     const msg = n === "ledger.manage" ? "没有修改整本台账的权限" : n === "ledger.write" ? "没有修改权限" : "没有权限";
     return Response.json({ error: msg, need: n }, { status: 403 });
   }
+  return null;
+}
+
+/** 想先 `gateTenant()` 再按 body 判权限的接口用这个补判；通过返回 null，否则返回可直接回给客户端的 403 */
+export function needDenied(request: Request, t: Tenant, need: NeedSpec): Promise<Response | null> {
+  return permReject(request, t, need);
+}
+
+/** 在已解析的 tenant 上下文里执行（与 `withTenant` 的上下文语义一致） */
+export function runInTenant<T>(t: Tenant, fn: () => T): T {
+  return runWithBook(t.bookId, fn);
+}
+
+/**
+ * 权限门禁 + 台账上下文。
+ *
+ * `fn` 会拿到解析好的 tenant（1.8.7 起）：导出这类「先鉴权、再写操作记录」的路由
+ * 需要知道是谁在导（原来只能再 resolveTenant 一次，白读一遍 accounts.json）。
+ * 老调用点写 `async () => …` 依然合法（参数少写不影响类型）。
+ *
+ * **鉴权在调用方的第一行**：需要读 body 的接口要把整个 body 处理放进 `fn` 里
+ * （或改用 `gateTenant` + `needDenied` + `runInTenant`），否则未登录的人能先灌满内存（A4）。
+ */
+export async function withTenant(
+  request: Request,
+  fn: (tenant: Tenant) => Response | Promise<Response>,
+  need?: NeedSpec,
+): Promise<Response> {
+  if (!persistOn()) return fn({} as Tenant);
+  const t = await gateTenant(request, need);
+  if (t instanceof Response) return t;
   return runWithBook(t.bookId, () => fn(t));
 }
 

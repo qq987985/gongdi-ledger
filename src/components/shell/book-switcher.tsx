@@ -4,7 +4,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { authOp, authStatus } from "~/lib/auth";
 import { setLivePerms } from "~/lib/perms";
-import { dropLocalLedger, flushPendingLedger, pullNasLedger, setCacheOwner } from "~/lib/nas-sync";
+import { createBookAndEnter, switchBook } from "~/lib/nas-sync";
+import { confirmLeaveUnsaved } from "~/lib/unsaved";
 
 export function BookSwitcher({ compact }: { compact?: boolean }) {
   const [books, setBooks] = React.useState<{ id: string; name: string }[]>([]);
@@ -37,18 +38,20 @@ export function BookSwitcher({ compact }: { compact?: boolean }) {
   if (!user || !books.length) return null;
   async function switchTo(id: string) {
     if (id === bookId) return;
-    // 先把当前台账还没保存的改动推上去，再切台账
-    await flushPendingLedger();
-    await authOp("useBook", { id });
-    setBookId(id);
+    // 换台账会把内存里这本整本换掉：月表里没保存的改动要先问一句（F1 / A12，文案唯一在 lib/unsaved.ts）
+    if (!confirmLeaveUnsaved("切换到别的台账前，先把本月考勤保存一下")) return;
     const n = books.find((b) => b.id === id)?.name || id;
+    // G1/G3：切册的整套顺序（flush → 作废在途拉取 → 清本机 → 拉新册）唯一实现在 `nas-sync.switchBook`，
+    // 这里只负责界面（提示 + 广播台账名）；本机改动推不上去时 switchBook 会拦下并问用户。
+    const r = await switchBook(id, { action: `切换到「${n}」` });
+    if (r.status === "cancelled") return;
+    if (r.status === "failed") {
+      toast.error(r.reason);
+      return;
+    }
+    setBookId(id);
     window.dispatchEvent(new CustomEvent("gongdi-book", { detail: n }));
-    const s = await authStatus();
-    setLivePerms(s.persist ? s.perms || [] : ["*"]);
-    // 换台账先丢掉上一本的残留：拉到新数据前屏幕上是空的，不是上一本的
-    dropLocalLedger(`切换到台账 ${id}`);
-    setCacheOwner(String(s.user?.id || ""), id);
-    await pullNasLedger();
+    await load();
     toast.success(`已切换到「${n}」`);
   }
   if (compact)
@@ -113,23 +116,22 @@ export function BookSwitcher({ compact }: { compact?: boolean }) {
             type="button"
             onClick={async () => {
               if (!name.trim()) return;
-              // 先把当前台账还没保存的改动推上去，再新建（否则这批改动会落到新台账）
-              await flushPendingLedger();
-              try {
-                const r = await authOp("createBook", { name: name.trim() });
-                setName("");
-                setAdding(false);
-                await load();
-                // 让其它台账下拉实例也立刻刷新（原来只有整页刷新才出现新台账）
-                window.dispatchEvent(new Event("gongdi-books"));
-                if (r.bookId) {
-                  await pullNasLedger();
-                  toast.success("已新建空台账");
-                }
-              } catch (err) {
-                // 普通成员自建台账有数量上限：服务端 400 的文案要**原样**显示（1.8.9）
-                toast.error(err instanceof Error ? err.message : "新建台账失败");
+              // 新建后本机这本会被空台账替换：同样先问一句（F1 / A12）
+              if (!confirmLeaveUnsaved("新建台账后，先把本月考勤保存一下")) return;
+              // G1/G3：新建的整套顺序（flush → createBook → 作废在途拉取 → 清本机 → 拉空册）
+              // 唯一实现在 `nas-sync.createBookAndEnter`。服务端 400（自建数量上限）的文案原样显示。
+              const r = await createBookAndEnter(name.trim(), { action: "新建台账" });
+              if (r.status === "cancelled") return;
+              if (r.status === "failed") {
+                toast.error(r.reason);
+                return;
               }
+              setName("");
+              setAdding(false);
+              await load();
+              // 让其它台账下拉实例也立刻刷新（原来只有整页刷新才出现新台账）
+              window.dispatchEvent(new Event("gongdi-books"));
+              toast.success("已新建空台账");
             }}
           >
             建

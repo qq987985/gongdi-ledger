@@ -27,11 +27,13 @@ function ledgerPath(): string {
   return join(bookRoot(), "ledger.json");
 }
 
-/** 台账读取结果：empty = 还没有台账文件；unreadable = 文件在但读不出来（损坏/权限/IO） */
-export interface LedgerRead extends Partial<LedgerState> {
-  empty?: boolean;
-  unreadable?: boolean;
-}
+/**
+ * 台账读取结果：empty = 还没有台账文件；unreadable = 文件在但读不出来（损坏/权限/IO）。
+ * 定义已下沉到叶子 `./types`（G2 / 专家评审 A2：影像层要用它 ⇒ 原来与 `assets.server.ts` 互指的环），
+ * 这里再导出一次保持调用点不变。
+ */
+import type { LedgerRead } from "./types";
+export type { LedgerRead };
 
 export function ledgerUnreadable(data: LedgerRead): boolean {
   return Boolean(data.unreadable);
@@ -57,6 +59,9 @@ export async function readLedger(): Promise<LedgerRead> {
   // 合同扫描件补名：只补「读出来的视图」，不回写——读路径写盘会绕过写队列和 CAS，覆盖并发保存
   // （历史上就出过读路径写回旧快照、把并发 PUT 的新数据盖掉的事）。补出来的值由客户端下次保存落盘。
   await reconcileContractScans(raw as { contracts?: { id?: string; name?: string; scanFileName?: string }[] });
+  // A3（1.8.14）：旧字段 accessHash 不再出现在读视图里（它的历史效力见 dropLegacyAccessHash）。
+  // 只删内存视图，不回写文件；老文件在下一次保存时被清理掉。
+  if ("accessHash" in raw) delete (raw as Record<string, unknown>).accessHash;
   return raw as LedgerRead;
 }
 
@@ -81,34 +86,84 @@ export async function ledgerRevision(): Promise<string> {
 
 export type LedgerWriteResult = "ok" | "conflict" | "unreadable";
 
-let ledgerWriteQueue: Promise<LedgerWriteResult> = Promise.resolve("ok");
+/** 写盘结果 + 「写成功后的服务端版本号」（与 GET 同源，见 writeLedgerEx） */
+export interface LedgerWriteOutcome {
+  result: LedgerWriteResult;
+  /** 只有 result === "ok" 时有效：服务端读视图的版本号；失败时为空串（不要拿它当基准） */
+  revision: string;
+}
 
-async function writeLedgerNow(data: Partial<LedgerState>, expectedRevision?: string): Promise<LedgerWriteResult> {
-  if (!persistOn()) return "ok";
+/**
+ * A3（1.8.14）：丢弃旧台账字段 `accessHash`。
+ *
+ * 它的值是 `sha256("gongdi-ledger::" + 开机口令)`，历史上既当过「开机口令」也当管理员口令 hash
+ * （`adminFromOldLedger` 直接拿它建 admin）→ 任何能读到 ledger.json 的路径都等于拿到管理员凭据
+ * （CWE-916/759/522）。现在：写入一律丢弃；有值时才记一条日志（老客户端仍会带着空串发，
+ * 不值得每个保存都写一行噪音）。
+ */
+function dropLegacyAccessHash(data: Partial<LedgerState>): { payload: Partial<LedgerState>; hadValue: boolean } {
+  if (!data || typeof data !== "object" || !("accessHash" in data)) return { payload: data, hadValue: false };
+  const clone = { ...(data as Record<string, unknown>) };
+  const value = clone.accessHash;
+  delete clone.accessHash;
+  return { payload: clone as Partial<LedgerState>, hadValue: Boolean(value) };
+}
+
+let ledgerWriteQueue: Promise<LedgerWriteOutcome> = Promise.resolve({ result: "ok", revision: "" });
+
+async function writeLedgerNow(
+  data: Partial<LedgerState>,
+  expectedRevision?: string,
+): Promise<LedgerWriteOutcome> {
+  if (!persistOn()) return { result: "ok", revision: "" };
   await ensureDirs();
   // 一次读取同时用于「坏文件保护」和「CAS 比对」，避免读写之间再插入一次读
   const cur = await readLedger();
-  if (ledgerUnreadable(cur)) return "unreadable";
-  if (expectedRevision !== undefined && ledgerRevisionValue(cur) !== expectedRevision) return "conflict";
+  if (ledgerUnreadable(cur)) return { result: "unreadable", revision: "" };
+  if (expectedRevision !== undefined && ledgerRevisionValue(cur) !== expectedRevision)
+    return { result: "conflict", revision: "" };
+  const { payload, hadValue } = dropLegacyAccessHash(data);
+  if (hadValue)
+    await logServer("warn", "台账写入已丢弃旧字段 accessHash", { path: ledgerPath() });
   // 原子写：先写临时文件再 rename，避免写一半崩溃导致文件损坏
   const p = ledgerPath();
   const tmp = `${p}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   try {
-    await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
+    await writeFile(tmp, JSON.stringify(payload, null, 2), "utf8");
     await rename(tmp, p);
   } catch (err) {
     await rm(tmp, { force: true }).catch(() => {});
     await logServer("error", "台账写入失败", { path: p, error: String(err) });
     throw err;
   }
-  return "ok";
+  // A2（1.8.14）：版本号必须与 GET / CAS 同源 —— 都用**服务端读视图**。
+  // 原来 PUT 响应头是拿请求体算的（`ledgerRevisionValue(body)`），而 readLedger() 会补合同扫描件名
+  // 等只在视图里的字段 → 客户端存下的基准永远对不上，下一次保存必然假冲突 409，弹窗还诱导用户
+  // 「以本机覆盖」（真丢别人的改动）。写完后在同一个串行队列里再读一次、按同一口径算，客户端拿到的
+  // 头就一定等于它随后 GET 到的头。
+  const after = await readLedger();
+  return { result: "ok", revision: ledgerUnreadable(after) ? "" : ledgerRevisionValue(after) };
 }
 
-/** 将版本检查和替换放在同一串行队列，避免两个请求同时通过 CAS 检查。 */
-export function writeLedger(data: Partial<LedgerState>, expectedRevision?: string): Promise<LedgerWriteResult> {
+/**
+ * 将版本检查和替换放在同一串行队列，避免两个请求同时通过 CAS 检查。
+ * 返回结果 + 写成功后的服务端版本号（PUT /api/ledger 用它设 `X-Ledger-Revision` 响应头）。
+ */
+export function writeLedgerEx(
+  data: Partial<LedgerState>,
+  expectedRevision?: string,
+): Promise<LedgerWriteOutcome> {
   const run = () => writeLedgerNow(data, expectedRevision);
   ledgerWriteQueue = ledgerWriteQueue.then(run, run);
   return ledgerWriteQueue;
+}
+
+/** 只关心结果的调用方（year.ts 等）用这个；口径与 writeLedgerEx 完全一致 */
+export async function writeLedger(
+  data: Partial<LedgerState>,
+  expectedRevision?: string,
+): Promise<LedgerWriteResult> {
+  return (await writeLedgerEx(data, expectedRevision)).result;
 }
 
 function auditPath(): string {

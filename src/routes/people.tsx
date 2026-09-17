@@ -282,12 +282,12 @@ function PeoplePage() {
             onSave={(p) => {
               // 只读账号在入口就被拦（编辑按钮已禁用），这里再兜一层：
               // 宁可什么都不做 + 明确提示，也绝不弹「已保存」（A 组报告第 17 项）
-              if (blockedWrite("people.edit", permLabel("people.edit"))) return;
+              if (blockedWrite("people.edit", permLabel("people.edit"))) return false;
               // 同名统一口径（总览/Excel/考勤都按姓名匹配）：新增与改名都拦截，避免一人多档
               const dupName = people.some((x) => x.name === p.name && (!editing || x.id !== editing.id));
               if (dupName) {
                 toast.error("已有同名人员，请改名或直接编辑原记录");
-                return;
+                return false;
               }
               if (creating) {
                 addPerson(p);
@@ -366,7 +366,8 @@ function PersonEditor({
   creating: boolean;
   refresh?: number;
   onClose: () => void;
-  onSave: (p: Person) => void;
+  /** 返回 false = 这次没存下去（只读账号被拦下 / 重名被拒）。此时**不许**复位脏标记 */
+  onSave: (p: Person) => void | boolean;
   onDelete?: () => void;
   onChanged?: () => void;
 }) {
@@ -384,7 +385,7 @@ function PersonEditor({
   }, [person.id]);
   // 编辑框里的「保存 / 删除」也要按权限禁用：只读账号连点都不该点得动
   const canEditSelf = useCanSave("people.edit");
-  const { markDirty, requestClose } = useGuardedClose(onClose);
+  const { markDirty, resetDirty, requestClose } = useGuardedClose(onClose);
   function set<K extends keyof Person>(k: K, v: Person[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
@@ -443,7 +444,8 @@ function PersonEditor({
       })
     )
       return;
-    onSave(next);
+    // 存下去了才复位脏标记（B9）：只读账号被拦、重名被拒时保持脏，关闭仍会确认一次
+    if (onSave(next) !== false) resetDirty();
   }
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -682,7 +684,7 @@ function PersonEditor({
           </div>
         ) : (
           <p className="mt-4 text-xs text-muted">
-            先填姓名再上传。身份证格子正面、反面各一张小图，点小图可放大查看。也可直接拷到 NAS：data/photos/id，文件名「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。编辑老档案时照片挂在档案原姓名下，改名保存后请重传。
+            先填姓名再上传。身份证格子正面、反面各一张小图，点小图可放大查看。也可直接拷到 NAS：data/photos/id，文件名「张三-身份证-正面.jpg」「张三-身份证-反面.jpg」。编辑老档案时照片挂在档案原姓名下，改名保存后请重传。改名会同步改掉考勤、发放、保险参保人、报销人里的姓名（历史记录一起改，不会脱钩），照片文件名不变，所以要重传。
           </p>
         )}
       </div>

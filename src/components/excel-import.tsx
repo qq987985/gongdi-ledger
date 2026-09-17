@@ -18,6 +18,8 @@ import {
   planAttendanceImport,
 } from "~/lib/excel";
 import { uid } from "~/lib/utils";
+// 姓名比较键的唯一实现（A-1）：导入时按姓名匹配人员/考勤，比较两侧都要 trim
+import { nameKey } from "~/lib/receiver";
 import { useApp } from "~/lib/store";
 import type { AttendanceRow, Expense, InsuranceMember, Payment, Person } from "~/lib/types";
 
@@ -78,12 +80,12 @@ export function PeopleImport() {
     let people = store.people.slice();
     if (mode === "replace") {
       // 替换模式：只保留不在导入列表中的原有人员，然后全部重新导入
-      const incomingNames = new Set([...fresh.map((p) => p.name), ...conflicts.filter((c) => c.action === "overwrite").map((c) => c.incoming.name)]);
-      people = people.filter((p) => !incomingNames.has(p.name));
+      const incomingNames = new Set([...fresh.map((p) => nameKey(p.name)), ...conflicts.filter((c) => c.action === "overwrite").map((c) => nameKey(c.incoming.name))]);
+      people = people.filter((p) => !incomingNames.has(nameKey(p.name)));
     }
     for (const p of fresh) people.push({ ...p, id: uid() });
     for (const c of conflicts)
-      if (c.action === "overwrite") people = people.map((x) => (x.name === c.existing.name ? { ...c.incoming, id: x.id } : x));
+      if (c.action === "overwrite") people = people.map((x) => (nameKey(x.name) === nameKey(c.existing.name) ? { ...c.incoming, id: x.id } : x));
     store.replacePeople(people);
     toast.success(mode === "replace" ? "人员已替换导入" : "人员导入完成");
     setConflicts([]);
@@ -181,7 +183,7 @@ export function AttendanceImport() {
     const conflicts: { name: string; existing: AttendanceRow; incoming: AttendanceRow }[] = [];
     for (const p of planAttendanceImport(rows, store.attendance, targetYear, targetMonth, keepMonths)) {
       if (!p.conflict) continue;
-      const ex = store.attendance.find((a) => a.year === p.year && a.month === p.month && a.name === p.row.name);
+      const ex = store.attendance.find((a) => a.year === p.year && a.month === p.month && nameKey(a.name) === nameKey(p.row.name));
       if (ex) conflicts.push({ name: p.row.name, existing: ex, incoming: p.row });
     }
 
@@ -216,7 +218,7 @@ export function AttendanceImport() {
         id: uid(),
         year: p.year,
         month: p.month,
-        team: p.row.team || store.people.find((x) => x.name === p.row.name)?.team || "",
+        team: p.row.team || store.people.find((x) => nameKey(x.name) === nameKey(p.row.name))?.team || "",
       }));
 
     // 行内年份可能跨年，全部展开后再写入

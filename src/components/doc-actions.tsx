@@ -387,7 +387,15 @@ export function DocActions({
                 named = pack.file;
                 replace = pack.replace;
               }
-              const saved = (await setDoc(id, kind, named, { replace })) || named.name;
+              // A11（专家评审）：原来这里没有 catch —— 上传失败（含服务端 403 权限不足、
+              // 413「文件太大，最大 50MB」）时界面一声不响。把服务端原文交给用户。
+              let saved = "";
+              try {
+                saved = (await setDoc(id, kind, named, { replace })) || named.name;
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "上传失败，请检查网络后重试");
+                return;
+              }
               onReplaced(saved);
               toast.success(fileName ? `已替换为 ${saved}` : `已上传 ${saved}`);
             }}
@@ -408,7 +416,13 @@ export function DocActions({
           className="rounded-sm border border-line px-1.5 py-0.5 text-[11px] text-muted hover:text-danger"
           onClick={async () => {
             if (!confirm(`确认删除影像资料「${fileName}」？删除后无法从这里找回。`)) return;
-            await removeDoc(id, kind);
+            // A11：删除失败（403 / 文件已经不在）也要说出来，不然用户以为删掉了
+            try {
+              await removeDoc(id, kind);
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "删除失败，请检查网络后重试");
+              return;
+            }
             onDeleted();
             toast.success("已删除影像资料");
           }}

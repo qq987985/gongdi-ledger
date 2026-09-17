@@ -3,10 +3,10 @@ import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { confirmRemoveYear, monthStatus, nextYear } from "~/lib/dates";
-import { nasEnabled } from "~/lib/nas-flag";
-import { pullNasLedger } from "~/lib/nas-sync";
+import { flushPendingLedger } from "~/lib/nas-sync";
 import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
+import { confirmLeaveUnsaved } from "~/lib/unsaved";
 import { useApp } from "~/lib/store";
 import { Can } from "~/components/can";
 
@@ -22,6 +22,15 @@ export function YearSwitcher({ compact }: { compact?: boolean }) {
   const prev = list[idx - 1];
   const nxt = list[idx + 1];
   const upcoming = nextYear(list);
+  /**
+   * 换年份会换掉整张月表：未保存的月表改动要像路由跳转一样先问一句（F1 / A12）。
+   * 文案与拦截都在 lib/unsaved.ts 一处，这里只负责在换年之前调一次。
+   */
+  function goYear(y: number) {
+    if (y === year) return;
+    if (!confirmLeaveUnsaved("换年份后这张月表会重新填")) return;
+    setYear(y);
+  }
   function addNext() {
     // 只读账号不该出现「新增年度」：服务端 /api/year 要 settings.year，
     // 本机改了也只留在本机（A 组报告 30b）
@@ -37,9 +46,14 @@ export function YearSwitcher({ compact }: { compact?: boolean }) {
     }
     const filled = Array.from({ length: 12 }, (_, i) => monthStatus(attendance, y, i + 1).filled > 0).filter(Boolean).length;
     if (!confirmRemoveYear(y, filled)) return;
-    try {
-      if (nasEnabled()) await pullNasLedger();
-    } catch {}
+    // G3 / 专家评审 B18：这里原来是 `pullNasLedger()`（**先覆盖本机**）—— 本机还没推上去的改动
+    // 会被服务器版本盖掉。删年度是「改本机数据 + 等自动保存」，所以必须先 flush；
+    // 推不上去就**中止删除并保留本机改动**，让用户自己决定（否则这次删除会叠在被丢掉的改动上）。
+    const flushed = await flushPendingLedger();
+    if (flushed.status === "failed") {
+      toast.error(`本机改动还没保存成功，先不删年度：${flushed.reason}`);
+      return;
+    }
     removeYear(y);
     toast.success(`已删除 ${y} 年考勤。人员、照片、发放记录都还在。`);
   }
@@ -48,7 +62,7 @@ export function YearSwitcher({ compact }: { compact?: boolean }) {
       <select
         className="field-select h-9 max-w-[8.5rem] shrink-0 text-sm"
         value={year}
-        onChange={(e) => setYear(Number(e.target.value))}
+        onChange={(e) => goYear(Number(e.target.value))}
         aria-label="选择年度"
       >
         {list.map((y) => (
@@ -61,13 +75,13 @@ export function YearSwitcher({ compact }: { compact?: boolean }) {
   return (
     <div className="mt-4 space-y-2">
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" className="size-8" disabled={!prev} type="button" onClick={() => prev && setYear(prev)}>
+        <Button variant="ghost" size="icon" className="size-8" disabled={!prev} type="button" onClick={() => prev && goYear(prev)}>
           <ChevronLeft className="size-4" />
         </Button>
         <select
           className="field-select h-9 min-w-0 flex-1"
           value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
+          onChange={(e) => goYear(Number(e.target.value))}
           aria-label="选择年度"
         >
           {list.map((y) => (
@@ -76,7 +90,7 @@ export function YearSwitcher({ compact }: { compact?: boolean }) {
             </option>
           ))}
         </select>
-        <Button variant="ghost" size="icon" className="size-8" disabled={!nxt} type="button" onClick={() => nxt && setYear(nxt)}>
+        <Button variant="ghost" size="icon" className="size-8" disabled={!nxt} type="button" onClick={() => nxt && goYear(nxt)}>
           <ChevronRight className="size-4" />
         </Button>
       </div>

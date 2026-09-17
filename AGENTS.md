@@ -8,13 +8,17 @@
 
 - **`docs/README.md`** —— 文档总索引：每份报告覆盖什么、状态如何，以及**当前未闭环项的唯一清单**。
 - `docs/审查与报告/` —— 历轮审查 / 复审 / 体检 / 架构审核（每份末尾有「处理状态」）。
-- `docs/使用与部署/` —— 使用说明、目录结构、部署说明、上传说明（注意：版本行还停在 1.2.x，内容滞后）。
+- `docs/使用与部署/` —— 使用说明、目录结构、部署说明、上传说明（8 份的版本行都写成「以 `VERSION.txt` 第一行为准」，
+  正文按 1.8.0/1.8.1 现状核对；1.8.0 已集中重写，见下方「仍待处理」的闭环条目）。
 - 根目录只留四个入口文档：`README.md`、`VERSION.txt`、`开发规范.md`（强制约定）、`AGENTS.md`（本文件）。
 - 处理完一份报告：**在原报告末尾追加「处理状态」**，并更新 `docs/README.md`（开发规范 §2）。
 
 ## 修改前必须知道的约束
 
-- API 写入必须经过 `withTenant(request, fn, need)`，并在当前台账上下文中执行。
+- **台账/业务数据**的写入必须经过 `withTenant(request, fn, need)`，并在当前台账上下文中执行；
+  写的是**台账之外**的东西（账号册、清镜像、触发更新）的接口至少要 `resolveTenant(request)` + 自行校验角色/同源
+  （现例：`src/routes/api/auth.ts`、`src/routes/api/images.ts`、`src/routes/api/update.ts`）。守卫的口径就是「二者其一」：
+  `tests/api-input-guards.test.ts`「每个会写盘的 handler 必须有鉴权（withTenant / resolveTenant）」。
 - 全量台账包含身份证和银行卡等敏感字段。读取至少需要 `people.view`，整本写入需要 `ledger.manage`。
 - 台账、账户和审计文件使用临时文件加 `rename` 原子写入。照片和文档上传也必须先写临时文件，再替换正式文件。
 - 自动保存是整本台账快照，必须通过 `pushNasLedger()` 的串行队列，不能直接并发 PUT。
@@ -43,6 +47,17 @@
 - **量打印分页只能在真 PDF 上量**（`ci/mobile-print-check.mjs pages` + `ci/print-pdf.mjs`）：真实打印的
   内容宽是 703px（186mm），比屏幕按 A4 宽 794px 量的更窄 ⇒ 换行更多、纸面更高；只看屏幕 DOM 高度会误判
   「1 页装得下」（1.8.13 踩过）。
+- **1.8.14 起新增的守卫家族**：结构红线（`tests/structure-guards.test.ts`：禁环 + 三条主线方向 + `types.ts` 叶子，
+  白名单只有 §12.3 的 `update/docker ↔ update/log` 且必须写明原因）、`tests/min-hits.ts`（扫描类守卫必须声明命中数下限 +
+  坏样本自检，治「正则 0 命中也是绿」）、版本四处一致（`tests/version-consistency.test.ts`）、文档口径一致
+  （`tests/docs-consistency.test.ts`）、在途拉取代际（`tests/pull-generation.test.ts`：迟到响应不覆盖新册）、
+  租户不回落（`tests/tenant-book-scope.test.ts`）、鉴权在读 body 之前（`tests/auth-before-body.test.ts`）、
+  删除留痕（`tests/delete-audit.test.ts`）、`accessHash` 凭据链（`tests/legacy-accesshash.test.ts`）、
+  版本号同源（`tests/ledger-revision-source.test.ts`）、未保存拦截（`tests/unsaved-guard.test.ts` + `ci/unsaved-guard-check.mjs` 真浏览器复核）、
+  备份完整性（`tests/backup-book.test.ts`）、改名事务（`tests/rename-person.test.ts`）、姓名键（`tests/name-key.test.ts`）、
+  金额取整（`tests/money-rounding.test.ts`）、出勤输入（`tests/attendance-input.test.ts`）、同步脏标记与失败可见性
+  （`tests/sync-dirty-guards.test.ts`、`tests/write-failure-guards.test.ts`）、启动器日志与交付
+  （`tests/launcher-log.test.ts`、`tests/deploy-guards.test.ts`、`tests/build-stamp.test.ts`）。
 - 提交前跑三道闸：`pnpm run typecheck`、`pnpm test`、`pnpm build`（规范 §2，测试见 §10）。
 
 ## 回归测试与质量闸门（2026-09-10 起）
@@ -55,12 +70,13 @@
 - 只在 `tests/*.test.ts` 里测纯函数；`tests/register.mjs` 负责给省略扩展名的相对导入补 `.ts`。Node 需 ≥ 22.18。
 - **改数据类代码前先看 `tests/excel-roundtrip.test.ts`**：Excel 导出→导入的往返断言是这套系统最容易悄悄改坏的地方（金额、年份、条数）。
 - 已知未修的问题写成 `test(name, { todo: "原因" }, fn)`，fn 断言正确行为；修好后自动转 pass。**现在 0 个 todo（已知缺陷已清零）**。
+- **扫描类守卫必须自带「命中数下限」自检**（1.8.14 起，专家评审 C2）：正则扫源码的守卫命中 0 处也是绿的（清单漏项 / 文件搬家 / 正则失效都看不出来，评审实测到两处假绿）→ 用 `tests/min-hits.ts` 的 `expectMinHits`（下限）与 `expectRegexCatches`（拿坏样本证明正则没坏）。
 - CI 闸门在 `ci/check.workflow.yml`：因为规范禁止本地改 `.github/workflows/`，首次要在 GitHub 网页建 `check.yml` 粘贴
   （1.8.1 已在该模板里补「Excel 往返对拍」一步；本机等价命令 `pnpm run check`）。
   **`check.yml` 已于 2026-09-16 建到 GitHub（1.8.10 起生效，推送 main / PR 都会跑 typecheck → test →
   test:roundtrip → build + `app/VERSION.txt` 一致性）**；本地 `git log origin/main` 里能看到它
   （本地 `git pull` 之前看不到文件，属正常）。
-- 1.8.13 起覆盖 **392 个用例（392 pass + 0 todo）**（1.8.12 时是 390、1.8.11 时是 389、1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.14 起覆盖 **543 个用例（543 pass + 0 todo）**（1.8.13 时是 392、1.8.12 时是 390、1.8.11 时是 389、1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源；
   1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外；

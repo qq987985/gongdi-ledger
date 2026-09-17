@@ -2,7 +2,7 @@
 
 这里的文件**不会自动生效**，因为开发规范 §2 规定：不要在本地改/加 `.github/workflows/`
 （推送工作流文件需要 token 带 `workflow` 权限，权限不够 GitHub 会直接拒绝整次推送）。
-所以统一做法是：在 GitHub 网页 → Actions → New workflow → 粘贴内容保存。
+所以统一做法是：在 GitHub 网页 → Actions → 选中对应 workflow → 编辑 → 整段粘贴 → 提交。
 
 ---
 
@@ -14,22 +14,72 @@ CI 跑的四步，本机一条命令等价（`package.json` 的 `check` 脚本�
 pnpm run check   # typecheck → test → test:roundtrip → build
 ```
 
+`pnpm run build` 结束时会写 `app/.build-inputs`（源码指纹）—— **它要跟 `app/` 一起提交**，
+CI 靠它在构建**之前**判断「这份 app/ 是不是当前源码构建出来的」。
+
 另外 `tests/guards-paths.test.ts` 会校验「守卫测试引用的源码路径都存在」——
 拆文件/改名后如果忘了同步守卫路径，`pnpm test` 会直接红（`开发规范.md` §12 末尾有说明）。
 
-## 1. `check.workflow.yml` —— 质量闸门（**建议尽快启用**）
+## 0. 两个 workflow 怎么装（2026-09-17 起，A8）
 
-把本文件内容粘贴成 `.github/workflows/check.yml` 即可。启用后每次 push / PR 会跑：
+| 模板 | 粘成 | 作用 |
+| --- | --- | --- |
+| `ci/check.workflow.yml` | `.github/workflows/check.yml` | 类型检查 / 回归测试 / Excel 往返对拍 / 构建产物不漂移 |
+| `ci/docker.workflow.yml` | `.github/workflows/docker.yml` | ghcr 镜像 + Windows zip Release |
 
-1. `pnpm run typecheck`（tsc 0 错误）
-2. `pnpm test`（零依赖回归测试，直接跑 tests/ 下的 .ts）
-3. `pnpm run build` 后再校验 `app/` 与源码同步（产物必须是当前源码构建出来的）
+每个文件各做一遍（约 1 分钟）：
 
-注意：Node 需要 **≥ 22.18**（类型擦除）；pnpm 版本要和本机一致（当前 12.x）。
+1. 仓库 → **Actions** → 左侧选中 `check`（或 `docker`）→ 右上 **⋯ → Edit workflow**；
+   首次还没有时用 **New workflow → set up a workflow yourself**，文件名填 `check.yml` / `docker.yml`。
+2. 把 `ci/check.workflow.yml`（或 `ci/docker.workflow.yml`）的**全部内容**粘进去覆盖原内容，提交。
+3. 以后再改这两个 workflow 都必须走这条网页路径（本地改会被 GitHub 拒绝推送）。
+
+> **为什么这次必须换掉线上那两份**：线上 `check.yml` 的第四道闸是**恒真**的 ——
+> 它先 `pnpm run build` 再去比 `app/VERSION.txt`，而 VERSION.txt 是构建时复制过去的、结构上永远相等；
+> 唯一还能看出漂移的判据在 `76b8099` 被降级成 `::warning`。同时 `docker.yml` 的两个 job 一道闸都不跑，
+> 直接拿仓库里那份 `app/` 构建/打包 → 「改了 src/ 忘了重建 app/」会全绿发版，
+> 用户拿到旧代码而版本号已是新的（表现为「更新完版本变了、行为没变」）。
+> 新模板：① `check` 第四道闸改回 `exit 1`，判据换成**跨环境稳定**的两条 ——
+> `cmp` 三个「构建时原样复制」的文件（启动器 / 日志核心 / VERSION.txt），以及
+> `node scripts/build-stamp.mjs --verify` 比源码指纹；② `docker` 的两个 job 在构建/打包前
+> 自己 `pnpm install --frozen-lockfile && pnpm run build`。
+> （不拿 `git diff --exit-code app/` 当硬失败：不同 OS / Node 版本构建出的字节不同，会让 CI 常红 ——
+> 那正是它当年被降级的原因。字节差异现在仍然提示，只是不作为失败。）
 
 ---
 
-## 2. 让「合并」和「发版」解耦（建议，需在网页改 `docker.yml`）
+## 1. `check.workflow.yml` —— 质量闸门
+
+把本文件内容粘贴成 `.github/workflows/check.yml` 即可（步骤见 §0）。启用后每次 push / PR 会跑：
+
+1. `pnpm run typecheck`（tsc 0 错误）
+2. `pnpm test`（零依赖回归测试，直接跑 tests/ 下的 .ts）
+3. `pnpm run test:roundtrip`（Excel 导出→导入对拍 70 用例）
+4. **构建产物不漂移（硬闸门）**：`cmp` 三个直接复制的文件 + 源码指纹 `app/.build-inputs`
+5. `pnpm run build`（确认源码能构建出产物；跨环境字节差异只提示不失败）
+
+注意：Node 需要 **≥ 22.18**（类型擦除）；pnpm 版本要和本机一致（当前 12.x）。
+第 4 步的原理、以及「为什么不用 git diff」写在 `scripts/build-stamp.mjs` 顶部注释里。
+
+---
+
+## 1b. `docker.workflow.yml` —— 镜像与 Windows 包（同样建议尽快换）
+
+模板包含两处改动：①（A8）两个 job 构建/打包前自己 `pnpm install --frozen-lockfile && pnpm run build`；
+②（C4④）windows job 加了发版守卫
+`if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'`
+—— **推 main 只出 `latest` 镜像；打 `v*` tag 或网页手动触发才打包 + 发 Release**。
+`version` 步骤同时改成「打 tag 时以 tag 名为准」（`v1.8.14` → `1.8.14`），
+避免 tag 名与 `VERSION.txt` 首行不一致时把 Release 发到别的 tag 上。
+贴上这份模板之后，下面 §2 说的「推一次文档就移动一次 Release」就不存在了 ——
+§2 保留原文当决策记录，**不用**再单独做一遍。
+
+---
+
+## 2. 让「合并」和「发版」解耦（**已并入 §1b 的模板**，此处留档）
+
+> 2026-09-17：本节的「建议改法」已经写进 `ci/docker.workflow.yml`（含 `if:` 守卫与 tag 名优先）。
+> 下面保留背景与决策记录；装模板时不必再做第二遍。
 
 ### 现状问题
 

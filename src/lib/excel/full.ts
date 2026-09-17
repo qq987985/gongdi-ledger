@@ -3,6 +3,9 @@ import { uid } from "../utils";
 import { getWageAt, monthPay } from "../wage";
 import { hasContent } from "../work";
 import { daysBetween, paymentsInYear } from "../dates";
+// 姓名比较键的唯一实现（A-1）：导出件的「汇总 / 工天加班」按姓名匹配人员与发放，
+// 两侧都要过 nameKey（否则同一个人年度表一行、这张 sheet 又是另一套数字）
+import { nameKey, ownerKey } from "../receiver";
 import type {
   AttendanceRow,
   Expense,
@@ -11,6 +14,7 @@ import type {
   Payment,
   Person,
 } from "../types";
+import type { ContractEntry, ContractRecord } from "../contracts";
 import {
   cellStr,
   contractFilesCell,
@@ -32,6 +36,7 @@ import { attFromRow } from "./attendance";
 import { expenseSheetAoa, rowToExpense } from "./expenses";
 import { paymentSheetAoa, rowToPayment } from "./payments";
 import { peopleSheetAoa, rowToPerson } from "./people";
+import { buildContractWorkbook } from "./contracts";
 
 export interface FullBookParse {
   year: number;
@@ -148,6 +153,10 @@ export interface FullWorkbookArgs {
   expenses?: Expense[];
   insurancePolicies?: InsurancePolicy[];
   insuranceMembers?: InsuranceMember[];
+  // 合同（合同管理表 + 报量/开票/收款/资金对照/影像明细）——F2：备份必须含合同，
+  // 复用 buildContractWorkbook，不在备份里另写一份拼表逻辑
+  contracts?: ContractRecord[];
+  contractEntries?: ContractEntry[];
   months?: { year: number; month: number }[];
   skipPeople?: boolean;
   skipPay?: boolean;
@@ -169,7 +178,7 @@ function hasAttContent(a: AttendanceRow): boolean {
   return hasContent(a);
 }
 export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
-  const { year, people, attendance, payments, expenses = [], insurancePolicies = [], insuranceMembers = [], months: monthArg, skipPeople = false, skipPay = false, skipExp = false } = args;
+  const { year, people, attendance, payments, expenses = [], insurancePolicies = [], insuranceMembers = [], contracts = [], contractEntries = [], months: monthArg, skipPeople = false, skipPay = false, skipExp = false } = args;
   const wb = utils.book_new();
   const monthList =
     Array.isArray(monthArg) && monthArg.length
@@ -187,7 +196,7 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
       ["序号", "姓名", "班组", "出勤天数", "加班小时", "补助", "扣款", "餐补", "计薪", "工资", "加班费", "应发工资", "加班规则", "备注"],
     ];
     monthRows.forEach((a, i) => {
-      const p = people.find((x) => x.name === a.name);
+      const p = people.find((x) => nameKey(x.name) === nameKey(a.name));
       const wage = getWageAt(p, y, m);
       const calc = monthPay(a, wage);
       aoa.push([
@@ -229,6 +238,12 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
     }
     utils.book_append_sheet(wb, sheetFromAoa(iaoa), "保险人员");
   }
+  // 合同：整块交给既有导出函数，把它的 sheet 原样并进本工作簿（别处不再拼一份）。
+  // 这样备份文件同时是一份合法的**合同导入文件**：出事时把备份丢回「导入 → 合同」也能还原。
+  if (contracts.length || contractEntries.length) {
+    const cwb = buildContractWorkbook({ contracts, entries: contractEntries });
+    for (const name of cwb.SheetNames) utils.book_append_sheet(wb, cwb.Sheets[name], name);
+  }
   const earliestYear = yearSet.length ? Math.min(...yearSet) : year;
   for (const y of yearSet) {
     // 无日期的旧发放只归最早一年，避免每年汇总重复出现
@@ -243,17 +258,17 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
     // 汇总/工天加班的人列必须与月表同口径（hasAttContent）：只填备注的人
     // 在月表里有这一行，汇总表里也得有他，否则同一个工作簿里两处对不上
     const workers = people.filter((p) =>
-      attendance.some((a) => a.year === y && a.name === p.name && hasAttContent(a)),
+      attendance.some((a) => a.year === y && nameKey(a.name) === nameKey(p.name) && hasAttContent(a)),
     );
     workers.forEach((p, i) => {
       const months: (number | string)[] = [];
       for (let m = 1; m <= 12; m++) {
-        const a = attendance.find((x) => x.year === y && x.month === m && x.name === p.name);
+        const a = attendance.find((x) => x.year === y && x.month === m && nameKey(x.name) === nameKey(p.name));
         const wage = getWageAt(p, y, m);
         months.push(monthPay(a, wage).pay);
       }
       const total = months.reduce<number>((s, n) => s + (n as number), 0);
-      const paid = yearPays.filter((x) => x.owner === p.name && x.date).reduce((s, x) => s + x.amount, 0);
+      const paid = yearPays.filter((x) => ownerKey(x) === nameKey(p.name) && x.date).reduce((s, x) => s + x.amount, 0);
       const unpaid = total - paid;
       const status = total === 0 ? "未计" : unpaid <= 0 ? "已结清" : paid > 0 ? "部分发放" : "未发放";
       sumAoa.push([
@@ -276,7 +291,7 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
       let daysSum = 0;
       let otSum = 0;
       for (let m = 1; m <= 12; m++) {
-        const a = attendance.find((x) => x.year === y && x.month === m && x.name === p.name);
+        const a = attendance.find((x) => x.year === y && x.month === m && nameKey(x.name) === nameKey(p.name));
         const d = a?.days || 0;
         const o = a?.otHours || 0;
         daysSum += d;

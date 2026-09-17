@@ -1,6 +1,14 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0.."
+REM 这份 bat 在 zip 里有两份（同一个文件）：zip 根目录（= 安装根）与 win\ 子目录，见 win/pack.sh。
+REM 所以不能无条件 cd 到上一级：先判断 %~dp0 自己是不是程序根目录，不是才上跳一级。
+REM （原来固定 cd 到上一级：放在 zip 根的那份会切到安装根的上一层，随后报「请重新解压」这种误报；
+REM  在线更新后的重启（src/lib/update/apply.ts）启动的正是 zip 根那份。）
+if exist "%~dp0app\server\index.mjs" (
+  cd /d "%~dp0"
+) else (
+  cd /d "%~dp0.."
+)
 title GongDi Ledger
 
 if not exist "node\node.exe" (

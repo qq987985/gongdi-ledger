@@ -16,13 +16,18 @@ cp -a app "$STAGE/app"
 rm -rf "$STAGE/app/public/__grok" 2>/dev/null || true
 mkdir -p "$STAGE/win"
 cp win/启动.bat win/停止.bat "$STAGE/win/"
-# 同时在 zip 根目录放一份，保证在线更新脚本（只在解压根目录找 bat）能更新启动器
+# zip 根目录 = 安装根（app/、node/、data/ 都在这一层），再放一份 bat：
+#   ① 在线更新脚本只在解压根目录找 bat（src/lib/update/apply.ts 覆盖 "%CD%\启动.bat" 并 start 它）；
+#   ② 用户双击最显眼的那个入口也能直接起来。
+# 两份是**同一个文件**：脚本自己判断「当前目录是不是程序根目录」再决定要不要上跳一级，
+# 所以根目录与 win\ 下都能启动（1.8.14 修：原来根目录那份会 cd 到上一级、报「请重新解压」，
+# 且在线更新后服务不会自己回来）。
 cp win/启动.bat win/停止.bat "$STAGE/"
 cp VERSION.txt "$STAGE/" 2>/dev/null || true
 # 说明文档已归档到 docs/使用与部署/，但包里仍放在根目录（用户第一眼要看）
 cp docs/使用与部署/使用说明.md "$STAGE/" 2>/dev/null || true
 cp docs/使用与部署/目录结构.txt "$STAGE/" 2>/dev/null || true
-printf '%s\n' '工地台账 Windows 解压即用' '双击 win/启动.bat' 'http://127.0.0.1:8501' '数据在 data，不要删。' > "$STAGE/说明.txt"
+printf '%s\n' '工地台账 Windows 解压即用' '双击 启动.bat（根目录这份，或 win\ 下的那份，都一样）' 'http://127.0.0.1:8501' '数据在 data，不要删。' > "$STAGE/说明.txt"
 
 if [ -f /tmp/node-win/node.exe ]; then
   cp /tmp/node-win/node.exe "$STAGE/node/node.exe"

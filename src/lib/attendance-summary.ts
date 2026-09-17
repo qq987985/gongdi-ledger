@@ -26,6 +26,9 @@ import { getWageAt, monthPay, round2 } from "./wage";
 import { hasContent } from "./work";
 import { groupBuckets } from "./buckets";
 import { isPaid, isPending, isProxyPaid } from "./payments-stats";
+// 姓名比较键的唯一实现（A-1）：比较**两侧**都要过 nameKey —— 存量数据里「张三 」与「张三」
+// 本来是同一个人的两行（年度表拆行、出勤静默归零），本文件不许再写裸 `a.name === person.name`
+import { nameKey, ownerKey } from "./receiver";
 import type { AttendanceRow, Payment, Person } from "./types";
 
 /** 年度表里「本年没有考勤记录、但有已发记录」那一行的备注（决策二） */
@@ -95,7 +98,7 @@ export function filledMonthsOf(attendance: { year: number; month: number }[], ye
 
 /** 一个人的 12 个月（同月多行累加；工资金额走 wage.ts 的唯一算法） */
 export function personMonths(person: Person, attendance: AttendanceRow[], year: number): MonthCell[] {
-  const mine = attendance.filter((a) => a.year === year && a.name === person.name);
+  const mine = attendance.filter((a) => a.year === year && nameKey(a.name) === nameKey(person.name));
   return Array.from({ length: 12 }, (_, i) => {
     const month = i + 1;
     const rows = mine.filter((a) => a.month === month);
@@ -141,8 +144,8 @@ export function summarizeYear(args: {
     const yearPayAmt = months.reduce((s, m) => s + m.pay, 0);
     const yearDays = months.reduce((s, m) => s + m.days, 0);
     const yearOt = months.reduce((s, m) => s + m.otHours, 0);
-    const paid = paidRows.filter((x) => (x.owner || "").trim() === person.name).reduce((s, x) => s + x.amount, 0);
-    const worked = attendance.some((a) => a.year === year && a.name === person.name && hasContent(a));
+    const paid = paidRows.filter((x) => ownerKey(x) === nameKey(person.name)).reduce((s, x) => s + x.amount, 0);
+    const worked = attendance.some((a) => a.year === year && nameKey(a.name) === nameKey(person.name) && hasContent(a));
     if (!worked) continue;
     rows.push({
       person,
@@ -158,10 +161,10 @@ export function summarizeYear(args: {
     });
   }
   // 决策二：本年没有考勤内容、却有已发记录的人，补一行（全年 0、已发照实列、未发为负数）
-  const rowNames = new Set(rows.map((r) => r.person.name));
+  const rowNames = new Set(rows.map((r) => nameKey(r.person.name)));
   const orphans = new Map<string, number>();
   for (const p of paidRows) {
-    const name = (p.owner || "").trim();
+    const name = ownerKey(p);
     if (rowNames.has(name)) continue;
     orphans.set(name, (orphans.get(name) || 0) + (p.amount || 0));
   }
@@ -169,7 +172,7 @@ export function summarizeYear(args: {
   const orphanRows: YearPersonRow[] = [...orphans.entries()]
     .map(([name, amount]) => {
       const paid = round2(amount);
-      const known = people.find((p) => p.name === name);
+      const known = people.find((p) => nameKey(p.name) === name);
       const person: Person =
         known ?? {
           id: `pay-only:${name}`,
@@ -212,7 +215,7 @@ export function summarizeYear(args: {
   const rowsPaidSum = round2(rows.reduce((s, r) => s + r.paid, 0));
   const paidTotal = round2(paidRows.reduce((s, p) => s + p.amount, 0));
   // 安全网（决策二后恒为空）：已发记录没能落到任何一行的人与钱。正常不再触发，留着兜底。
-  const offRows = paidRows.filter((p) => !rows.some((r) => r.person.name === (p.owner || "").trim()));
+  const offRows = paidRows.filter((p) => !rows.some((r) => nameKey(r.person.name) === ownerKey(p)));
   const proxyRows = paidRows.filter(isProxyPaid);
   return {
     rows,

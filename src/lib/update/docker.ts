@@ -1,6 +1,11 @@
 /**
- * Docker 引擎交互：dockerReq 原始请求、镜像拉取/比对/清理、容器自省。
- * 从 update.server.ts 原样搬出，行为不变。
+ * Docker 引擎交互：dockerReq 原始请求、镜像拉取/比对/清理、容器自省。从 update.server.ts 原样搬出，行为不变。
+ *
+ * **互引例外（开发规范 §12.3，必须在注释里写明原因）**：本文件要 `./log` 的 `appendUpdateLog()`（把更新过程写进 update.log），`./log` 又要本文件的 `dockerReq()`（读更新容器日志）——
+ * 两者互相 import。为什么允许：两者同属 `src/lib/update/` 这一条「一键更新」链路，都不是可复用的一般设施；
+ * 再拆一个模块只会让 Docker 请求的签名在三个文件之间转手，真实耦合一点没少（拆的收益是零，代价是多一层跳转）。
+ * 要真消除，得把「Docker 请求」（基础设施）与「更新日志文件格式」（观测）当成两个独立关注点 —— 属后续专轮。
+ * 例外登记在 `tests/structure-guards.test.ts` 的白名单里，并且**本段说明必须存在**（删掉就测试红）。
  */
 import http from "node:http";
 import { readFile } from "node:fs/promises";

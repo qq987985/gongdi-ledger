@@ -141,3 +141,50 @@ test("兜底：saveBackup(0 字节) 自己不写盘（将来多一个调用方�
   assert.ok(p && existsSync(p), "非空 buffer 应正常落盘");
   assert.ok((await stat(join(root, "backups", "考勤表.xlsx"))).size > 0);
 });
+
+/* ── B-12③（1.8.14）：非空垃圾内容同样不许覆盖「最新备份」 ── */
+
+test("B-12③ 内容不是 xlsx（JSON / HTML 错误页 / 纯文本）→ 400，且 backups 一个字节都没变", async () => {
+  const before = await snapshot();
+  assert.ok(Object.keys(before).length > 0, "前置：已有备份");
+  for (const junk of [
+    Buffer.from('{"ok":true,"data":[]}'),
+    Buffer.from("<!doctype html><html><body>502 Bad Gateway</body></html>"),
+    Buffer.from("随便一段文本"),
+  ]) {
+    const r = await call(junk);
+    assert.equal(r.status, 400, `${junk.subarray(0, 16).toString()} 不是 xlsx，必须 400（不是 ok:true）`);
+    const j = (await r.json()) as { error?: string; invalid?: boolean };
+    assert.match(String(j.error), /xlsx/, "要给用户可读原因");
+    assert.equal(j.invalid, true);
+    assert.deepEqual(await snapshot(), before, "垃圾内容绝不许覆盖固定名「最新备份」");
+  }
+});
+
+test("B-12③ 传输中断被截断的 xlsx（只有前 200 字节）→ 400；完整的那份照样能写", async () => {
+  const before = await snapshot();
+  const full = tinyXlsx("会被截断");
+  const r = await call(Buffer.from(full.subarray(0, 200)));
+  assert.equal(r.status, 400, "截断的 xlsx 不是完整备份，必须 400");
+  assert.match(String(((await r.json()) as { error?: string }).error), /截断|损坏|xlsx/);
+  assert.deepEqual(await snapshot(), before, "截断内容不许覆盖最新备份");
+  // 正向对照：判据不误伤正常文件
+  const ok = await call(full);
+  assert.equal(ok.status, 200);
+  const after = await snapshot();
+  assert.notEqual(after["考勤表.xlsx"], before["考勤表.xlsx"], "完整 xlsx 应正常更新最新备份");
+});
+
+test("B-12③ backupRejectReason 判据：正常 xlsx 放行，各类坏输入都有可读原因", async () => {
+  const { backupRejectReason } = await import("../src/lib/backup-check");
+  assert.match(backupRejectReason(Buffer.alloc(0)), /空|0 字节/, "0 字节文案与 1.8.4 一致（老测试仍匹配）");
+  assert.match(backupRejectReason(null), /空|0 字节/);
+  assert.equal(backupRejectReason(tinyXlsx("正常")), "", "正常 xlsx 必须放行");
+  const zipNoXl = Buffer.concat([
+    Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+    Buffer.from("hello.txt"),
+    Buffer.from([0x50, 0x4b, 0x05, 0x06]),
+  ]);
+  assert.match(backupRejectReason(zipNoXl), /xl\//, "是 zip 但不是 xlsx（没有 xl/ 目录）");
+  assert.match(backupRejectReason(Buffer.from(tinyXlsx("截断").subarray(0, 200))), /截断|损坏/);
+});

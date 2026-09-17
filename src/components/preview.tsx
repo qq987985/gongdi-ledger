@@ -16,6 +16,10 @@ export interface PreviewTarget {
  * 为什么要有它：原来「查看」是 `window.open(blobUrl, "_blank")` —— 新开一个浏览器标签页，
  * 看完还得手动切回列表再点下一次，而且 blob URL 60 秒后失效，回来再点常提示"文件不在"。
  * 现在改成弹窗：点遮罩 / Esc / 「关闭」都能关，弹窗里还能直接下载，不用来回切页面。
+ *
+ * `data-modal`：声明「这里还有一个内层弹层」。编辑弹窗（`useGuardedClose`）的 Esc / 点遮罩
+ * 会检查它 —— 否则在「编辑报销 → 查看凭证」时按一次 Esc，会先关预览、又弹出「有未保存的更改」
+ * 两个框（C3）。
  */
 export function PreviewModal({ target, onClose }: { target: PreviewTarget | null; onClose: () => void }) {
   React.useEffect(() => {
@@ -30,6 +34,7 @@ export function PreviewModal({ target, onClose }: { target: PreviewTarget | null
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
     <div
+      data-modal="preview"
       className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 p-3"
       onClick={onClose}
       role="dialog"

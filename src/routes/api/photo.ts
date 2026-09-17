@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { persistOn } from "~/lib/paths.server";
 import { findPhotoPath, isWritablePhotoDataUrl, photoNameWritable, removePhoto, savePhoto } from "~/lib/assets.server";
-import { withTenant } from "~/lib/accounts.server";
+import { auditTenantDelete, gateTenant, needDenied, runInTenant, withTenant } from "~/lib/accounts.server";
 
 function kindOf(v: string | null) {
   if (v === "id" || v === "idFront" || v === "idBack" || v === "bank" || v === "ic") return v === "idFront" ? "id" : v;
   return null;
 }
+
+/** 照片类别中文名（与客户端 `src/lib/photos.ts` 的 PHOTO_KIND_LABEL 同口径，审计内容里给用户看） */
+const PHOTO_CN: Record<string, string> = { id: "身份证正面", idBack: "身份证反面", bank: "银行卡", ic: "IC卡" };
 
 export const Route = createFileRoute("/api/photo")({
   server: {
@@ -32,6 +35,11 @@ export const Route = createFileRoute("/api/photo")({
       },
       PUT: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
+        // A4（1.8.14）：先鉴权（**不读 body**），读完 body 拿到 kind 再判具体权限。
+        // 原来 `await request.json()` 在前、withTenant 在后 —— 未登录的人反复发 20MB body
+        // 就能把内存吃满（CWE-770/400）。权限位（photos.edit）与 4xx 语义不变。
+        const t = await gateTenant(request);
+        if (t instanceof Response) return t;
         // 照片走 base64 JSON，限制 20MB（原图过大先压缩再传）
         const len = Number(request.headers.get("content-length") || 0);
         if (len > 20 * 1024 * 1024) return Response.json({ error: "照片太大，最大 20MB" }, { status: 413 });
@@ -53,14 +61,12 @@ export const Route = createFileRoute("/api/photo")({
           return Response.json({ error: "文件名去掉非法字符后为空，请换一个名字" }, { status: 400 });
         if (!isWritablePhotoDataUrl(body.dataUrl))
           return Response.json({ error: "照片数据格式不对（需要 data:image/…;base64,… 的图片数据）" }, { status: 400 });
-        return withTenant(
-          request,
-          async () => {
-            await savePhoto(body.name, kind, body.dataUrl);
-            return Response.json({ ok: true });
-          },
-          "photos.edit",
-        );
+        const denied = await needDenied(request, t, "photos.edit");
+        if (denied) return denied;
+        return runInTenant(t, async () => {
+          await savePhoto(body.name, kind, body.dataUrl);
+          return Response.json({ ok: true });
+        });
       },
       DELETE: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
@@ -73,8 +79,15 @@ export const Route = createFileRoute("/api/photo")({
           return Response.json({ error: "文件名去掉非法字符后为空，没有可删除的照片" }, { status: 400 });
         return withTenant(
           request,
-          async () => {
+          async (t) => {
             await removePhoto(name, kind);
+            // A5（1.8.14）：删除影像必须在**服务端**留痕。原来只有客户端 logOp，
+            // 会话过期/网络失败/前端漏报就彻底查不出「谁把证件照删了」。
+            await auditTenantDelete(t, {
+              action: "删除照片",
+              module: "照片",
+              detail: `${name} ${PHOTO_CN[kind] || kind}（服务端记录）`,
+            });
             return Response.json({ ok: true });
           },
           "photos.edit",

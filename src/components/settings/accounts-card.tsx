@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Input, Label } from "~/components/ui/input";
 import { authStatus, authOp } from "~/lib/auth";
-import { dropLocalLedger, pullNasLedger, flushPendingLedger, setCacheOwner } from "~/lib/nas-sync";
+import { createBookAndEnter, deleteBook, switchBook } from "~/lib/nas-sync";
 import { PRESETS } from "~/lib/perms";
 
 export function AccountsCard() {
@@ -102,14 +102,17 @@ export function AccountsCard() {
                       size="sm"
                       type="button"
                       onClick={async () => {
-                        await flushPendingLedger();
-                        await authOp("useBook", { id: b.id });
+                        // G1/G3：切册顺序唯一实现在 nas-sync.switchBook（flush → 作废在途拉取 →
+                        // 清本机 → 拉新册）；本机改动推不上去会被拦下并问用户。
+                        const r = await switchBook(b.id, { action: `进入「${b.name}」` });
+                        if (r.status === "cancelled") return;
+                        if (r.status === "failed") {
+                          toast.error(r.reason);
+                          return;
+                        }
                         window.dispatchEvent(new CustomEvent("gongdi-book", { detail: b.name }));
                         window.dispatchEvent(new Event("gongdi-books"));
-                        // 换台账先丢掉上一本的残留（拉到之前屏幕上是空的，不是上一本的）
-                        dropLocalLedger(`切换到台账 ${b.id}`);
-                        setCacheOwner(String(me.id || ""), b.id);
-                        await pullNasLedger();
+                        await load();
                         toast.success(`已进入「${b.name}」`);
                       }}
                     >
@@ -141,11 +144,16 @@ export function AccountsCard() {
                           )
                             return;
                           try {
-                            await flushPendingLedger();
-                            await authOp("deleteBook", { id: b.id });
+                            // G1/G3：删除的编排（flush 只在删当前这本时拦 → 作废在途拉取 →
+                            // 服务器换册时清本机 + 重新拉）唯一实现在 nas-sync.deleteBook
+                            const r = await deleteBook(b.id, { action: `删除台账「${b.name}」` });
+                            if (r.status === "cancelled") return;
+                            if (r.status === "failed") {
+                              toast.error(r.reason);
+                              return;
+                            }
                             await load();
                             window.dispatchEvent(new Event("gongdi-books"));
-                            await pullNasLedger();
                             toast.success("已删除这套台账");
                           } catch (err: any) {
                             toast.error(err instanceof Error ? err.message : "删除失败");
@@ -175,17 +183,19 @@ export function AccountsCard() {
               if (!bookName.trim() || creating) return;
               setCreating(true);
               try {
-                await flushPendingLedger();
-                await authOp("createBook", { name: bookName.trim() });
+                // G1/G3：新建台账的唯一入口（flush → createBook → 作废在途拉取 → 清本机 → 拉空册）
+                const r = await createBookAndEnter(bookName.trim(), { action: "新建台账" });
+                if (r.status === "cancelled") return;
+                if (r.status === "failed") {
+                  toast.error(r.reason);
+                  return;
+                }
                 setBookName("");
                 await load();
                 // 新建台账后左侧下拉要立刻出现这本（原来 createBook 分支漏发事件，
                 // 必须刷新整页才看到 —— A 组报告第 32 项）
                 window.dispatchEvent(new Event("gongdi-books"));
-                await pullNasLedger();
                 toast.success("已新建空台账，可在左侧切换");
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "新建台账失败");
               } finally {
                 setCreating(false);
               }

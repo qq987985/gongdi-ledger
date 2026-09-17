@@ -85,10 +85,13 @@ export function ScanPhotosButton({
 export function IdCardSlot({
   name,
   compact,
+  readOnly = false,
   onChanged,
 }: {
   name: string;
   compact?: boolean;
+  /** true = 只读账号：不显示「传正面/换正面/删除」，点图仍能看大图 */
+  readOnly?: boolean;
   onChanged?: () => void;
 }) {
   const [front, setFront] = React.useState<string | null>(null);
@@ -111,6 +114,16 @@ export function IdCardSlot({
       live = false;
     };
   }, [name]);
+  // 全屏预览自己吃 Esc（外层元素带 data-modal）：否则按一次 Esc 会穿透到外层人员编辑弹窗，
+  // 弹出「有未保存的更改」的确认（C3）
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   async function onFile(file: File, kind: "id" | "idBack") {
     if (!file || !name) return;
     setBusy(true);
@@ -156,15 +169,17 @@ export function IdCardSlot({
               <span className="text-xs text-muted">正面</span>
             </div>
           )}
-          <button
-            type="button"
-            disabled={busy}
-            className={cn(btnFill, "w-full", !front && "opacity-70")}
-            onClick={() => frontRef.current?.click()}
-          >
-            <Camera className="mr-0.5 size-3.5" />
-            {front ? "换正面" : "传正面"}
-          </button>
+          {!readOnly ? (
+            <button
+              type="button"
+              disabled={busy}
+              className={cn(btnFill, "w-full", !front && "opacity-70")}
+              onClick={() => frontRef.current?.click()}
+            >
+              <Camera className="mr-0.5 size-3.5" />
+              {front ? "换正面" : "传正面"}
+            </button>
+          ) : null}
         </div>
         <div className="space-y-1.5">
           {back ? (
@@ -176,15 +191,17 @@ export function IdCardSlot({
               <span className="text-xs text-muted">反面</span>
             </div>
           )}
-          <button
-            type="button"
-            disabled={busy}
-            className={cn(btnFill, "w-full", !back && "opacity-70")}
-            onClick={() => backRef.current?.click()}
-          >
-            <Camera className="mr-0.5 size-3.5" />
-            {back ? "换反面" : "传反面"}
-          </button>
+          {!readOnly ? (
+            <button
+              type="button"
+              disabled={busy}
+              className={cn(btnFill, "w-full", !back && "opacity-70")}
+              onClick={() => backRef.current?.click()}
+            >
+              <Camera className="mr-0.5 size-3.5" />
+              {back ? "换反面" : "传反面"}
+            </button>
+          ) : null}
         </div>
       </div>
       <input
@@ -217,6 +234,7 @@ export function IdCardSlot({
       {compactView}
       {open ? (
         <div
+          data-modal="photo-id"
           className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
@@ -251,24 +269,26 @@ export function IdCardSlot({
                   >
                     <Download className="mr-1 size-3" /> 下载
                   </button>
-                  <button
-                    type="button"
-                    className={cn(btnGhost, "text-danger hover:text-danger")}
-                    onClick={async () => {
-                      if (!confirm(`删除 ${name} 的${face === "back" ? "反面" : "正面"}？`)) return;
-                      try {
-                        await deletePhoto(name, face === "back" ? "idBack" : "id");
-                        if (face === "back") setBack(null);
-                        else setFront(null);
-                        onChanged?.();
-                        toast.success("已删除");
-                      } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "删除失败，请重试");
-                      }
-                    }}
-                  >
-                    删除
-                  </button>
+                  {!readOnly ? (
+                    <button
+                      type="button"
+                      className={cn(btnGhost, "text-danger hover:text-danger")}
+                      onClick={async () => {
+                        if (!confirm(`删除 ${name} 的${face === "back" ? "反面" : "正面"}？`)) return;
+                        try {
+                          await deletePhoto(name, face === "back" ? "idBack" : "id");
+                          if (face === "back") setBack(null);
+                          else setFront(null);
+                          onChanged?.();
+                          toast.success("已删除");
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "删除失败，请重试");
+                        }
+                      }}
+                    >
+                      删除
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -286,12 +306,15 @@ function SinglePhotoSlot({
   kind,
   label,
   compact,
+  readOnly = false,
   onChanged,
 }: {
   name: string;
   kind: string;
   label: string;
   compact?: boolean;
+  /** true = 只读账号：不显示「上传/换图/删除」，点图仍能看大图 */
+  readOnly?: boolean;
   onChanged?: () => void;
 }) {
   const [url, setUrl] = React.useState<string | null>(null);
@@ -307,6 +330,15 @@ function SinglePhotoSlot({
       live = false;
     };
   }, [name, kind]);
+  // 同上：单张照片（银行卡 / IC卡）的全屏预览自己处理 Esc（C3）
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   async function onFile(file: File) {
     setBusy(true);
     try {
@@ -346,32 +378,39 @@ function SinglePhotoSlot({
             onClick={() => setOpen(true)}
           />
         ) : null}
-        <button
-          type="button"
-          disabled={busy}
-          className={cn(btnFill, !url && "opacity-70")}
-          onClick={(e) => {
-            const input = e.currentTarget.parentElement?.querySelector("input[type=file]") as HTMLInputElement | null;
-            input?.click();
-          }}
-        >
-          <Camera className="mr-0.5 size-3.5" />
-          {url ? `换${label}` : `上传${label}`}
-        </button>
-        <input
-          type="file"
-          accept={photoAccept}
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = "";
-            if (f) onFile(f);
-          }}
-        />
-        <p className="mt-1 text-[11px] text-muted">{url ? "点击或拖新图替换" : "点击选择或拖到这里"}</p>
+        {!readOnly ? (
+          <button
+            type="button"
+            disabled={busy}
+            className={cn(btnFill, !url && "opacity-70")}
+            onClick={(e) => {
+              const input = e.currentTarget.parentElement?.querySelector("input[type=file]") as HTMLInputElement | null;
+              input?.click();
+            }}
+          >
+            <Camera className="mr-0.5 size-3.5" />
+            {url ? `换${label}` : `上传${label}`}
+          </button>
+        ) : null}
+        {!readOnly ? (
+          <input
+            type="file"
+            accept={photoAccept}
+            className="sr-only"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) onFile(f);
+            }}
+          />
+        ) : null}
+        {!readOnly ? (
+          <p className="mt-1 text-[11px] text-muted">{url ? "点击或拖新图替换" : "点击选择或拖到这里"}</p>
+        ) : null}
       </DropSurface>
       {open && url ? (
         <div
+          data-modal="photo-single"
           className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
@@ -400,23 +439,25 @@ function SinglePhotoSlot({
               <button type="button" className={btnGhost} onClick={() => downloadPhoto(name, kind, url)}>
                 <Download className="mr-1 size-3" /> 下载
               </button>
-              <button
-                type="button"
-                className={cn(btnGhost, "text-danger hover:text-danger")}
-                onClick={async () => {
-                  if (!confirm(`删除 ${name} 的${label}？`)) return;
-                  try {
-                    await deletePhoto(name, kind);
-                    setUrl(null);
-                    onChanged?.();
-                    toast.success("已删除");
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "删除失败，请重试");
-                  }
-                }}
-              >
-                删除
-              </button>
+              {!readOnly ? (
+                <button
+                  type="button"
+                  className={cn(btnGhost, "text-danger hover:text-danger")}
+                  onClick={async () => {
+                    if (!confirm(`删除 ${name} 的${label}？`)) return;
+                    try {
+                      await deletePhoto(name, kind);
+                      setUrl(null);
+                      onChanged?.();
+                      toast.success("已删除");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "删除失败，请重试");
+                    }
+                  }}
+                >
+                  删除
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -431,22 +472,34 @@ export function PhotoSlot({
   name,
   kind,
   compact,
+  readOnly = false,
   onChanged,
 }: {
   name: string;
   kind?: "id" | "idBack" | "bank" | "ic";
   compact?: boolean;
+  /** true = 只读账号：只留「看图 / 复制 / 下载」，隐藏换图、上传、删除（服务端 `photos.edit` 必回 403） */
+  readOnly?: boolean;
   onChanged?: () => void;
 }) {
-  if (kind === "id") return <IdCardSlot name={name} compact={compact} onChanged={onChanged} />;
+  if (kind === "id") return <IdCardSlot name={name} compact={compact} readOnly={readOnly} onChanged={onChanged} />;
   if (kind)
-    return <SinglePhotoSlot name={name} kind={kind} label={KIND_LABEL[kind]} compact={compact} onChanged={onChanged} />;
+    return (
+      <SinglePhotoSlot
+        name={name}
+        kind={kind}
+        label={KIND_LABEL[kind]}
+        compact={compact}
+        readOnly={readOnly}
+        onChanged={onChanged}
+      />
+    );
   return (
     <div className="space-y-3">
-      <IdCardSlot name={name} compact={compact} onChanged={onChanged} />
+      <IdCardSlot name={name} compact={compact} readOnly={readOnly} onChanged={onChanged} />
       <div className="grid grid-cols-2 gap-3">
-        <SinglePhotoSlot name={name} kind="bank" label="银行卡" compact={compact} onChanged={onChanged} />
-        <SinglePhotoSlot name={name} kind="ic" label="IC卡" compact={compact} onChanged={onChanged} />
+        <SinglePhotoSlot name={name} kind="bank" label="银行卡" compact={compact} readOnly={readOnly} onChanged={onChanged} />
+        <SinglePhotoSlot name={name} kind="ic" label="IC卡" compact={compact} readOnly={readOnly} onChanged={onChanged} />
       </div>
     </div>
   );

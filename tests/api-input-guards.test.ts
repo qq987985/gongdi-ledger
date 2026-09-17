@@ -21,6 +21,7 @@ import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { expectMinHits } from "./min-hits";
 
 const cwd = (p: string) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 
@@ -140,6 +141,8 @@ const WRITE_CALLS = [
   "removePhoto",
   "removeDocFile",
   "writeLedger",
+  // 1.8.14（A2）：写台账并拿到「写后服务端版本号」的入口，与 writeLedger 共用同一份实现
+  "writeLedgerEx",
   "saveBackup",
   "appendAudit",
   "writeAudit",
@@ -241,15 +244,25 @@ function regionOf(h: Handler): string | null {
 const mutating = handlers.filter((h) => regionOf(h) !== null);
 
 test("守卫：写接口清单非空（守卫本身不能因为解析失败而空转）", () => {
-  assert.equal(mutating.length >= 8, true, `解析到的写 handler 只有 ${mutating.length} 个，正则可能失效了`);
+  expectMinHits(
+    "写接口守卫：解析到的写 handler 数（正则/文件清单失效时会空转）",
+    mutating.length,
+    8,
+    "现有 12 个以上（各接口的 PUT/DELETE）",
+  );
   const where = mutating.map((h) => `${h.file.replace("src/routes/api/", "")} ${h.method}`);
   for (const expect of ["photo.ts PUT", "photo.ts DELETE", "doc.ts PUT", "doc.ts DELETE", "ledger.ts PUT", "year.ts POST"]) {
     assert.equal(where.includes(expect), true, `少了解析到的写接口：${expect}（现有：${where.join("、")}）`);
   }
 });
 
-test("守卫：每个写 handler 都必须有鉴权（withTenant 或 resolveTenant）", () => {
-  const bad = mutating.filter((h) => !/withTenant\(|resolveTenant\(/.test(h.body)).map((h) => `${h.file} ${h.method}`);
+test("守卫：每个写 handler 都必须有鉴权（withTenant / resolveTenant / gateTenant）", () => {
+  // 1.8.14（A4）：doc/photo 的 PUT 要按 body 里的 kind 判模块权限，拆成了
+  // `gateTenant()`（先鉴权、不读 body）+ `needDenied()`（读完 body 补判）两段 ——
+  // gateTenant 就是 withTenant 的第一段，口径不变，同样算「做了租户/权限校验」。
+  const bad = mutating
+    .filter((h) => !/withTenant\(|resolveTenant\(|gateTenant\(/.test(h.body))
+    .map((h) => `${h.file} ${h.method}`);
   assert.deepEqual(bad, [], `这些写接口没有做租户/权限校验：${bad.join("、")}`);
 });
 

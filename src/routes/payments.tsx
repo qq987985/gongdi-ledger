@@ -16,6 +16,7 @@ import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
 import { useGuardedClose } from "~/lib/confirm-close";
 import { ALL_BUCKETS } from "~/lib/buckets";
+import { round2 } from "~/lib/wage";
 import {
   PROXY_INLINE_LABEL,
   panelRows,
@@ -340,7 +341,7 @@ function PaymentsPage() {
               setCreating(false);
             }}
             onSave={(row) => {
-              if (blockedWrite("payments.edit", permLabel("payments.edit"))) return;
+              if (blockedWrite("payments.edit", permLabel("payments.edit"))) return false;
               if (creating) {
                 addPayment({
                   owner: row.owner,
@@ -454,11 +455,12 @@ function PaymentEditor({
   receiverNames: string[];
   sources: string[];
   onCancel: () => void;
-  onSave: (row: Payment) => void;
+  /** 返回 false = 这次没存下去（只读账号被拦下）。此时**不许**复位脏标记 */
+  onSave: (row: Payment) => void | boolean;
   onDelete: () => void;
 }) {
   const [c, setC] = React.useState<Payment>(() => ({ ...draft }));
-  const { markDirty, requestClose } = useGuardedClose(onCancel);
+  const { markDirty, resetDirty, requestClose } = useGuardedClose(onCancel);
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") requestClose();
@@ -489,13 +491,16 @@ function PaymentEditor({
       owner: who,
       receiver: recv,
       date,
-      amount: Number(c.amount) || 0,
+      // 金额入库统一取整到分（专家评审 A-2）：亚分金额会让「已发 + 待发 = 总计」这条
+      // 印在界面/打印件上的等式差 0.01 —— 与报销/工资同口径，都走 wage.ts 的 round2
+      amount: round2(Number(c.amount) || 0),
       source: (c.source || "").trim(),
       remark: (c.remark || "").trim(),
     };
     if (creating) {
       if (!confirm(`确认新增发放给「${who}」¥${next.amount}？`)) return;
-      onSave(next);
+      // 存下去了才复位脏标记：B9 实测「保存成功后点关闭仍被问『有未保存的更改』」
+      if (onSave(next) !== false) resetDirty();
       return;
     }
     const lines: string[] = [];
@@ -510,7 +515,7 @@ function PaymentEditor({
       return;
     }
     if (!confirm(`确认保存这些修改？\n${lines.join("\n")}`)) return;
-    onSave(next);
+    if (onSave(next) !== false) resetDirty();
   }
   return (
     <div
