@@ -133,10 +133,14 @@ test("发版：Release 挂的 zip 名必须与 win/pack.sh 真正写出的名字
   expectMinHits("发版守卫：检查的 workflow 份数", workflows.length, 2, "模板 + 线上各一份");
 });
 
-test("ci/README.md：写清这两个 workflow 只能在 GitHub 网页粘贴（本地改会被拒推）", () => {
+test("ci/README.md：写清模板与线上 workflow 必须同一提交一起改（推不动时退回网页粘贴）", () => {
+  // 2026-09-17 起本机 token 带 workflow 权限，所以 ci/ 模板与 .github/workflows/ 生效那份一起改；
+  // 但权限随时可能被收回（那时推送会被整包拒绝）—— 网页粘贴这条路必须仍然写在文档里。
   const md = read("ci/README.md");
   assert.match(md, /ci\/check\.workflow\.yml/, "要指向 check 模板");
   assert.match(md, /ci\/docker\.workflow\.yml/, "要指向 docker 模板");
-  assert.match(md, /Edit workflow/, "要写清具体点哪里");
+  assert.match(md, /\.github\/workflows\//, "要指向线上真正生效的那两份（同一提交一起改）");
+  assert.match(md, /同一提交/, "要写清「同一提交两份一起改」这条纪律");
+  assert.match(md, /Edit workflow/, "权限没了时要能查到退回哪条网页路径");
   assert.match(md, /app\/\.build-inputs/, "要提醒指纹文件跟 app/ 一起提交");
 });

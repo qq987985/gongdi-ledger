@@ -1,5 +1,8 @@
-# 发版工作流（镜像 + Windows 包）：**模板**，不会自动生效 —— 见 ci/README.md §2。
-#   ⚠️ 必须与仓库里实际生效的 `.github/workflows/docker.yml` 保持一致：模板改动后要同步过去。（2026-09-17 起本机 gh token 已带 `workflow` 权限，两份由同一提交一起改；此前只能网页粘贴 —— 那次 `gongzi` / `gongdi` 差一个字母就是人工搬运看不出来的。）
+# 发版工作流（镜像 + Windows 包）：**实际生效的那份**（模板在 `ci/docker.workflow.yml`）。
+#   ⚠️ 本文件是**实际生效**的那份（模板在 `ci/docker.workflow.yml`），两者**必须一致**：
+#   2026-09-17 起本机 gh token 已带 `workflow` 权限 → 两份在**同一提交**里一起改。
+#   （此前只能网页粘贴 —— 那次 `gongzi` / `gongdi` 差一个字母就是人工搬运看不出来的；
+#    守卫 `tests/deploy-guards.test.ts` 现在两份都查。）
 #
 # 与 1.8.13 线上那版的唯一差别（A8，2026-09-17 专家评审）：**两个 job 都自己从源码构建**，
 # 不再信任仓库里那份 `app/`：

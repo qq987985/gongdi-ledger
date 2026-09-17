@@ -1,8 +1,8 @@
 # ci/ 目录说明（E 项：交付与发版）
 
-这里的文件**不会自动生效**，因为开发规范 §2 规定：不要在本地改/加 `.github/workflows/`
-（推送工作流文件需要 token 带 `workflow` 权限，权限不够 GitHub 会直接拒绝整次推送）。
-所以统一做法是：在 GitHub 网页 → Actions → 选中对应 workflow → 编辑 → 整段粘贴 → 提交。
+这里的文件**不会自动生效**：仓库里实际生效的是 `.github/workflows/` 下的同名文件，本目录这份是**判断口径**（模板），两者必须一致。
+**2026-09-17 起本机 gh token 已带 `workflow` 权限** → 改的时候在**同一提交**里两份一起改（守卫 `tests/deploy-guards.test.ts` 会查关键字段，别再只改一份）。
+万一权限又被收回、本地推不上去（GitHub 会拒绝整次推送），退回网页路径：仓库 → Actions → 选中对应 workflow → ⋯ → **Edit workflow** → 整段粘贴 → 提交。
 
 ---
 
@@ -20,7 +20,7 @@ CI 靠它在构建**之前**判断「这份 app/ 是不是当前源码构建出�
 另外 `tests/guards-paths.test.ts` 会校验「守卫测试引用的源码路径都存在」——
 拆文件/改名后如果忘了同步守卫路径，`pnpm test` 会直接红（`开发规范.md` §12 末尾有说明）。
 
-## 0. 两个 workflow 怎么装（2026-09-17 起，A8）
+## 0. 两个 workflow 怎么装 / 怎么改（2026-09-17 起，A8）
 
 | 模板 | 粘成 | 作用 |
 | --- | --- | --- |
@@ -32,7 +32,8 @@ CI 靠它在构建**之前**判断「这份 app/ 是不是当前源码构建出�
 1. 仓库 → **Actions** → 左侧选中 `check`（或 `docker`）→ 右上 **⋯ → Edit workflow**；
    首次还没有时用 **New workflow → set up a workflow yourself**，文件名填 `check.yml` / `docker.yml`。
 2. 把 `ci/check.workflow.yml`（或 `ci/docker.workflow.yml`）的**全部内容**粘进去覆盖原内容，提交。
-3. 以后再改这两个 workflow 都必须走这条网页路径（本地改会被 GitHub 拒绝推送）。
+3. 以后改 workflow：`ci/check.workflow.yml` ↔ `.github/workflows/check.yml`、`ci/docker.workflow.yml` ↔ `.github/workflows/docker.yml`
+   **同一提交两份一起改**（本地 token 已带 `workflow` 权限）；推不上去时退回上面那条网页路径。
 
 > **为什么这次必须换掉线上那两份**：线上 `check.yml` 的第四道闸是**恒真**的 ——
 > 它先 `pnpm run build` 再去比 `app/VERSION.txt`，而 VERSION.txt 是构建时复制过去的、结构上永远相等；

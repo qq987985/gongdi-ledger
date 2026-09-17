@@ -1,8 +1,9 @@
 # 质量闸门（CI）：类型检查 / 回归测试 / Excel 往返对拍 / 构建产物不漂移
 #
-# ⚠️ 这是**模板**，不会自动生效：开发规范 §2 规定不要在本地改 `.github/workflows/`
-#   （推送 workflow 文件需要 token 带 workflow 权限，权限不够 GitHub 会拒绝整次推送）。
-#   安装/更新做法见 ci/README.md §1：GitHub 仓库 → Actions → 选中 check → 编辑 → 整段粘贴 → 提交。
+# ⚠️ 这是**判断口径**（模板），仓库里实际生效的是 `.github/workflows/check.yml`，两者必须一致。
+#   安装/更新做法见 ci/README.md §0/§1。**2026-09-17 起本机 gh token 已带 `workflow` 权限**，
+#   所以本模板与仓库里生效的 `.github/workflows/check.yml` 由**同一提交**一起改；
+#   万一权限又不在了（推不上去），退回网页路径：仓库 → Actions → 选中 check → ⋯ → Edit workflow → 整段粘贴。
 #
 # 触发：push 到 main、以及任何 PR。本机等价命令（提交前建议先跑一遍）：pnpm run check
 #

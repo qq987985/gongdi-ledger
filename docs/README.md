@@ -164,6 +164,8 @@
 1. ~~**GitHub 网页粘贴两份 workflow**~~ ✅ **已完成（2026-09-17）**：`check.yml` / `docker.yml` 已按
    `ci/check.workflow.yml` / `ci/docker.workflow.yml` 建到 GitHub；首次运行的 `check` 里，
    第四道闸「构建产物不漂移（硬闸门）」**通过**（做法见 `ci/README.md` §0/§1b）。
+   同日稍后本机 gh token 补上了 `workflow` 权限 ⇒ 以后两份在**同一提交**里一起改，不再需要手工粘贴
+   （权限若失效才退回网页路径；见 `ci/README.md` §0 与 `开发规范.md` §2）。
 2. ~~**Windows 真机验证一次**~~ ✅ **已完成（2026-09-17）**：解压后双击**根目录** `启动.bat` 能打开应用；
    用户另做了三条真实场景实测（人员 / 考勤 / 发放），均正常。
 
