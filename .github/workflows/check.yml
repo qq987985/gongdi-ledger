@@ -1,13 +1,23 @@
 # 质量闸门（CI）：类型检查 / 回归测试 / Excel 往返对拍 / 构建产物不漂移
 #
-# 触发：push 到 main、以及任何 PR。
-# 本机等价命令（提交前建议先跑一遍）：pnpm run check
+# ⚠️ 这是**模板**，不会自动生效：开发规范 §2 规定不要在本地改 `.github/workflows/`
+#   （推送 workflow 文件需要 token 带 workflow 权限，权限不够 GitHub 会拒绝整次推送）。
+#   安装/更新做法见 ci/README.md §1：GitHub 仓库 → Actions → 选中 check → 编辑 → 整段粘贴 → 提交。
 #
-# 说明：
+# 触发：push 到 main、以及任何 PR。本机等价命令（提交前建议先跑一遍）：pnpm run check
+#
+# 与 1.8.13 线上那版的差别（A8，2026-09-17 专家评审）：
+#   1) 第四道闸从「恒真」改成**硬闸门**：
+#      · 逐字节比对三个「构建时直接复制」的文件（cmp，跨环境稳定）；
+#      · `node scripts/build-stamp.mjs --verify` 比对**源码指纹** app/.build-inputs ——
+#        源码改了没重建 app/ 会 exit 1，而不是 `::warning`。
+#      为什么不用 `git diff --exit-code app/`：不同操作系统/Node 版本构建出的字节不同，
+#      把它当硬失败会让 CI 常红（这正是它当年被降级成 warning 的原因）。
+#      指纹只覆盖构建输入（src/、public/、启动器、日志核心、vite/tsconfig/package/lockfile/VERSION），
+#      所以改文档/测试不会误报。
+#   2) 构建放在闸门**之后**：闸门校验的是「仓库里那份 app/」，构建只是确认源码能构建出产物。
 #   - 测试直接跑 .ts 源码（Node 内置类型擦除），Node 需 ≥ 22.18；这里用 24，与开发者本机一致。
 #   - pnpm 版本与开发者一致（12），否则 --frozen-lockfile 可能因 lockfile 版本差异失败。
-#   - 最后一步只做「确定性检查」（版本号一致 + 产物关键文件存在）：
-#     不同操作系统 / Node 版本构建出的哈希必然不同，字节级比对不能当失败，只作提示。
 
 name: check
 
@@ -28,6 +38,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
+
         with:
           version: 12
 
@@ -48,18 +59,20 @@ jobs:
       - name: Excel 往返对拍（导出→导入，70 用例）
         run: pnpm run test:roundtrip
 
-      - name: 构建产物不漂移（确定性检查）
+      - name: 构建产物不漂移（硬闸门）
         run: |
-          pnpm run build
-          APP_VER=$(head -n1 app/VERSION.txt | tr -d '[:space:]')
-          SRC_VER=$(head -n1 VERSION.txt | tr -d '[:space:]')
-          if [ "$APP_VER" != "$SRC_VER" ]; then
-            echo "::error::app/VERSION.txt=$APP_VER 与 VERSION.txt=$SRC_VER 不一致——请本地跑 pnpm run build，把 app/ 一起提交"
-            exit 1
-          fi
-          for f in app/server/index.mjs app/server/server.js app/VERSION.txt; do
-            [ -s "$f" ] || { echo "::error::构建产物缺少或为空：$f"; exit 1; }
-          done
+          # ① 逐字节比对「构建时原样复制」的文件：跨环境稳定，能拦住「改了启动器/日志核心/版本号没重建」
+          cmp scripts/app-server-index.mjs app/server/index.mjs
+          cmp scripts/log-core.mjs app/server/log-core.mjs
+          cmp VERSION.txt app/VERSION.txt
+          # ② 源码指纹：app/.build-inputs 由 pnpm run build 写入，必须等于当前源码的指纹
+          node scripts/build-stamp.mjs --verify
+
+      - name: 构建（确认源码真的能构建出产物，并刷新 CI 现场的 app/）
+        run: pnpm run build
+
+      - name: 跨环境字节差异（只提示，不失败）
+        run: |
           if ! git diff --quiet -- app/; then
             echo "::warning::app/ 与 CI 现场构建存在字节差异（多为跨环境哈希差异，不影响功能）："
             git diff --stat -- app/
