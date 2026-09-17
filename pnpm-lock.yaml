@@ -9,71 +9,71 @@ importers:
   .:
     dependencies:
       '@tanstack/react-router':
-        specifier: latest
+        specifier: 1.170.32
         version: 1.170.32(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@tanstack/react-start':
-        specifier: latest
+        specifier: 1.168.49
         version: 1.168.49(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.4.1)(jiti@2.7.0))
       class-variance-authority:
-        specifier: latest
+        specifier: 0.7.1
         version: 0.7.1
       clsx:
-        specifier: latest
+        specifier: 2.1.1
         version: 2.1.1
       exceljs:
-        specifier: latest
+        specifier: 4.4.0
         version: 4.4.0
       lucide-react:
-        specifier: latest
+        specifier: 1.41.0
         version: 1.41.0(react@19.2.8)
       react:
-        specifier: latest
+        specifier: 19.2.8
         version: 19.2.8
       react-dom:
-        specifier: latest
+        specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
       sonner:
-        specifier: latest
+        specifier: 2.0.8
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       tailwind-merge:
-        specifier: latest
+        specifier: 3.6.0
         version: 3.6.0
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
       zod:
-        specifier: latest
+        specifier: 4.5.4
         version: 4.5.4
       zustand:
-        specifier: latest
+        specifier: 5.0.15
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
     devDependencies:
       '@tailwindcss/vite':
-        specifier: latest
+        specifier: 4.3.3
         version: 4.3.3(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.4.1)(jiti@2.7.0))
       '@types/node':
-        specifier: latest
+        specifier: 26.4.1
         version: 26.4.1
       '@types/react':
-        specifier: latest
+        specifier: 19.2.18
         version: 19.2.18
       '@types/react-dom':
-        specifier: latest
+        specifier: 19.2.7
         version: 19.2.7(@types/react@19.2.18)
       '@vitejs/plugin-react':
-        specifier: ^6.1.1
+        specifier: 6.1.1
         version: 6.1.1(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.4.1)(jiti@2.7.0))
       tailwindcss:
-        specifier: latest
+        specifier: 4.3.3
         version: 4.3.3
       typescript:
-        specifier: latest
+        specifier: 7.0.2
         version: 7.0.2
       vite:
-        specifier: npm:rolldown-vite@latest
+        specifier: npm:rolldown-vite@7.3.1
         version: rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.4.1)(jiti@2.7.0)
       vite-tsconfig-paths:
-        specifier: latest
+        specifier: 6.1.1
         version: 6.1.1(rolldown-vite@7.3.1(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.4.1)(jiti@2.7.0))(typescript@7.0.2)
 
 packages:

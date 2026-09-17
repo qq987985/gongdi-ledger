@@ -6,6 +6,7 @@ import { FilePick } from "~/components/file-pick";
 import {
   duplicateNotice,
   findDuplicatePayments,
+  mergeContracts,
   mergeExpenses,
   mergePayments,
   parseAttendanceSheet,
@@ -18,6 +19,10 @@ import {
   planAttendanceImport,
 } from "~/lib/excel";
 import { uid } from "~/lib/utils";
+// 只读账号的写入兜底（工作包 C）：7 个导入入口（人员/考勤/发放/报销/合同/保险人员/整本）写的是
+// 整本台账（服务端 ledger.manage），而页面门槛只有 import.use —— 账号只勾了「导入」时界面会弹
+// 「导入完成」而服务端 403（与 A17 同一类假成功）。守卫的唯一实现是 lib/readonly.ts 的 blockedImport。
+import { blockedImport } from "~/lib/readonly";
 // 姓名比较键的唯一实现（A-1）：导入时按姓名匹配人员/考勤，比较两侧都要 trim
 import { nameKey } from "~/lib/receiver";
 import { useApp } from "~/lib/store";
@@ -36,7 +41,10 @@ function ExcelBtn({ label, onFile }: { label: string; onFile: (f: File) => void 
         onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = "";
-          if (f && confirm(`确认上传「${f.name}」？`)) onFile(f);
+          if (!f) return;
+          // 只读 / 缺 import.use：连确认框都不弹，直接说明原因（写盘前拦截的唯一实现）
+          if (blockedImport()) return;
+          if (confirm(`确认上传「${f.name}」？`)) onFile(f);
         }}
       />
     </label>
@@ -59,6 +67,9 @@ export function PeopleImport() {
   const [fresh, setFresh] = React.useState<Person[]>([]);
   async function onFile(file: File) {
     if (!file) return;
+    // 导入写的是整本台账（服务端 ledger.manage）：只读/缺权限在这里就拦下、不许再写盘。
+    // 判据与文案的唯一实现是 lib/readonly.ts 的 blockedImport（别在每个入口各写一段）
+    if (blockedImport()) return;
     const rows = parsePeopleSheet(await file.arrayBuffer());
     const byName = Object.fromEntries(store.people.map((p) => [p.name, p]));
     const c: { incoming: Person; existing: Person; action: "skip" | "overwrite" }[] = [];
@@ -167,6 +178,9 @@ export function AttendanceImport() {
   } | null>(null);
   async function onFile(file: File) {
     if (!file) return;
+    // 导入写的是整本台账（服务端 ledger.manage）：只读/缺权限在这里就拦下、不许再写盘。
+    // 判据与文案的唯一实现是 lib/readonly.ts 的 blockedImport（别在每个入口各写一段）
+    if (blockedImport()) return;
     const rows = parseAttendanceSheet(await file.arrayBuffer(), store.year);
     if (!rows.length) {
       toast.error("没有读到考勤行。模板列：姓名、出勤天数、加班小时、补助、扣款。");
@@ -303,6 +317,9 @@ export function PaymentImport() {
   const dupNotice = duplicateNotice(findDuplicatePayments(store.payments), "发放记录");
   async function onFile(file: File) {
     if (!file) return;
+    // 导入写的是整本台账（服务端 ledger.manage）：只读/缺权限在这里就拦下、不许再写盘。
+    // 判据与文案的唯一实现是 lib/readonly.ts 的 blockedImport（别在每个入口各写一段）
+    if (blockedImport()) return;
     const rows = parsePaymentSheet(await file.arrayBuffer());
     if (!rows.length) {
       toast.error("没有读到发放记录");
@@ -363,6 +380,9 @@ export function ContractImport() {
   const [preview, setPreview] = React.useState<{ contracts: any[]; entries: any[]; conflicts: any[]; fileName: string } | null>(null);
   async function onFile(file: File) {
     if (!file) return;
+    // 导入写的是整本台账（服务端 ledger.manage）：只读/缺权限在这里就拦下、不许再写盘。
+    // 判据与文案的唯一实现是 lib/readonly.ts 的 blockedImport（别在每个入口各写一段）
+    if (blockedImport()) return;
     const parsed = parseContractWorkbook(await file.arrayBuffer());
     if (!parsed.contracts.length) {
       toast.error("没有读到合同。需要「项目名称」列。");
@@ -390,18 +410,14 @@ export function ContractImport() {
       keepE = keepE.filter((e) => !skipIds.has(e.contractId));
     }
 
-    let added = 0;
-    for (const c of contracts) {
-      if (keep.find((x) => x.year === c.year && x.name === c.name && x.code === c.code)) continue;
-      keep.push(c);
-      keepE.push(...entries.filter((e) => e.contractId === c.id));
-      added += 1;
-    }
-    store.replaceContracts(keep, keepE);
+    // 去重键（年份+项目号+项目名称）只有 excel/contracts.ts 的 mergeContracts 一处实现：
+    // 替换模式下冲突项已先删掉，这里合并进来的就是全部；增加模式下同键自动跳过
+    const merged = mergeContracts(keep, keepE, contracts, entries);
+    store.replaceContracts(merged.contracts, merged.entries);
     toast.success(
       mode === "replace"
-        ? `导入合同 ${added} 个，替换冲突 ${conflicts.length} 个`
-        : `导入合同 ${added} 个，跳过重复 ${conflicts.length} 个`,
+        ? `导入合同 ${merged.added} 个，替换冲突 ${conflicts.length} 个`
+        : `导入合同 ${merged.added} 个，跳过重复 ${merged.skipped} 个`,
     );
     setPreview(null);
   }
@@ -453,6 +469,9 @@ export function ExpenseImport() {
   const [preview, setPreview] = React.useState<{ rows: Expense[]; fileName: string; skipped: number } | null>(null);
   async function onFile(file: File) {
     if (!file) return;
+    // 导入写的是整本台账（服务端 ledger.manage）：只读/缺权限在这里就拦下、不许再写盘。
+    // 判据与文案的唯一实现是 lib/readonly.ts 的 blockedImport（别在每个入口各写一段）
+    if (blockedImport()) return;
     const rows = parseExpenseSheet(await file.arrayBuffer(), store.year);
     if (!rows.length) {
       toast.error("没有读到报销。需要「项目名称」列。");
@@ -510,25 +529,35 @@ export function FullBookImport() {
   return (
     <FilePick
       accept=".xlsx,.xls"
-      label="选择整本台账"
-      hint="含人员、12 个月考勤、发放、报销"
+      label="选择整本台账 / 备份文件"
+      hint="含人员、各年月考勤、发放、报销、合同+明细、保险+参保人"
       onFile={async (file) => {
         if (!file) return;
-        const parsed = parseFullAttendanceWorkbook(await file.arrayBuffer(), store.year);
+        // 只读账号（缺 people.edit / attendance.edit / settings.* 任一）点得动、而服务端 PUT /api/ledger 必 403 ——
+        // 先拦下，别让它弹「整本导入完成」（与 A17 是同一类「本机改了一下」的假成功）
+        if (blockedImport()) return;
+        const wbBuf = await file.arrayBuffer();
+        const parsed = parseFullAttendanceWorkbook(wbBuf, store.year);
+        // 合同 + 明细：备份工作簿把「合同管理表 / 月报量 / 开票 / 收款」拼在同一份文件里（1.8.14）。
+        // 恢复若只用整本导入、不解析这几张表，合同整块会丢（工作包 C 核查出的缺口）。
+        // 复用既有 parseContractWorkbook，不另写一套解析。
+        const cparsed = parseContractWorkbook(wbBuf);
         if (
           !parsed.people.length &&
           !parsed.attendance.length &&
           !parsed.payments.length &&
           !(parsed.expenses || []).length &&
           !(parsed.policies || []).length &&
-          !(parsed.members || []).length
+          !(parsed.members || []).length &&
+          !cparsed.contracts.length
         ) {
-          toast.error("没有读到人员、考勤、发放、报销或保险");
+          toast.error("没有读到人员、考勤、发放、报销、保险或合同");
           return;
         }
-        // 发放/报销按内容键去重：同一份整本重复导入不再翻倍
+        // 发放/报销/合同按内容键去重：同一份整本重复导入不再翻倍
         const payMerge = mergePayments(store.payments, parsed.payments || []);
         const expMerge = mergeExpenses(store.expenses || [], parsed.expenses || []);
+        const conMerge = mergeContracts(store.contracts, store.contractEntries, cparsed.contracts, cparsed.entries);
         // 1.8.8 D5 善后：历史重复只提示、不自动删（用户数据红线）
         const legacyDup = duplicateNotice(findDuplicatePayments(store.payments), "发放记录");
         // 整本导入直接合并写入，风险最大：先列出清单确认
@@ -536,8 +565,9 @@ export function FullBookImport() {
           !confirm(
             `导入「${file.name}」？\n\n` +
               `人员 ${parsed.people.length} 人 · 考勤 ${parsed.attendance.length} 条 · 发放 ${parsed.payments.length} 条（跳过 ${payMerge.skipped} 条重复）· ` +
-              `报销 ${(parsed.expenses || []).length} 条（跳过 ${expMerge.skipped} 条重复）· 保单 ${(parsed.policies || []).length} 份 · 保险人员 ${(parsed.members || []).length} 人。\n\n` +
-              "同名人员、同保单号保单、重复考勤（姓名+年月）与重复发放/报销会被跳过；现有数据追加保留。" +
+              `报销 ${(parsed.expenses || []).length} 条（跳过 ${expMerge.skipped} 条重复）· 保单 ${(parsed.policies || []).length} 份 · 保险人员 ${(parsed.members || []).length} 人 · ` +
+              `合同 ${cparsed.contracts.length} 份（含 ${cparsed.entries.length} 条明细，跳过 ${conMerge.skipped} 份重复）。\n\n` +
+              "同名人员、同保单号保单、重复发放/报销/合同（年份+项目号+项目名称）会被跳过；同一人同一月的考勤用文件里的行覆盖；其余数据追加保留。" +
               (legacyDup ? `\n\n${legacyDup}` : ""),
           )
         )
@@ -553,6 +583,9 @@ export function FullBookImport() {
         if (added) store.replacePeople(merged);
         if (parsed.payments.length) store.replacePayments(payMerge.merged);
         if (parsed.expenses && parsed.expenses.length) store.replaceExpenses(expMerge.merged);
+        // 合同：同键（年份+项目号+项目名称）跳过，新的连明细一起落（去重键的唯一实现在 excel/contracts.ts）
+        if (cparsed.contracts.length || cparsed.entries.length)
+          store.replaceContracts(conMerge.contracts, conMerge.entries);
         if (parsed.attendance.length) {
           store.addYear(parsed.year || store.year);
           const names = new Set(parsed.attendance.map((a) => a.name + a.year + a.month));
@@ -593,7 +626,7 @@ export function FullBookImport() {
           }
         }
         toast.success(
-          `整本导入完成：人员新增 ${added}，考勤 ${parsed.attendance.length} 条，发放新增 ${payMerge.added} 条（跳过 ${payMerge.skipped} 条重复），报销新增 ${expMerge.added} 条（跳过 ${expMerge.skipped} 条重复），保单 ${polAdded} 份，保险人员 ${memAdded} 人`,
+          `整本导入完成：人员新增 ${added}，考勤 ${parsed.attendance.length} 条，发放新增 ${payMerge.added} 条（跳过 ${payMerge.skipped} 条重复），报销新增 ${expMerge.added} 条（跳过 ${expMerge.skipped} 条重复），合同新增 ${conMerge.added} 份（跳过 ${conMerge.skipped} 份重复），保单 ${polAdded} 份，保险人员 ${memAdded} 人`,
         );
       }}
     />
@@ -608,6 +641,9 @@ export function InsuranceMemberImport({ policyId, onImported }: { policyId: stri
   const [fresh, setFresh] = React.useState<InsuranceMember[]>([]);
   async function onFile(file: File) {
     if (!file) return;
+    // 导入写的是整本台账（服务端 ledger.manage）：只读/缺权限在这里就拦下、不许再写盘。
+    // 判据与文案的唯一实现是 lib/readonly.ts 的 blockedImport（别在每个入口各写一段）
+    if (blockedImport()) return;
     const policy = store.insurancePolicies.find((p) => p.id === policyId);
     const rows = parseInsuranceMembersSheet(await file.arrayBuffer()).map((m) => ({
       ...m,

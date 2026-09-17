@@ -64,7 +64,7 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
   const contracts: ContractRecord[] = [];
   const entries: Parameters<typeof splitLegacyReceipts>[0] = [];
   const byKey = new Map<string, ContractRecord>();
-  const keyOf = (c: ContractRecord) => `${c.year}|${c.code}|${c.name}`;
+  const keyOf = contractKey;
   const isEntrySheet = (n: string) => /报量|开票|收款/.test(n) && !n.includes("合同");
   // 导出文件里的派生表：资金对照是公式结果、影像资料只是文件名清单，都按数据表解析会重复生成合同/明细
   const sheets = wb.SheetNames.filter((n) => !n.includes("填写说明") && !isDerivedSheet(n));
@@ -199,6 +199,56 @@ export function parseContractWorkbook(buf: ArrayBuffer | Uint8Array): {
   }
   return { contracts, entries: splitLegacyReceipts(entries) };
 }
+
+/**
+ * 合同的去重键：**唯一实现**（解析用 `keyOf`、整本/备份恢复用 `mergeContracts`、
+ * 页面上的导入冲突提示都指这里）。原来是三处各写一份字符串拼接，改一处就分叉。
+ */
+export function contractKey(c: Pick<ContractRecord, "year" | "code" | "name">): string {
+  return `${c.year}|${c.code}|${c.name}`;
+}
+
+export interface ContractMergeResult {
+  contracts: ContractRecord[];
+  entries: ContractEntry[];
+  /** 真正新增的合同数 */
+  added: number;
+  /** 因为「年份+项目号+项目名称」已存在而跳过的合同数 */
+  skipped: number;
+}
+
+/**
+ * 「增加」语义的合同合并（工作包 C：备份恢复）。**不删任何现有数据**：
+ * ① 同键（年份+项目号+项目名称）合同整份跳过 —— 现有那份和它的明细原样不动
+ *    （备份恢复是「把丢掉的补回来」，不是「用旧文件覆盖现场改过的数据」，要覆盖得显式选「替换」）；
+ * ② 新合同的明细按 `contractId` 挂回去，顺序 = 合同顺序（导出→导入→再导出行序稳定）;
+ * ③ 返回合并后的整份列表，交给 `store.replaceContracts()`（它同一把尺子只留这批合同的明细）。
+ */
+export function mergeContracts(
+  existing: ContractRecord[],
+  existingEntries: ContractEntry[],
+  incoming: ContractRecord[],
+  incomingEntries: ContractEntry[],
+): ContractMergeResult {
+  const contracts = existing.slice();
+  const entries = existingEntries.slice();
+  const have = new Set(contracts.map(contractKey));
+  let added = 0;
+  let skipped = 0;
+  for (const c of incoming) {
+    const key = contractKey(c);
+    if (have.has(key)) {
+      skipped += 1;
+      continue;
+    }
+    have.add(key);
+    contracts.push(c);
+    for (const e of incomingEntries) if (e.contractId === c.id) entries.push(e);
+    added += 1;
+  }
+  return { contracts, entries, added, skipped };
+}
+
 export function contractTemplateWb(): XLSX.WorkBook {
   const wb = utils.book_new();
   utils.book_append_sheet(

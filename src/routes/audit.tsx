@@ -8,6 +8,9 @@ import { WideTable, usePager } from "~/components/wide-table";
 import { Need, useCan } from "~/components/can";
 import { fetchAudit, logOp } from "~/lib/audit";
 import { authStatus } from "~/lib/auth";
+// B17（1.8.15）：改动前后值的反解与展示都走 lib/audit-diff.ts（唯一实现）——
+// 页面自己拼「改动前 → 改动后」会让格式分叉，反解就失效了
+import { detailPlain, parseDetail } from "~/lib/audit-diff";
 import type { AuditEntry } from "~/lib/types";
 
 function fmt(iso: string) {
@@ -21,6 +24,36 @@ function datePart(iso: string) {
   return fmt(iso).slice(0, 10);
 }
 
+/**
+ * 「内容」列的渲染（B17，1.8.15）。
+ *
+ * 关键改写类操作的 detail 里带了「改动前 → 改动后」（格式见 lib/audit-diff.ts）：
+ * 这里把它折成一行可展开的明细 —— 不展开时与以前完全一样（不破坏现有列与排版），
+ * 展开后逐条列「字段：改动前 → 改动后」，误改之后能凭它对照着改回来。
+ * 没有前后值的历史记录（旧数据只写了摘要）原样显示，不做任何包装。
+ */
+function DetailCell({ detail }: { detail: string }) {
+  const parsed = React.useMemo(() => parseDetail(detail), [detail]);
+  if (!parsed.changes.length) return <>{detail}</>;
+  return (
+    <div className="space-y-1">
+      <div>{parsed.summary}</div>
+      <details className="text-xs text-muted">
+        <summary className="cursor-pointer select-none">
+          改动前 → 改动后（{parsed.changes.length} 项）
+        </summary>
+        <ul className="mt-1 space-y-0.5">
+          {parsed.changes.map((c, i) => (
+            <li key={`${c.label}-${i}`} className="tabular-nums">
+              {c.label}：{c.before} → {c.after}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+}
+
 function exportAudit(rows: AuditEntry[], from: string, to: string) {
   const aoa: unknown[][] = [
     ["操作记录"],
@@ -29,10 +62,10 @@ function exportAudit(rows: AuditEntry[], from: string, to: string) {
   [...rows]
     .sort((a, b) => (a.at || "").localeCompare(b.at || ""))
     .forEach((e, i) => {
-      aoa.push([i + 1, fmt(e.at), e.userName, e.module, e.action, e.detail]);
+      aoa.push([i + 1, fmt(e.at), e.userName, e.module, e.action, detailPlain(e.detail)]);
     });
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 6 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 50 }];
+  ws["!cols"] = [{ wch: 6 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 60 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "操作记录");
   const name = from || to ? `操作记录_${from || "起始"}_${to || "至今"}.xlsx` : "操作记录_全部.xlsx";
@@ -219,7 +252,8 @@ function AuditPage() {
                     {edit?.id === e.id ? (
                       <Input className="h-8" value={edit.detail} onChange={(ev) => setEdit({ ...edit, detail: ev.target.value })} />
                     ) : (
-                      e.detail
+                      // B17：关键改写类操作的「改动前 → 改动后」在这里可展开查看（不展开时与以前一样）
+                      <DetailCell detail={e.detail} />
                     )}
                   </td>
                   {admin ? (

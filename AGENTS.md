@@ -36,6 +36,7 @@
 - 结构三条标准（模块化/可拓展/低耦合）已写进 `开发规范.md` §12（1.7.19 起），
   红线：单文件约 1000 行评估拆分、禁循环依赖（共同依赖下沉第三模块）、存储三层/excel/shell
   三条主线依赖单向；拆分=机械提取+barrel 兼容+守卫扫描路径同步改。
+- **1.8.15 新增模块**：操作记录前后值 `src/lib/audit-diff.ts`（唯一序列化/截断实现，金额 round2、日期 dates、敏感字段只记已填）；批量待发放 `src/lib/pending-batch.ts`（应发复用 summarizeYear，幂等跳过已有待发放）；备份恢复文案与门禁 `src/lib/restore.ts` + `readonly.ts` 的 `blockedImport()`（7 个导入入口写盘前统一拦）；打印件 `src/components/ledger-print-sheets.tsx` 与 `src/lib/attendance-month.ts`、`src/lib/print-cols.ts`（月表合计与列宽唯一实现）。
 - 修改数据模型时同步检查 `types.ts`、`store.ts`、`nas-sync.ts`、Excel 导入导出。
 - **改打印件（`.print-only`）前先读 `src/styles.css` 的「打印分页协议」（1.8.10 起，1.8.11 补充）**：规则只在那一处写；
   组件里禁用容器级 `break-inside-avoid`（页底放不下会整块推移、上一页留一大片空白），
@@ -62,7 +63,12 @@
 
 ## 回归测试与质量闸门（2026-09-10 起）
 
-- `pnpm test` 用 **Node 内置测试器**直接跑 `tests/*.test.ts`（零依赖，不需要 vitest/jest —— 因为 `package.json` 里全是 `latest`，`pnpm add` 会顺带重解析无关依赖）。
+- `pnpm test` 用 **Node 内置测试器**直接跑 `tests/*.test.ts`（零依赖，不需要 vitest/jest —— 早年的理由是 `package.json` 里全是 `latest`、`pnpm add` 会顺带重解析无关依赖；**1.8.15 起依赖已改精确版本 + 提交 lockfile**，这条现在只是「少一层要维护的依赖」）。
+- **依赖只写精确版本 + `pnpm-lock.yaml` 必须入库**（1.8.15 起，用户拍板）：禁止 `latest`/`^`/`~`/`*`/范围写法，
+  别名要精确（`npm:rolldown-vite@7.3.1`）、tarball 直链要带版本号；CI 用 `pnpm install --frozen-lockfile`。
+  升级依赖 = 改 `package.json` → `pnpm install` 生成新 lockfile → 三道闸 → `package.json` 与 `pnpm-lock.yaml`
+  **一起提交** → **重跑 `pnpm run build` 并提交 `app/`**（这两个文件是构建指纹的输入，不重建 CI 第 4 道闸会红）。
+  完整步骤见 `开发规范.md` §2「依赖与 lockfile」；守卫 `tests/dependency-pinning.test.ts`。
 - **改 Excel 相关代码（`src/lib/excel.ts` / `src/components/excel-import.tsx`）时，除了 `pnpm test` 还要跑
   `pnpm run test:roundtrip`** —— 那是 70 个"导出→导入"对拍用例（`tests/roundtrip/`），
   专门盯历史上反复出问题的地方：报量被换成含税金额、开票翻倍、跨年考勤落到第一年、调薪历史被清空、
@@ -76,7 +82,7 @@
   **`check.yml` 已于 2026-09-16 建到 GitHub（1.8.10 起生效，推送 main / PR 都会跑 typecheck → test →
   test:roundtrip → build + `app/VERSION.txt` 一致性）**；本地 `git log origin/main` 里能看到它
   （本地 `git pull` 之前看不到文件，属正常）。
-- 1.8.14 起覆盖 **543 个用例（543 pass + 0 todo）**（1.8.13 时是 392、1.8.12 时是 390、1.8.11 时是 389、1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- 1.8.15 起覆盖 **610 个用例（610 pass + 0 todo）**（1.8.14 时是 543、1.8.13 时是 392、1.8.12 时是 390、1.8.11 时是 389、1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源；
   1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外；

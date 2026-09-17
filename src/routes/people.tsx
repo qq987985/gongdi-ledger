@@ -10,6 +10,8 @@ import { WideTable, usePager } from "~/components/wide-table";
 import { Can, Need, ReadonlyNotice, useCan, useCanSave } from "~/components/can";
 import { PeopleImport, TplLink } from "~/components/excel-import";
 import { PhotoSlot, ScanPhotosButton, usePhotoFlags } from "~/components/photo-slot";
+// B16（1.8.15）打印入口：人员名单（打印件唯一实现在 components/ledger-print-sheets.tsx）
+import { PeopleRosterSheet } from "~/components/ledger-print-sheets";
 import { PayTypePick, OtRulePick } from "~/components/pay-fields";
 import { parseIdCard, validateIdCard, normalizeIdDate, overAgeLabel } from "~/lib/idcard";
 import { parseDateYmd } from "~/lib/dates";
@@ -89,6 +91,11 @@ function PeoplePage() {
   });
   const pager = usePager("people", filtered, [q, team].join("|"));
   const pageRows = pager.rows;
+  // 打印人员名单的抬头要写清「这一份印的是哪一批人」：当前筛选条件 + 人数（与屏幕上「共 N 条」同值）。
+  // 名单直接取筛选中的人员（不是当前这一页）—— 贴墙/交财务要的是整份名单，跟发放页打印全筛选结果同一口径。
+  const rosterFilter = [q.trim() ? `搜索「${q.trim()}」` : "", team !== ALL_BUCKETS ? `班组：${team || "未分班组"}` : ""]
+    .filter(Boolean)
+    .join(" · ") || "全部人员";
   function closeEditor() {
     setEditing(null);
     setCreating(false);
@@ -97,6 +104,8 @@ function PeoplePage() {
   return (
     <Need perm="people.view">
       <div className="space-y-5">
+        {/* 屏幕内容整体 no-print：打印只出下面的打印件（协议见 styles.css「打印分页协议」） */}
+        <div className="no-print space-y-5">
         <ReadonlyNotice perm="people.edit" />
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -114,6 +123,10 @@ function PeoplePage() {
             >
               导出人员名单
             </a>
+            {/* 打印是只读操作：入口只按 people.view（页面本身）控制，不看能不能编辑 */}
+            <Button variant="outline" type="button" disabled={!filtered.length} onClick={() => window.print()}>
+              打印人员名单
+            </Button>
             <Can perm="import.use">
               <PeopleImport />
             </Can>
@@ -308,6 +321,10 @@ function PeoplePage() {
             }}
           />
         ) : null}
+        </div>
+        {/* 打印件渲染在 no-print 包裹**之外**（屏幕态隐藏，只在打印时出现）：
+            名单直接来自筛选中的人员，抬头写清筛选条件与人数 */}
+        <PeopleRosterSheet rows={filtered} filterText={rosterFilter} total={pager.total} />
       </div>
     </Need>
   );

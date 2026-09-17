@@ -58,6 +58,13 @@ CI 靠它在构建**之前**判断「这份 app/ 是不是当前源码构建出�
 4. **构建产物不漂移（硬闸门）**：`cmp` 三个直接复制的文件 + 源码指纹 `app/.build-inputs`
 5. `pnpm run build`（确认源码能构建出产物；跨环境字节差异只提示不失败）
 
+**依赖口径（1.8.15 起）：精确版本 + `pnpm-lock.yaml` 入库，CI 的 `pnpm install --frozen-lockfile` 是「真」按 lockfile 装的。**
+`package.json` 里不再有 `latest`，lockfile 的 `specifier` 与 `package.json` 的依赖值**逐字相同**（`tests/dependency-pinning.test.ts` 守卫）：
+- 漏提交 lockfile、或改了 `package.json` 没重新 `pnpm install` → 这一步**直接失败**，而不是悄悄装一套新依赖再让后面某道闸莫名变红；
+- 想升级依赖：`pnpm install` 生成新 lockfile 后与 `package.json` **一起提交**（步骤见 `开发规范.md` §2「依赖与 lockfile」）；
+- ⚠️ `package.json` 与 `pnpm-lock.yaml` 都是**构建指纹的输入**（`scripts/build-stamp.mjs` 的 `BUILD_INPUTS`）——
+  动过它们必须重跑 `pnpm run build` 并提交 `app/`，否则上面第 4 道闸会红（指纹只覆盖构建输入，改文档/测试不会误报）。
+
 注意：Node 需要 **≥ 22.18**（类型擦除）；pnpm 版本要和本机一致（当前 12.x）。
 第 4 步的原理、以及「为什么不用 git diff」写在 `scripts/build-stamp.mjs` 顶部注释里。
 

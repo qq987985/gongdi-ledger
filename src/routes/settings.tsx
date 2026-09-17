@@ -1,10 +1,10 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/input";
-import { Can } from "~/components/can";
+import { Can, useCanSave } from "~/components/can";
 import { WinUpdate } from "~/components/shell/win-update";
 import { VersionLog } from "~/components/shell/version-log";
 import { UiStyleCard } from "~/components/settings/ui-style-card";
@@ -20,6 +20,8 @@ import { backupKeep } from "~/lib/backup-keep";
 import { clearAllPhotos } from "~/lib/photos";
 import { authStatus, authOp } from "~/lib/auth";
 import { confirmLeaveUnsaved } from "~/lib/unsaved";
+// 只读账号的写入守卫（canSaveToServer）＋ 恢复入口的文案/门禁唯一实现（工作包 C）
+import { RESTORE_AFTER_CHECK, RESTORE_BEFORE, RESTORE_COVERED, RESTORE_MERGE_NOTE, RESTORE_NOT_COVERED, RESTORE_PATH, restoreGate } from "~/lib/restore";
 
 function SettingsPage() {
   const store = useApp();
@@ -40,6 +42,10 @@ function SettingsPage() {
   // 让用户肉眼核对这份文件里到底有没有报销和合同
   const [backupInfo, setBackupInfo] = React.useState("");
   const [adopting, setAdopting] = React.useState(false);
+  // 恢复入口（工作包 C / B4）：能不能用与只读账号同一判据（lib/readonly.ts 的 canSaveToServer：
+  // canManageLedger 且该模块权限）。useCanSave 内部就是它，权限变化时会让本页重渲染。
+  const canRestore = useCanSave("import.use");
+  const restoreReason = restoreGate().reason;
   
   React.useEffect(() => {
     authStatus().then((s) => setIsAdmin(s.user?.role === "admin"));
@@ -258,8 +264,75 @@ function SettingsPage() {
               {backupInfo}
             </p>
           ) : null}
+          {/* 备份按钮旁边就给出恢复的去处：只写「备份」不写「恢复」，用户出事了还是找不到入口 */}
+          <p className="mt-2 text-xs text-muted">
+            要恢复（误删 / 换机）：见下一节「从备份恢复」—— 用这份备份文件走「导入 → 导入整本台账」，
+            影像附件不在 Excel 口径内。
+          </p>
         </section>
       </Can>
+      {/* 从备份恢复（工作包 C / 业务评估 B4）：原来有备份入口却没有恢复入口，FAQ 却把备份当恢复依据。
+          这一段**故意不放在 Can perm 里**：只读账号 / 缺权限也要看得到，按钮禁用 + 写明原因，
+          而不是整块藏起来 ——「找不到怎么恢复」正是这次要修的问题。 */}
+      <section className="rounded-xl border border-line bg-surface p-5 lg:col-span-2" data-testid="restore-entry">
+        <h2 className="font-semibold">从备份恢复</h2>
+        <p className="mt-1 text-sm text-muted">
+          备份文件（<code>data/backups/</code> 里那份 Excel）本身就是一份「整本台账」，
+          <b>恢复走既有的整本导入流程</b>：<b>导入 → 导入整本台账</b>，选中备份文件即可。{RESTORE_MERGE_NOTE}
+        </p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border border-line bg-bg-elevated p-3">
+            <p className="text-sm font-medium">备份里有、会恢复</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted">
+              {RESTORE_COVERED.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-lg border border-warn bg-warn-bg p-3">
+            <p className="text-sm font-medium">不在 Excel 口径内、不会恢复</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted">
+              {RESTORE_NOT_COVERED.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="mt-3 rounded-lg border border-line bg-bg-elevated p-3">
+          <p className="text-sm font-medium">恢复前</p>
+          <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-xs text-muted">
+            {RESTORE_BEFORE.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ol>
+          <p className="mt-2 text-sm font-medium">恢复后人工核对</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted">
+            {RESTORE_AFTER_CHECK.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {canRestore ? (
+            <>
+              <Link
+                to={RESTORE_PATH}
+                className="btn inline-flex items-center rounded-sm border border-line text-xs hover:bg-accent-soft"
+              >
+                从备份恢复…
+              </Link>
+              <span className="text-xs text-subtle">直达「导入 → 导入整本台账」，选 data/backups 里那份备份</span>
+            </>
+          ) : (
+            <>
+              <Button type="button" disabled title={restoreReason}>
+                从备份恢复…
+              </Button>
+              <span className="text-xs text-warn">{restoreReason}</span>
+            </>
+          )}
+        </div>
+      </section>
       {/* 影像归入本台账：老版本的影像放在全局目录里，按台账分区后需要一次性归入 */}
       <Can perm="photos.edit">
         <section className="rounded-xl border border-line bg-surface p-5">

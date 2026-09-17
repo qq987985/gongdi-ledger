@@ -6,6 +6,23 @@ import { normalizeIdDate, parseIdCard } from "./idcard";
 import { derivedYears, nextYear, localToday } from "./dates";
 import { normalizeEntry, splitLegacyReceipts, type ContractEntry, type ContractRecord } from "./contracts";
 import { logOp } from "./audit";
+// 操作记录的前后值（B17，1.8.15）：**唯一实现**在 lib/audit-diff.ts ——
+// 关键改写类动作必须记「改动前 → 改动后」，不许在这里或页面里自己拼字符串
+// （守卫见 tests/audit-diff.test.ts「关键改写动作必须带前后值」）。
+import {
+  attendanceChanges,
+  batchChanges,
+  contractChanges,
+  diffDetail,
+  entryChanges,
+  expenseChanges,
+  expenseDeletedChanges,
+  fmtMoney,
+  paymentChanges,
+  paymentDeletedChanges,
+  personChanges,
+  personDeletedChanges,
+} from "./audit-diff";
 import { applyRenameToPeople, planRenamePerson, renameLogDetail, type RenameCounts } from "./rename-person";
 import { runMuted } from "./sync-mute";
 // 姓名比较键的唯一实现（A-1）：姓名是考勤 / 发放 / 人员表之间的关联键，**入库一律 trim** ——
@@ -273,6 +290,12 @@ export interface AppActions {
   patchAttendanceDoc: (id: string, patch: Partial<AttendanceDoc>) => void;
   removeAttendanceDocs: (ids: string[]) => void;
   addPayment: (p: Omit<Payment, "id"> & { id?: string }) => void;
+  /**
+   * 一次落多笔发放（B15「按应发生成待发放」，1.8.15）：整批只写**一条**操作记录。
+   * 逐笔调 addPayment 会灌 30 条「新增发放」，操作记录页直接刷屏、也看不出这是同一次批量操作。
+   * 返回真正写进去的笔数（0 笔时什么都不做）。
+   */
+  addPayments: (rows: (Omit<Payment, "id"> & { id?: string })[]) => number;
   patchPayments: (ids: string[], patch: Partial<Payment>) => void;
   replacePayments: (payments: Payment[]) => void;
   removePayment: (id: string) => void;
@@ -386,9 +409,16 @@ export const useApp = create<AppStore>()(
             insuranceMembers: plan.insuranceMembers,
             expenses: plan.expenses,
           });
+          // B17：修改人员必须留下「改动前 → 改动后」（工资/班组/计薪方式/调薪历史条数…），
+          // 身份证与银行卡号只记「改过了」不记值（audit-diff.ts 是唯一实现）。
+          // 改名时：摘要仍是「张三 → 张三丰（同步 N 条考勤…）」，同时把**一起改的其它字段**
+          // 也带上前后值 —— 姓名那一项由摘要说清了，不重复记（无变化时不会出现标记）。
+          const fieldDiffs = personChanges(people[i], next[i]).filter((c) => c.label !== "姓名" || plan.oldName === plan.newName);
           logOp(
             plan.oldName === plan.newName ? "修改人员" : "人员改名",
-            plan.oldName === plan.newName ? nextP.name : renameLogDetail(plan),
+            plan.oldName === plan.newName
+              ? diffDetail(nextP.name, fieldDiffs)
+              : diffDetail(renameLogDetail(plan), fieldDiffs),
             "人员",
           );
         } else {
@@ -437,12 +467,10 @@ export const useApp = create<AppStore>()(
         logOp("新增人员", nameKey(p.name), "人员");
       },
       removePeople: (ids) => {
-        const names = get()
-          .people.filter((p) => ids.includes(p.id))
-          .map((p) => p.name)
-          .join("、");
+        const rows = get().people.filter((p) => ids.includes(p.id));
         set({ people: get().people.filter((p) => !ids.includes(p.id)) });
-        logOp("删除人员", names || `${ids.length}人`, "人员");
+        // B17：误删要能凭记录知道删了谁、他当时是哪个班组/多少工资（只记改动前）
+        logOp("删除人员", diffDetail(`${rows.length}人`, personDeletedChanges(rows)), "人员");
       },
       replacePeople: (people) => {
         set({
@@ -459,6 +487,7 @@ export const useApp = create<AppStore>()(
         logOp("导入/替换人员", `${people.length}人`, "人员");
       },
       saveAttendanceMonth: (year, month, rows) => {
+        const before = get().attendance.filter((r) => r.year === year && r.month === month);
         const rest = get().attendance.filter((r) => !(r.year === year && r.month === month));
         const next = rows
           .filter((r) => (r.name || "").trim())
@@ -473,7 +502,13 @@ export const useApp = create<AppStore>()(
           }) as AttendanceRow);
         const attendance = [...rest, ...next];
         set({ attendance, years: derivedYears({ ...get(), attendance, year }) });
-        logOp("保存月考勤", `${year}年${month}月 ${next.length}人`, "考勤");
+        // B17：考勤天数改动必须留下「改动前 → 改动后」（首次录入整月没有对比基准 → 只写人数，
+        // 不逐个记「（空）→ 26」，避免刷屏；见 audit-diff.ts 的 attendanceChanges）
+        logOp(
+          "保存月考勤",
+          diffDetail(`${year}年${month}月 ${next.length}人`, attendanceChanges(before, next)),
+          "考勤",
+        );
       },
       replaceAttendance: (attendance) => {
         // 整本导入的考勤姓名同样入库 trim（A-1）：不然与人员表的干净姓名对不上
@@ -500,12 +535,46 @@ export const useApp = create<AppStore>()(
         set({ payments: [...get().payments, { ...p, id: uid() }] });
         logOp("新增发放", `${p.owner} ${p.amount}`, "发放");
       },
+      addPayments: (rows) => {
+        const list = (rows || []).filter((r) => r && (r.owner || "").trim());
+        if (!list.length) return 0;
+        const next = list.map((r) => ({ ...r, id: r.id || uid() }));
+        set({ payments: [...get().payments, ...next] });
+        // B15/B17：一次批量只写一条操作记录；名单（谁、多少）写进前后值里 ——
+        // 误删/误改时凭这条记录能还原「这一次一共生成了哪些待发放、各多少钱」。
+        const total = next.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+        logOp(
+          "批量生成待发放",
+          diffDetail(
+            `${next.length} 笔`,
+            [
+              { label: "笔数", before: "0", after: String(next.length) },
+              { label: "待发放合计", before: "0.00", after: fmtMoney(total) },
+              {
+                label: "名单",
+                before: "（无）",
+                after: next.map((r) => `${r.owner} ¥${fmtMoney(r.amount)}`).join("、"),
+              },
+            ],
+          ),
+          "发放",
+        );
+        return next.length;
+      },
       patchPayments: (ids, patch) => {
         const idset = new Set(ids);
+        const pairs = get()
+          .payments.filter((p) => idset.has(p.id))
+          .map((p) => ({ before: p, after: { ...p, ...patch, id: p.id } as Payment }));
         set({
           payments: get().payments.map((p) => (idset.has(p.id) ? { ...p, ...patch, id: p.id } : p)),
         });
-        logOp("修改发放", `${ids.length}条`, "发放");
+        // B17：金额 / 发放日期 / 收款人 改动必须留下「改动前 → 改动后」（批量改写时带收款人前缀）
+        logOp(
+          "修改发放",
+          diffDetail(`${ids.length}条`, batchChanges(pairs, paymentChanges, (p) => nameKey(p.owner))),
+          "发放",
+        );
       },
       replacePayments: (payments) => {
         set({ payments });
@@ -514,11 +583,13 @@ export const useApp = create<AppStore>()(
       removePayment: (id) => {
         const p = get().payments.find((x) => x.id === id);
         set({ payments: get().payments.filter((x) => x.id !== id) });
-        logOp("删除发放", p ? `${p.owner} ${p.amount}` : id, "发放");
+        // B17：误删要能凭记录知道删的是哪一笔、多少钱（只记改动前）
+        logOp("删除发放", p ? diffDetail("1条", paymentDeletedChanges([p])) : id, "发放");
       },
       removePayments: (ids) => {
+        const rows = get().payments.filter((p) => ids.includes(p.id));
         set({ payments: get().payments.filter((p) => !ids.includes(p.id)) });
-        logOp("删除发放", `${ids.length}条`, "发放");
+        logOp("删除发放", diffDetail(`${ids.length}条`, paymentDeletedChanges(rows)), "发放");
       },
       upsertContract: (c) => {
         const list = get().contracts;
@@ -529,7 +600,8 @@ export const useApp = create<AppStore>()(
           const next = list.slice();
           next[i] = { ...c, id: list[i].id };
           set({ contracts: next });
-          logOp("修改合同", c.name, "合同");
+          // B17：合同金额/税率/状态/结算金额改动必须留下「改动前 → 改动后」
+          logOp("修改合同", diffDetail(c.name, contractChanges(list[i], next[i])), "合同");
         } else {
           set({ contracts: [...list, { ...c, id: c.id || uid() }] });
           logOp("新增合同", c.name, "合同");
@@ -552,14 +624,26 @@ export const useApp = create<AppStore>()(
         // 与新增走同一个 normalizeEntry，金额/不含税/税率口径不许在编辑路径分叉；
         // id 不变（normalizeEntry 用 e.id || uid()），影像文件挂接关系保持。
         const entry = normalizeEntry(row);
+        const before = get().contractEntries.find((e) => e.id === entry.id);
         set({ contractEntries: get().contractEntries.map((e) => (e.id === entry.id ? entry : e)) });
-        logOp("修改合同明细", `${entry.kind} ${entry.amount}`, "合同");
+        // B17：合同明细金额/税率/不含税改动留下前后值；这是「开票翻倍 / 报量被换成含税」
+        // 这类历史缺陷唯一能事后追的地方（只记关键字段，不整条 dump）
+        logOp(
+          "修改合同明细",
+          diffDetail(
+            `${entry.kind} ${fmtMoney(entry.amount)}`,
+            before ? entryChanges(before, entry) : [],
+          ),
+          "合同",
+        );
       },
       patchContractEntry: (id, patch) => {
+        const before = get().contractEntries.find((e) => e.id === id);
+        const after = before ? ({ ...before, ...patch } as ContractEntry) : undefined;
         set({
           contractEntries: get().contractEntries.map((e) => (e.id === id ? { ...e, ...patch } : e)),
         });
-        logOp("修改合同明细", id, "合同");
+        logOp("修改合同明细", diffDetail(id, before && after ? entryChanges(before, after) : []), "合同");
       },
       removeContractEntries: (ids) => {
         set({ contractEntries: get().contractEntries.filter((e) => !ids.includes(e.id)) });
@@ -606,15 +690,18 @@ export const useApp = create<AppStore>()(
           const copy = list.slice();
           copy[i] = next;
           set({ expenses: copy });
-          logOp("修改报销", next.name, "报销");
+          // B17：报销金额/数量/单价/状态/报销人的改动留下前后值
+          logOp("修改报销", diffDetail(next.name, expenseChanges(list[i], next)), "报销");
         } else {
           set({ expenses: [...list, next] });
           logOp("新增报销", next.name, "报销");
         }
       },
       removeExpenses: (ids) => {
+        const rows = (get().expenses || []).filter((e) => ids.includes(e.id));
         set({ expenses: (get().expenses || []).filter((e) => !ids.includes(e.id)) });
-        logOp("删除报销", `${ids.length}笔`, "报销");
+        // B17：误删要能凭记录知道删的是哪几笔、谁报的、多少钱（只记改动前）
+        logOp("删除报销", diffDetail(`${rows.length}笔`, expenseDeletedChanges(rows)), "报销");
       },
       replaceExpenses: (expenses) => {
         set({ expenses });

@@ -59,8 +59,14 @@ function ImportPage() {
           </div>
         </section>
         <section className="rounded-xl border border-dashed border-line-strong bg-bg-elevated p-5">
-          <h2 className="font-semibold">导入整本台账</h2>
-          <p className="mt-1 text-sm text-muted">一次写入人员、各月考勤、发放、报销。合同仍用上面单独导入。</p>
+          <h2 className="font-semibold">导入整本台账 / 从备份恢复</h2>
+          <p className="mt-1 text-sm text-muted">
+            一次写入人员、各年月考勤、发放、报销、合同+明细、保险+参保人 ——
+            <b>「设置 → 数据 → 立即备份 Excel」生成的备份文件直接用这里恢复</b>（备份文件里含合同 5 张表）。
+            同键记录（同名人员 / 同保单号 / 重复的发放、报销、合同）会跳过、现有数据保留；
+            同一人同一月的考勤会用文件里的那一行覆盖；
+            影像附件（证件照、合同扫描件、报销凭证）不在 Excel 口径内，恢复后要人工核对文件还在不在。
+          </p>
           <div className="mt-3">
             <FullBookImport />
           </div>

@@ -231,7 +231,12 @@ test("约定：含 window.print() 的页面必须「屏幕内容 no-print + 打�
     if (file.startsWith("src/components/") && /\bprint:hidden\b/.test(text)) continue;
     bad.push(`${file}: ${issue}`);
   }
-  expectMinHits("ui 守卫：扫描到的打印入口页面数", checked, 5, "现有 6 处 window.print()");
+  expectMinHits(
+    "ui 守卫：扫描到的打印入口页面数",
+    checked,
+    8,
+    "现有 8 处 window.print()：发放 / 保险 / 合同 / 报销（2 个按钮）/ 个人查询 / 合同编辑弹窗 + 1.8.15 新增的考勤页、人员页",
+  );
   assert.deepEqual(
     bad,
     [],
@@ -519,3 +524,128 @@ test("约定：没有待发放记录时不印「无日期的待发放记录按�
     "那句提示必须用 `breakdown.pendingCount` 包起来：没有待发放记录时它纯占一行（实测正好把「打印日期」挤到第 2 页）",
   );
 });
+
+// ───────────────────── B16 新打印入口（1.8.15）：考勤月表 / 全年月表 / 年度工资汇总 / 人员名单 ─────────────────────
+
+/**
+ * 背景（业务评估 B16）：打印入口原来只有发放 / 合同 / 保险 / 报销 / 工资条五处，
+ * **考勤月表、年度工资汇总、人员名单印不出来**（现场要贴墙、交财务、存档）。
+ * 新增打印入口最容易漏的两件事：
+ *  ① 忘记把屏幕内容包进 `.no-print`（点打印把导航、筛选、月表一起印出来 —— 1.8.4 用户实测的缺陷）。
+ *     这一条由上面的「打印分离」守卫统一管（含 `window.print()` 的页面自动入清单，命中数下限已提到 8）；
+ *  ② 顺手把打印按钮放进 `<Can perm="….edit">` 或 `disabled={!canEdit}`：打印是**只读操作**，
+ *     只读账号也要能印（A 组报告第 17 项同一类问题 —— 只读账号被挡在只读功能之外）。
+ * 这里补的就是 ②，以及「打印件的单据抬头必须写在 thead 第一行」（1.8.11：跨页重复，
+ * 裁开分发时续页也认得出是哪张单）。
+ */
+
+const NEW_PRINT_ENTRIES: { file: string; label: string; why: string }[] = [
+  { file: "src/routes/attendance.tsx", label: "打印月表", why: "考勤月表（当前月：贴墙 / 存档）" },
+  { file: "src/routes/attendance.tsx", label: "打印全年月表", why: "全年 12 个月的月表（每月一块，按月贴/存档）" },
+  { file: "src/routes/attendance.tsx", label: "打印年度工资汇总", why: "年度工资汇总（交财务）" },
+  { file: "src/routes/people.tsx", label: "打印人员名单", why: "人员名单（现场贴墙 / 存档）" },
+];
+
+test("约定：B16 新打印入口必须存在，且按钮不受编辑权限限制（打印是只读操作）", async () => {
+  const bad: string[] = [];
+  let checked = 0;
+  for (const c of NEW_PRINT_ENTRIES) {
+    const code = stripComments(await readFile(repo(c.file), "utf8"));
+    const at = code.indexOf(c.label);
+    if (at < 0) {
+      bad.push(`${c.file}: 找不到「${c.label}」按钮（${c.why}）`);
+      continue;
+    }
+    checked += 1;
+    const open = code.lastIndexOf("<Button", at);
+    const close = code.indexOf("</Button>", at);
+    if (open < 0 || close < 0) {
+      bad.push(`${c.file}:「${c.label}」不是一个 Button`);
+      continue;
+    }
+    const btn = code.slice(open, close);
+    if (/disabled=\{!(can|useCan|canSave|canEdit)/.test(btn))
+      bad.push(`${c.file}:「${c.label}」被编辑权限禁用 —— 打印是只读操作，只读账号也要能印`);
+    if (!/onClick=/.test(btn)) bad.push(`${c.file}:「${c.label}」没有 onClick`);
+    if (!/variant="outline"/.test(btn)) bad.push(`${c.file}:「${c.label}」的样式要与其他页的「打印…」按钮一致（outline）`);
+  }
+  expectMinHits("ui 守卫：B16 新打印入口数", checked, 4, "现有 4 个（考勤页 3 + 人员页 1）");
+  assert.deepEqual(bad, [], `B16 打印入口不齐 / 不只读 / 样式不一致：\n${bad.join("\n")}`);
+
+  // 反向自检：把打印按钮按编辑权限禁用的坏样本必须被这条正则抓到（否则「0 命中」没有意义）
+  const byPerm = /disabled=\{!(can|useCan|canSave|canEdit)/;
+  expectRegexCatches(
+    byPerm,
+    '<Button variant="outline" disabled={!canEditPeople} onClick={() => window.print()}>打印人员名单</Button>',
+    "「打印按钮按编辑权限禁用」的坏写法",
+  );
+
+  // 打印件必须渲染在 .no-print 包裹**之外**（否则打印时被一起隐藏，印出来是空白）：
+  // 这条与上面的通用守卫同源，但那里认的是「任一渲染点在包裹外」，这里要求四个入口都真的接了打印件。
+  const att = stripComments(await readFile(repo("src/routes/attendance.tsx"), "utf8"));
+  const ppl = stripComments(await readFile(repo("src/routes/people.tsx"), "utf8"));
+  const sheets: [string, string, RegExp][] = [
+    ["src/routes/attendance.tsx", att, /<AttendanceMonthSheet\b/],
+    ["src/routes/attendance.tsx", att, /<AttendanceMonthsYearSheet\b/],
+    ["src/routes/attendance.tsx", att, /<PayrollYearSheet\b/],
+    ["src/routes/people.tsx", ppl, /<PeopleRosterSheet\b/],
+  ];
+  const broken: string[] = [];
+  for (const [file, code, re] of sheets) {
+    const m = re.exec(code);
+    if (!m) broken.push(`${file}: 缺打印件渲染点 ${re.source}`);
+    else {
+      const ranges = noPrintRanges(code);
+      if (ranges.some((w) => (m.index ?? 0) > w.open && (m.index ?? 0) < w.close))
+        broken.push(`${file}: ${re.source} 渲染在 .no-print 之内 —— 打印时会被藏起来`);
+    }
+  }
+  expectMinHits("ui 守卫：B16 打印件渲染点数", sheets.length, 4, "4 个打印件各一处");
+  assert.deepEqual(broken, [], `B16 打印件没有接在 no-print 之外：\n${broken.join("\n")}`);
+});
+
+test("约定：B16 打印件的单据抬头写在 thead 第一行 + 尾部打印日期（1.8.11 / 1.8.13 协议）", async () => {
+  const code = stripComments(await readFile(repo("src/components/ledger-print-sheets.tsx"), "utf8"));
+  const sheets = ["AttendanceMonthSheet", "AttendanceMonthsYearSheet", "PayrollYearSheet", "PeopleRosterSheet"];
+  const bad: string[] = [];
+  for (const name of sheets) {
+    const start = code.indexOf(`export function ${name}(`);
+    const next = code.indexOf("export function ", start + 1);
+    const seg = code.slice(start, next < 0 ? code.length : next);
+    if (start < 0) {
+      bad.push(`${name}: 打印件不见了（被搬家/改名？守卫路径要同步改）`);
+      continue;
+    }
+    const theadFrom = seg.indexOf("<thead>");
+    const theadTo = seg.indexOf("</thead>");
+    if (theadFrom < 0 || theadTo < 0) {
+      bad.push(`${name}: 没有 <thead> —— 第 2 页起会没有表头`);
+      continue;
+    }
+    // 抬头 = <thead> 里的第一个 <tr> 里的 colSpan th（跨页重复，裁开也认得出是哪张单）
+    if (!/<thead>\s*<tr>\s*<th[^>]*colSpan=/.test(seg.slice(theadFrom, theadTo + 8)))
+      bad.push(`${name}: thead 第一行不是单据抬头（应该是 <th colSpan> 写清年份/月份/筛选范围）`);
+    if (!/打印日期 \{today\}/.test(seg)) bad.push(`${name}: 尾部缺「打印日期 {today}」`);
+    if (!/className="print-only/.test(seg)) bad.push(`${name}: 没有 .print-only（屏幕态就藏不住）`);
+  }
+  expectMinHits("ui 守卫：检查了抬头 / 打印日期的打印件数", sheets.length, 4, "现有 4 个（1.8.15 新增）");
+  assert.deepEqual(bad, [], `打印件协议不满足（抬头要在 thead 里、尾部要打印日期）：\n${bad.join("\n")}`);
+
+  // 坏样本自检：抬头写在 <thead> 之外（旧写法：只放在页眉 div 里）必须判不合格
+  const captionFirst = /<thead>\s*<tr>\s*<th[^>]*colSpan=/;
+  expectRegexCatches(
+    captionFirst,
+    '<thead><tr><th colSpan={7}>2026年3月 · 本表 12 人</th></tr><tr><th>序号</th></tr></thead>',
+    "「抬头写在 thead 第一行」的正样本",
+  );
+  assert.equal(captionFirst.test('<div class="text-center">2026年3月</div><thead><tr><th>序号</th></tr></thead>'), false, "抬头放在 thead 之外必须判不合格");
+
+  // 合计只放 tfoot（1.8.11：tfoot 在打印态是普通行组，只在最后一页印一次）
+  expectMinHits(
+    "ui 守卫：写在 <tfoot> 里的合计（月度表 / 年度汇总表）",
+    (code.match(/<tfoot>[\s\S]{0,400}?合计/g) || []).length,
+    2,
+    "现有 2 处（打印月表、年度工资汇总）",
+  );
+});
+

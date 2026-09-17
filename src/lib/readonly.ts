@@ -13,7 +13,7 @@
  * 唯一实现，页面与守卫测试都引用这里（test/readonly.test.ts + tests/ui-guards.test.ts）。
  */
 import { toast } from "sonner";
-import { canManageLedger, hasPerm, livePerms } from "./perms";
+import { canManageLedger, hasPerm, livePerms, permLabel } from "./perms";
 
 /** 这次改动能不能真的保存到服务器（不能 = 只读，改了也白改） */
 export function canSaveToServer(perm: string): boolean {
@@ -44,4 +44,17 @@ export const READONLY_MSG = "你是只读账号，改动不会保存。请联系
 
 export function readonlyHint(what: string): string {
   return `你是只读账号（缺「${what}」权限），改动不会保存。请联系管理员开通权限。`;
+}
+
+/**
+ * 导入入口的统一守卫（工作包 C 续）：**7 个导入入口共用这一处**，别在每个入口各写一段文案。
+ *
+ * 为什么单独抽一条：导入（人员 / 考勤 / 发放 / 报销 / 合同 / 保险人员 / 整本）写的是**整本台账**
+ * —— 服务端 `PUT /api/ledger` 要 `ledger.manage`，而导入页的门槛只是 `import.use`。
+ * 自定义权限的账号只勾了「导入」时，界面会一路弹「导入完成 / 已导入 N 条」而服务端 403，
+ * 改动只活在本机内存里、刷新即丢（与 A 组第 17 项「只读账号改电话弹『已保存』」同一类假成功）。
+ * 所以在「点确认」那一刻就拦下：返回 true = 已拦下，调用方必须立刻 return，不许再解析、不许再写台账。
+ */
+export function blockedImport(): boolean {
+  return blockedWrite("import.use", permLabel("import.use"));
 }

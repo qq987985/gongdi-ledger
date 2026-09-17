@@ -762,7 +762,27 @@ function printCases() {
         await page.waitForTimeout(300);
       },
     },
+    // ③ B16（1.8.15）新增的三个入口（考勤月表 / 全年月表 / 年度工资汇总 / 人员名单）：
+    //    「打印月表」要先点进某个月（年度总览上是 12 张月卡）
+    {
+      name: "考勤月表-当前月",
+      route: "/attendance",
+      button: "打印月表",
+      file: "attendance-month",
+      // 故意选 2 月：种子数据里 2 月的备注最长（「春节放假…」），用来量「长文本会不会把表撑出纸面」
+      setup: (page) => openMonth(page, 2),
+    },
+    { name: "考勤全年月表", route: "/attendance", button: "打印全年月表", file: "attendance-months-year" },
+    { name: "年度工资汇总", route: "/attendance", button: "打印年度工资汇总", file: "attendance-payroll-year" },
+    { name: "人员名单", route: "/people", button: "打印人员名单", file: "people-roster" },
   ];
+}
+
+/** 从年度总览点进某个月（月卡的按钮名字以「3月」开头） */
+async function openMonth(page, month) {
+  const card = page.getByRole("button", { name: new RegExp(`^${month}月`) }).first();
+  await card.click();
+  await page.waitForTimeout(600);
 }
 
 async function printCheck() {

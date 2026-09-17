@@ -35,6 +35,9 @@ import {
   receiverOf,
 } from "~/lib/payments-stats";
 import { PaymentSheets } from "~/components/payment-sheets";
+// B15（1.8.15）：批量「按应发生成待发放」的应发口径、跳过判据、落盘记录全在 lib/pending-batch.ts
+// （页面**不许**自己算应发：那是总览 KPI / 考勤页年度表同一份计算，两处算法必然分叉）
+import { pendingPaymentsOf, planPendingBatch, planSkipNote } from "~/lib/pending-batch";
 import type { Payment } from "~/lib/types";
 
 function emptyPayment(): Payment {
@@ -43,7 +46,7 @@ function emptyPayment(): Payment {
 
 function PaymentsPage() {
   const store = useApp();
-  const { year, people, payments, addPayment, patchPayments, removePayments } = store;
+  const { year, people, payments, addPayment, addPayments, patchPayments, removePayments } = store;
   const names = people.map((p) => p.name);
   const years = derivedYears(store);
   const [q, setQ] = React.useState("");
@@ -59,6 +62,8 @@ function PaymentsPage() {
   const [editing, setEditing] = React.useState<Payment | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [fillDate, setFillDate] = React.useState(() => localToday());
+  /** B15：批量「按应发生成待发放」的预览弹窗 */
+  const [pendingOpen, setPendingOpen] = React.useState(false);
   // 只读账号：编辑/新增/删除/保存入口一律拦在入口（A 组报告第 17 项同源）
   const canEditPay = useCanSave("payments.edit");
   const yearOpts = React.useMemo(() => {
@@ -139,6 +144,66 @@ function PaymentsPage() {
     setSelected([]);
     toast.success(`已给 ${ids.length} 笔补上日期 ${d}`);
   }
+  /**
+   * B15：批量「按应发生成待发放」的预览计划（纯函数，不写盘）。
+   * 口径全在 lib/pending-batch.ts 里复用现有唯一实现：
+   * 应发 = 年度表的「全年」（总览「应发合计」KPI 同一份计算）、已发 = 该行「已发」（含代发），
+   * 本次要生成 = 应发 − 已发（= 年度表的「未发」）；该年已有待发放记录的人跳过（幂等）。
+   * 年份 = 当前工作年；搜索框有关键词时只生成姓名匹配的人（与列表筛选同口径）。
+   */
+  const pendingPlan = React.useMemo(
+    () =>
+      planPendingBatch({
+        people,
+        attendance: store.attendance,
+        payments,
+        year,
+        fallbackYear: year,
+        q,
+      }),
+    [people, store.attendance, payments, year, q],
+  );
+  /** 生成时带上的发放方：跟随当前「发放方」筛选（全部发放方时不填） */
+  const pendingSource = batch === ALL_BUCKETS ? "" : batch;
+  // 预览弹窗自己吃 Esc（与 components/preview.tsx 同一写法）：
+  // 带 data-modal 后，外层编辑弹窗的「有未保存的更改」不会因为一次 Esc 被连带触发（C3）
+  React.useEffect(() => {
+    if (!pendingOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPendingOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pendingOpen]);
+  function openPendingPreview() {
+    if (blockedWrite("payments.edit", permLabel("payments.edit"))) return;
+    if (!pendingPlan.items.length) {
+      toast.error(`没有可生成的待发放记录${planSkipNote(pendingPlan) ? `（${planSkipNote(pendingPlan)}）` : ""}`);
+      return;
+    }
+    setPendingOpen(true);
+  }
+  function confirmPendingBatch() {
+    if (blockedWrite("payments.edit", permLabel("payments.edit"))) return;
+    // 预览已经列了名单/金额/合计；这里再确认一次（§6.11：批量操作必须有确认，文案写明数量与影响）
+    const rows = pendingPaymentsOf(pendingPlan, { source: pendingSource });
+    if (
+      !confirm(
+        `按应发为这 ${rows.length} 人生成待发放记录（合计 ¥${money(pendingPlan.total)}）？\n\n` +
+          `记录的发放日期留空 = 待发放；发钱后补上发放日期即算已发。\n` +
+          `该年已有待发放记录的人不会再生成，已有的发放记录不会被动到。`,
+      )
+    )
+      return;
+    // 一次性落盘：store 的 addPayments 只写一条操作记录（逐笔写会灌 30 条记录刷屏）
+    const n = addPayments(rows);
+    setPendingOpen(false);
+    if (!n) {
+      toast.error("没有生成任何记录（名单已变化，请重试）");
+      return;
+    }
+    toast.success(`已生成 ${n} 笔待发放（合计 ¥${money(pendingPlan.total)}），补发放日期后即算已发`);
+  }
   return (
     <Need perm="payments.view">
       <>
@@ -156,6 +221,21 @@ function PaymentsPage() {
               导出全部发放
             </a>
             <PaymentImport />
+            {/* B15：30 人发工资不用开 30 次弹窗 —— 按当前年份的应发一次生成「待发放」（日期留空），
+                先出预览（名单 + 每人金额 + 合计）再落盘；只读账号 / 无 payments.edit 直接拦下 */}
+            <Button
+              variant="outline"
+              type="button"
+              disabled={!canEditPay}
+              title={
+                canEditPay
+                  ? "按本年应发（考勤×工资口径）为还没登记的每个人生成一条待发放记录，日期留空"
+                  : `你是只读账号（缺「${permLabel("payments.edit")}」权限），改动不会保存。`
+              }
+              onClick={openPendingPreview}
+            >
+              按应发生成待发放
+            </Button>
             <Button
               type="button"
               disabled={!canEditPay}
@@ -420,6 +500,69 @@ function PaymentsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        ) : null}
+        {pendingOpen ? (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6"
+            data-modal="pending-batch-preview"
+            onClick={() => setPendingOpen(false)}
+          >
+            <section
+              id="pending-batch-preview"
+              // 小屏（375×667）不许用裸 max-h-screen（1.8.8 D6）：面板比可视区高、顶部按钮会被裁
+              className="max-h-[calc(100dvh-4rem)] w-full max-w-3xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-6 shadow-panel md:max-h-[calc(100dvh-3rem)] md:rounded-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+                <h2 className="font-display text-lg font-semibold">按应发生成待发放 · {year} 年</h2>
+                <div className="btn-row">
+                  <Button variant="outline" type="button" onClick={() => setPendingOpen(false)}>
+                    取消
+                  </Button>
+                  <Button type="button" disabled={!pendingPlan.items.length} onClick={confirmPendingBatch}>
+                    确认生成 {pendingPlan.items.length} 笔
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3 text-sm">
+                <p className="text-xs text-muted">
+                  应发 = 本年考勤按工资口径算出的「全年」（与总览「应发合计」、考勤页年度表同一份计算）；
+                  本次生成金额 = 应发 − 已发（已发按实际收款人计入、含代发）。生成出来的记录
+                  <b>日期留空 = 待发放</b>，发钱后给它们补上日期即算已发。
+                  {q.trim() ? `只生成姓名包含「${q.trim()}」的人（跟随当前搜索）。` : ""}
+                  {pendingSource ? `发放方跟随当前筛选：${pendingSource}。` : ""}
+                </p>
+                <p className="text-sm">
+                  将新增 <b>{pendingPlan.items.length}</b> 笔 · 合计 <b>¥{money(pendingPlan.total)}</b>
+                  {planSkipNote(pendingPlan) ? <span className="text-xs text-muted"> · 跳过：{planSkipNote(pendingPlan)}</span> : null}
+                </p>
+                <div className="overflow-x-auto rounded-xl border border-line">
+                  <table className="fit-table text-left text-sm">
+                    <thead className="text-xs text-muted">
+                      <tr>
+                        <th className="p-3">姓名</th>
+                        <th className="p-3">班组</th>
+                        <th className="p-3 text-right">本年应发</th>
+                        <th className="p-3 text-right">本年已发（含代发）</th>
+                        <th className="p-3 text-right">本次待发放</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingPlan.items.map((it) => (
+                        <tr key={it.owner} className="border-t border-line">
+                          <td className="p-3 font-medium">{it.owner}</td>
+                          <td className="p-3 text-muted">{it.team || "未分班组"}</td>
+                          <td className="p-3 text-right tabular-nums">¥{money(it.should)}</td>
+                          <td className="p-3 text-right tabular-nums">¥{money(it.paid)}</td>
+                          <td className="p-3 text-right tabular-nums font-medium">¥{money(it.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
           </div>
         ) : null}
         </div>
