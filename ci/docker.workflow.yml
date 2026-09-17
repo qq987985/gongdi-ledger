@@ -98,5 +98,5 @@ jobs:
           tag_name: ${{ steps.ver.outputs.ver }}
           name: 工地台账 ${{ steps.ver.outputs.ver }} Windows
           body_path: VERSION.txt
-          files: gongzi-windows.zip
+          files: gongdi-windows.zip
           make_latest: true

@@ -81,6 +81,20 @@ CI 靠它在构建**之前**判断「这份 app/ 是不是当前源码构建出�
 贴上这份模板之后，下面 §2 说的「推一次文档就移动一次 Release」就不存在了 ——
 §2 保留原文当决策记录，**不用**再单独做一遍。
 
+**粘贴后自检一条（1.8.15 实测踩过）**：Release 步骤的 `files:` 必须与打包脚本写出的文件名**逐字一致** ——
+`win/pack.sh` 写的是 `gongdi-windows.zip`，模板里曾写成 `gongzi-windows.zip`（差一个字母）。
+`softprops/action-gh-release` 遇到匹配不到的文件**只打一行警告、照样报成功**：
+Release 建出来了、镜像推上去了、**zip 一个字节都没挂**（2026-09-17 的 1.8.15 就是如此，只能事后手工补传）。
+所以粘贴后请顺手核对：
+
+```sh
+grep -n 'windows.zip' ci/docker.workflow.yml win/pack.sh     # 两个名字必须一模一样
+grep -n 'windows.zip' .github/workflows/docker.yml           # 线上那份也应一致
+```
+
+本地有守卫（`tests/deploy-guards.test.ts`）盯着模板与 `win/pack.sh` 的一致性；
+线上一份因为要 GitHub 网页粘贴、本地 token 没有 workflow 权限，只能靠上面这条自检。
+
 ---
 
 ## 2. 让「合并」和「发版」解耦（**已并入 §1b 的模板**，此处留档）

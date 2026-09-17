@@ -1,3 +1,3 @@
 # 这个 app/ 是下面这版源码构建出来的（由 scripts/copy-output.mjs 写入，勿手改）。
 # 校验：node scripts/build-stamp.mjs --verify
-c9f7f9eb2d422170490d0064da20075ed28a5ea13bb3a47088928dddaa1c1966  1.8.15
+e5c8d54e3d88ccac6d1dbda1030cfbb7563632cb0cff8fde1aaaf0960b3b28d0  1.8.15

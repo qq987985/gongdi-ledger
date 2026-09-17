@@ -82,7 +82,15 @@
   **`check.yml` 已于 2026-09-16 建到 GitHub（1.8.10 起生效，推送 main / PR 都会跑 typecheck → test →
   test:roundtrip → build + `app/VERSION.txt` 一致性）**；本地 `git log origin/main` 里能看到它
   （本地 `git pull` 之前看不到文件，属正常）。
-- 1.8.15 起覆盖 **610 个用例（610 pass + 0 todo）**（1.8.14 时是 543、1.8.13 时是 392、1.8.12 时是 390、1.8.11 时是 389、1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
+- **发版链路的两条硬经验（1.8.15 实测，都是「静默失败」）**：
+  ① Release 步骤的 `files:` 必须与 `win/pack.sh` 的 `OUT=` **逐字一致** ——
+  `softprops/action-gh-release` 匹配不到文件时**只打一行警告、照样报成功**：Release 建出来了、镜像推上去了、
+  **zip 一个字节都没挂**（现场就是 `gongzi-windows.zip` 与 `gongdi-windows.zip` 差一个字母）。
+  守卫在 `tests/deploy-guards.test.ts`「Release 挂的 zip 名必须与 win/pack.sh 的 OUT 逐字一致」，
+  粘贴后的自检写在 `ci/README.md` §1b；② 本机 token **没有 `workflow` 权限**，任何改动 `.github/workflows/`
+  的提交都会被**整包拒推**（不是只拒那个文件）—— 线上两份只能由用户在 GitHub 网页粘贴，
+  所以守卫只断言 `ci/` 下的模板，别去硬断言线上那份（会让 CI 直接红死、什么都发不出去）。
+- 1.8.15 起覆盖 **611 个用例（611 pass + 0 todo）**（1.8.14 时是 543、1.8.13 时是 392、1.8.12 时是 390、1.8.11 时是 389、1.8.10 时是 387、1.8.9 时是 384、1.8.8 时是 375、1.8.7 时是 344、1.8.6 时是 315、1.8.5 时是 314、1.8.4 时是 307）：wage / contracts / dates / idcard / excel 往返 / 台账服务端（CAS、坏文件、
   读路径不写盘）/ 账户库自保与审计并发 / 影像按台账隔离与归入 / 权限声明表一致性 / 更新脚本（含镜像比对与旧镜像清理）/
   UI 约定守卫（1.7.16 起：防误关不被 onClick={onClose} 绕过、round2 与 localToday 唯一来源；
   1.8.4 起还管**打印件与屏幕内容分离**——含 window.print() 的页面必须有 no-print 包裹且打印件在包裹外；

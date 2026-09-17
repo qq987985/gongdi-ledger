@@ -34,9 +34,22 @@
   lockfile 重生成（`packages:` 段逐字节不变，只改 21 行 `specifier`），`pnpm install --frozen-lockfile` 通过。
   新增守卫 `tests/dependency-pinning.test.ts`（禁 latest/^/~/范围；lockfile 与 package.json 逐字一致；
   node_modules 实装一致；lockfile 未被忽略且在库里；CI 真用 frozen；文档口径），并用隔离副本上的 4 个坏样本证明「不是假绿」。
-- **测试 543 → 610**（610 pass / 0 todo）；Excel 往返 **70/70**；四道闸 + 构建戳校验（app/ 与源码指纹一致）。
+- **测试 543 → 611**（611 pass / 0 todo）；Excel 往返 **70/70**；四道闸 + 构建戳校验（app/ 与源码指纹一致）。
 - **已知取舍**：年度工资汇总打印件不印 12 个月列（要横向须改共享 `@page` 协议）；月表打印件不印「加班规则（人员表）」
   长文本列（实测会把 12 人撑到第 2 页）；人员名单不印身份证/银行卡。
+
+- **发版链路今天实测到的两次「静默失败」**（都已修 + 加守卫，教训留给下一次发版本的人）：
+  · **Release 没挂上 Windows 包**：工作流的 Release 步骤写 `files: gongzi-windows.zip`，而 `win/pack.sh` 写的是 `gongdi-windows.zip`
+    —— 差一个字母。`softprops/action-gh-release` 匹配不到文件时**只打一行警告、照样报成功**：
+    Release 建出来了、镜像也推上去了、**zip 一个字节都没挂**（用户根本下载不到 Windows 包）。
+    已改正模板并在 `ci/README.md` §1b 补「粘贴后自检（两个 zip 名必须一模一样）」；新增守卫
+    `tests/deploy-guards.test.ts`「Release 挂的 zip 名必须与 `win/pack.sh` 的 `OUT=` 逐字一致」。
+    1.8.15 的 zip 已**手工补传**（本机 `sh win/pack.sh` 产出，与提交的 `app/` 同源）。
+  · **本地推不动 `.github/workflows/`**：本机 token 只有 `gist/read:org/repo`、没有 `workflow` 权限 ——
+    线上两份只能在 GitHub 网页粘贴；所以守卫只断言 `ci/` 下的模板（断言线上那份会让 CI 直接红死）。
+- **文档同步**：`AGENTS.md` / `开发规范.md` / `README.md` / `docs/README.md`（待办改成「1.8.15 之后」、
+  勾掉 B4/B15/B16/B17 与依赖锁版本、记上你已完成的两项）/ `使用说明书.md` §5（4 个新打印入口）/
+  专家评审汇总新增 §10「处理状态（1.8.15）」。
 
 [1.8.14] 2026-09-17
 - **8 位专家评审后的批量修复**（评审汇总 `docs/审查与报告/专家审查/00-汇总-专家评审-20260917.md`，含逐条证据与 §9 处理状态）。

@@ -18,6 +18,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+
+import { expectMinHits } from "./min-hits";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -103,6 +105,27 @@ test("ci/docker.workflow.yml：镜像与 Windows 包都必须先自己构建，�
     "打包 zip 之前也必须从源码构建（pack.sh 拷的就是 app/）",
   );
   assert.equal(yml.includes("pnpm install --frozen-lockfile"), true, "构建前要按 lockfile 装依赖");
+});
+
+test("发版：Release 挂的 zip 名必须与 win/pack.sh 真正写出的名字逐字一致（1.8.15 实测踩过）", () => {
+  // 现场：ci/docker.workflow.yml 写 files: gongzi-windows.zip，而 win/pack.sh 写的是 gongdi-windows.zip。
+  // softprops/action-gh-release 只会打一行「Pattern … does not match any files」然后**照样报成功**：
+  // Release 建出来了、镜像也推上去了、zip 一个字节都没挂 —— 用户根本下载不到 Windows 包（1.8.15 实测）。
+  // 这类「两边名字差一个字母」的缺陷单测测不到、构建也不报错，只能守卫。
+  //
+  // 只守 `ci/` 下的模板：线上一份（.github/workflows/docker.yml）本地改不了 —— token 没有 workflow 权限，
+  // 只能由用户在 GitHub 网页粘贴；在这里硬断言线上那份会让 CI 直接红死、什么都发不出去。
+  // 模板对了，粘过去就对（粘贴后的自检写法见 ci/README.md）。
+  const pack = read("win/pack.sh");
+  const wrote = pack.match(/OUT=\$ROOT\/([A-Za-z0-9._-]+\.zip)/)?.[1];
+  assert.equal(wrote, "gongdi-windows.zip", "win/pack.sh 的 OUT 必须能解析出发包文件名");
+  const attached = read("ci/docker.workflow.yml").match(/files:\s*([A-Za-z0-9._-]+\.zip)/)?.[1];
+  assert.equal(
+    attached,
+    wrote,
+    "ci/docker.workflow.yml 的 files: 必须与 pack.sh 写出的 " + wrote + " 逐字一致（gongdi ≠ gongzi），否则 Release 不会挂上 zip",
+  );
+  expectMinHits("发版守卫：能从 pack.sh 解析出的 zip 名个数", wrote ? 1 : 0, 1, "win/pack.sh 的 OUT=");
 });
 
 test("ci/README.md：写清这两个 workflow 只能在 GitHub 网页粘贴（本地改会被拒推）", () => {
