@@ -27,6 +27,11 @@ on:
     branches: [main]
   pull_request:
 
+# 最小权限（2026-09-17）：这道闸只读仓库、构建、比对，什么都不写 ——
+# 不给声明就会用仓库默认（本仓库默认是 read/write，等于白给写权限）。
+permissions:
+  contents: read
+
 concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: true

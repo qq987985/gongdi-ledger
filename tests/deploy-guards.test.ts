@@ -105,6 +105,16 @@ test("ci/docker.workflow.yml：镜像与 Windows 包都必须先自己构建，�
     "打包 zip 之前也必须从源码构建（pack.sh 拷的就是 app/）",
   );
   assert.equal(yml.includes("pnpm install --frozen-lockfile"), true, "构建前要按 lockfile 装依赖");
+
+  // 最小权限（2026-09-17 收紧）：GITHUB_TOKEN 的权限写在 workflow 里，不给声明就用仓库默认
+  // （本仓库默认 read/write）—— check 只读仓库，多发一份写权限没有理由。
+  assert.match(yml, /permissions:\s*\n\s*contents: write/, "docker job 要能建 Release（contents: write）");
+  assert.match(yml, /packages: write/, "docker job 要能推 ghcr 镜像（packages: write）");
+  const check = read("ci/check.workflow.yml");
+  assert.match(check, /permissions:\s*\n\s*contents: read/, "check 只读仓库：显式最小权限");
+  for (const rel of [".github/workflows/check.yml", ".github/workflows/docker.yml"]) {
+    assert.match(read(rel), /^permissions:/m, rel + " 必须显式声明权限（不吃仓库默认的 read/write）");
+  }
 });
 
 test("发版：Release 挂的 zip 名必须与 win/pack.sh 真正写出的名字逐字一致（1.8.15 实测踩过）", () => {
