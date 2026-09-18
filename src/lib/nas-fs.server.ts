@@ -1,5 +1,5 @@
 /**
- * 台账存储层：ledger.json（CAS + 串行写队列）、audit.json（坏文件保护 + 串行追加）、
+ * 台账存储层：ledger.json（CAS + 串行写队列）、audit.json（坏文件保护 + 串行读改写）、
  * Excel 备份、台账册（book.json）与版本号文件。
  * 路径与目录初始化在 paths.server，影像/文档在 assets.server；依赖方向单向：
  * paths ← assets ← nas-fs。
@@ -192,90 +192,138 @@ function legacyAuditPaths(): string[] {
  * 拿到 `[]` 就会把整份历史覆盖成刚写的这一条（实测 97 条 → 1 条）。
  * 写之前必须能区分「本来就没有记录」和「读不出来」。
  */
-let auditBroken = false;
+const auditBrokenByPath = new Map<string, boolean>();
 
-/** 上一次 readAudit() 是否遇到了坏文件（只在写入路径上用，防止覆盖历史） */
+/** 上一次当前台账读取是否损坏；事务内部直接用读取结果，不依赖此兼容状态。 */
 export function auditUnreadable(): boolean {
-  return auditBroken;
+  return auditBrokenByPath.get(auditPath()) ?? false;
 }
 
-export async function readAudit(): Promise<AuditEntry[]> {
-  if (!persistOn()) return [];
+interface AuditSnapshot {
+  entries: AuditEntry[];
+  unreadable: boolean;
+}
+
+async function readAuditSnapshot(): Promise<AuditSnapshot> {
+  if (!persistOn()) return { entries: [], unreadable: false };
   await ensureDirs();
   const p = auditPath();
   if (existsSync(p)) {
     try {
-      const rows = parseAuditFile(JSON.parse(await readFile(p, "utf8")));
-      auditBroken = false;
-      return rows;
+      return { entries: parseAuditFile(JSON.parse(await readFile(p, "utf8"))), unreadable: false };
     } catch (err) {
-      auditBroken = true;
       await logServer("error", "操作记录文件读取失败", { path: p, error: String(err) });
-      return [];
+      return { entries: [], unreadable: true };
     }
   }
-  // 没有本台账的记录文件时，回落到旧位置（只读）；下一次写入会把它们一起并入新文件
+  // 没有本台账的记录文件时，回落到旧位置（只读）；下一次写入会并入新文件。
   for (const legacy of legacyAuditPaths()) {
+    if (!existsSync(legacy)) continue;
     try {
-      if (!existsSync(legacy)) continue;
-      const rows = parseAuditFile(JSON.parse(await readFile(legacy, "utf8")));
-      if (rows.length) {
-        await logServer("info", "操作记录从旧位置读取", { legacy, count: rows.length });
-        return rows;
+      const entries = parseAuditFile(JSON.parse(await readFile(legacy, "utf8")));
+      if (entries.length) {
+        await logServer("info", "操作记录从旧位置读取", { legacy, count: entries.length });
+        return { entries, unreadable: false };
       }
-    } catch {}
+    } catch (err) {
+      await logServer("error", "历史操作记录文件读取失败", { path: legacy, error: String(err) });
+      return { entries: [], unreadable: true };
+    }
   }
-  return [];
+  return { entries: [], unreadable: false };
 }
 
-export async function writeAudit(entries: AuditEntry[]): Promise<void> {
-  if (!persistOn()) return;
+export async function readAudit(): Promise<AuditEntry[]> {
+  const path = auditPath();
+  const snapshot = await readAuditSnapshot();
+  auditBrokenByPath.set(path, snapshot.unreadable);
+  return snapshot.entries;
+}
+
+/** 仅由持有审计队列的操作调用，避免事务内部再次排队造成死锁。 */
+async function writeAuditNow(entries: AuditEntry[]): Promise<AuditEntry[]> {
+  if (!persistOn()) return entries;
   await ensureDirs();
-  // 原子写（临时名带随机后缀）：原来固定用 `${target}.tmp`，两次并发写会互相搬走对方写了一半的文件，
-  // rename 抛 ENOENT → 这条记录就丢了；客户端又把失败静默吞掉，界面表现为「操作没被记录」。
-  // 上限 2 万条：超出后从最老的开始丢，但必须留痕——以前静默 slice， oldest 记录悄悄消失。
+  // 随机临时名 + 原子替换；保留上限触发时需可追溯。
   const MAX_AUDIT_ENTRIES = 2e4;
   if (entries.length > MAX_AUDIT_ENTRIES) {
     await logServer("warn", "操作记录超出上限，最老的记录将被丢弃", { count: entries.length, keep: MAX_AUDIT_ENTRIES });
     entries = entries.slice(0, MAX_AUDIT_ENTRIES);
   }
   await atomicWriteFile(auditPath(), JSON.stringify({ entries }, null, 2));
+  return entries;
 }
 
-/** 审计写入串行化：appendAudit 是「读—改—写」，并发不排队必然丢记录 */
 let auditQueue: Promise<unknown> = Promise.resolve();
-
-export function appendAudit(row: Partial<AuditEntry>): Promise<AuditEntry> {
-  const task = async (): Promise<AuditEntry> => {
-    const list = await readAudit();
-    if (auditBroken) {
-      // 读不出来就只记日志、不写盘：宁可少一条记录，也不能把整份历史覆盖掉
-      await logServer("error", "操作记录写入被拒：文件读不出来", { path: auditPath() });
-      return {
-        id: row.id || "",
-        at: row.at || new Date().toISOString(),
-        userId: row.userId || "",
-        userName: row.userName || "",
-        action: row.action || "",
-        detail: row.detail || "",
-        module: row.module || "",
-      };
-    }
-    const entry: AuditEntry = {
-      id: row.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-      at: row.at || new Date().toISOString(),
-      userId: row.userId || "",
-      userName: row.userName || "",
-      action: row.action || "",
-      detail: row.detail || "",
-      module: row.module || "",
-    };
-    await writeAudit([entry, ...list]);
-    return entry;
-  };
+function queueAudit<T>(task: () => Promise<T>): Promise<T> {
+  // then 在调用方的台账上下文中注册，排队不改变 runWithBook 的 AsyncLocalStorage。
   const next = auditQueue.then(task, task);
   auditQueue = next.catch(() => {});
   return next;
+}
+
+/** 兼容整份写入入口；业务读改写必须使用 withAuditTransaction，不能在入队前读快照。 */
+export function writeAudit(entries: AuditEntry[]): Promise<void> {
+  return queueAudit(async () => { await writeAuditNow(entries); });
+}
+
+interface AuditTransaction {
+  readonly entries: readonly AuditEntry[];
+  readonly unreadable: boolean;
+  append(row: Partial<AuditEntry>): Promise<AuditEntry>;
+  replace(entries: AuditEntry[]): Promise<void>;
+}
+
+/**
+ * 追加/修改/删除共用的读改写事务入口。回调内只使用 tx.append/replace，
+ * 不调用排队版 appendAudit/writeAudit（嵌套等待会死锁）。
+ * 每次写入成功后才更新事务内视图，DELETE 可先持久化留痕，再过滤目标。
+ * 这里只保证进程内串行与每次原子写，不提供多次写入的自动回滚；
+ * 后续写入失败时，先前已落盘的删除留痕仍保留。tx 仅在回调内使用并 await。
+ */
+export function withAuditTransaction<T>(fn: (tx: AuditTransaction) => Promise<T>): Promise<T> {
+  return queueAudit(async () => {
+    const snapshot = await readAuditSnapshot();
+    auditBrokenByPath.set(auditPath(), snapshot.unreadable);
+    let entries = snapshot.entries;
+    const replace = async (next: AuditEntry[]): Promise<void> => {
+      if (snapshot.unreadable) throw new Error("操作记录文件读取失败，已拒绝覆盖历史");
+      entries = await writeAuditNow(next);
+    };
+    return fn({
+      get entries() { return entries; },
+      unreadable: snapshot.unreadable,
+      replace,
+      async append(row) {
+        const entry = auditEntry(row);
+        await replace([entry, ...entries]);
+        return entry;
+      },
+    });
+  });
+}
+
+function auditEntry(row: Partial<AuditEntry>): AuditEntry {
+  return {
+    id: row.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    at: row.at || new Date().toISOString(),
+    userId: row.userId || "",
+    userName: row.userName || "",
+    action: row.action || "",
+    detail: row.detail || "",
+    module: row.module || "",
+  };
+}
+
+export function appendAudit(row: Partial<AuditEntry>): Promise<AuditEntry> {
+  return withAuditTransaction(async (tx) => {
+    if (tx.unreadable) {
+      // 兼容账户操作的尽力留痕语义；坏文件必须保持原状。
+      await logServer("error", "操作记录写入被拒：文件读不出来", { path: auditPath() });
+      return { ...auditEntry(row), id: row.id || "" };
+    }
+    return tx.append(row);
+  });
 }
 /**
  * 备份保留策略（1.8.7）。

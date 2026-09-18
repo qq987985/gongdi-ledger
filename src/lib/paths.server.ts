@@ -10,8 +10,9 @@ import { copyFile, mkdir, readdir, rename, rm, writeFile } from "node:fs/promise
 
 const bookAls = new AsyncLocalStorage<string>();
 
-/** ensureDirs 已就绪的台账（按 bookId 记，切台账后对新台账会再跑一次） */
-let ensuredFor = "";
+/** 成功后才缓存；并发首次请求共享初始化，失败后允许重试。 */
+const ensuredFor = new Set<string>();
+const initializing = new Map<string, Promise<void>>();
 
 export function dataDir(): string {
   return process.env.DATA_DIR?.trim() || "";
@@ -22,7 +23,11 @@ export function persistOn(): boolean {
 }
 
 export function safeBookId(id: string): string {
-  return id.replace(/[\\/:*?"<>|]/g, "").trim() || "default";
+  const safe = id.replace(/[\\/:*?"<>|]/g, "").trim() || "default";
+  if (safe === "." || safe === ".." || /[\x00-\x1f\x7f]/.test(id)) {
+    throw new Error("台账编号不合法");
+  }
+  return safe;
 }
 
 export function currentBookId(): string {
@@ -93,9 +98,21 @@ export async function ensureDirs(): Promise<void> {
   // 这些 mkdir/迁移/说明文件对每个「数据目录 × 台账」只做一次：readLedger 在每次 GET 和
   // 每次写前 CAS 读都会走到这里，原来每次都重复 30 来个 mkdir + 重写说明.txt，纯读请求也在写盘。
   // 键必须含数据目录本身：测试/多实例场景会换 DATA_DIR，只按台账 id 会把新目录误判成已就绪。
-  const key = `${dataDir()}::${currentBookId()}`;
-  if (ensuredFor === key) return;
-  ensuredFor = key;
+  const key = `${dataDir()}::${currentBookId()}::${photosRoot()}`;
+  if (ensuredFor.has(key)) return;
+  const pending = initializing.get(key);
+  if (pending) return pending;
+  const job = initializeDirs().then(() => {
+    ensuredFor.add(key);
+    // 只缓存最近 128 个上下文，避免长期运行时随台账数量无限增长。
+    if (ensuredFor.size > 128) ensuredFor.delete(ensuredFor.values().next().value!);
+  }).finally(() => initializing.delete(key));
+  initializing.set(key, job);
+  return job;
+}
+
+async function initializeDirs(): Promise<void> {
+  const root = dataDir();
   await mkdir(root, { recursive: true });
   await mkdir(join(root, "accounts"), { recursive: true });
   await mkdir(join(root, "books"), { recursive: true });
@@ -111,7 +128,7 @@ export async function ensureDirs(): Promise<void> {
   if (book) await mkdir(book, { recursive: true });
   await migrateIntoDataTree();
   await writeDataReadme();
-  seedTemplates();
+  await seedTemplates();
 }
 
 export async function migrateIntoDataTree(): Promise<void> {

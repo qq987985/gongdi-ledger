@@ -20,6 +20,25 @@ let ledgerRevision = "";
 let pullDepth = 0;
 /** 本机有改动还没成功推到服务器（用来在「重新加载」覆盖本机之前先问一声） */
 let dirty = false;
+/** 模式可用不代表身份已确认；身份与缓存归属校验完成前，不允许任何自动/显式推送。 */
+let syncReady = false;
+let syncEpoch = 0;
+let subscribed = false;
+let saveTimer: number | undefined;
+
+/** 开机、重新鉴权、退出登录先暂停；旧队列和迟到的拉取不能带入下一次身份。 */
+export function pauseNasSync(): void {
+  syncReady = false;
+  syncEpoch += 1;
+  window.clearTimeout(saveTimer);
+  saveTimer = undefined;
+  invalidateInFlightPulls();
+}
+
+/** 仅在身份、权限和本机缓存归属均确认后调用。startNasSync 自身不会打开此门禁。 */
+export function resumeNasSync(): void {
+  syncReady = true;
+}
 /**
  * 服务器明确说「这本台账你读不了」（401 会话失效 / 403 没权限 / 404 册子不存在或已被移出，A1）。
  * 这种状态下**绝不能**把本机数据推回去：目标册子可能已经换了人，推上去就是跨册覆盖。
@@ -92,19 +111,20 @@ function timeoutFetch(url: string, ms: number, init?: RequestInit, signal?: Abor
 }
 
 export async function detectNas(): Promise<boolean> {
-  let on = false;
   try {
-    const j = await (await timeoutFetch("/api/health", 2500)).json();
-    on = Boolean(j.persist);
+    const r = await timeoutFetch("/api/health", 2500);
+    if (!r.ok) return nasEnabled();
+    const j = await r.json();
+    if (typeof j?.persist !== "boolean") return nasEnabled();
+    setNasEnabled(j.persist);
     // 服务端 LEDGER_GZIP=off 时上行不压缩（下行由服务端自己决定，客户端无感）
     setLedgerGzip(j.ledgerGzip);
     // 备份保留份数（BACKUP_KEEP）：设置页提示用
     setBackupKeep(j.backupKeep);
   } catch {
-    on = false;
+    // 健康探测失败只说明连接异常，不能据此把服务器模式降为本地模式。
   }
-  setNasEnabled(on);
-  return on;
+  return nasEnabled();
 }
 
 function sliceState(s: LedgerState) {
@@ -208,6 +228,7 @@ export function setCacheOwner(userId: string, bookId: string): void {
  */
 export async function pullNasLedger(opts: PullNasLedgerOptions = {}): Promise<void> {
   if (!nasEnabled()) return;
+  if (opts.seed && !syncReady) return;
   const gen = ++pullGen;
   // seed 推送期间发起的拉取（409 → 「放弃本机」→ 再拉一次）要直接跑：它排队的对象正是
   // 「正在等这次推送的这次拉取」，排队就自锁（见 awaitingSeedPush 的说明）
@@ -354,11 +375,12 @@ async function gzipJson(text: string): Promise<ArrayBuffer | null> {
   }
 }
 
-async function putLedger(revision: string): Promise<Response> {
+async function putLedger(revision: string, epoch: number): Promise<Response> {
   const body = sliceState(useApp.getState());
   const json = JSON.stringify(body);
   // LEDGER_GZIP=off：上行不压缩（服务端照旧接受 gzip，老客户端不受影响）
   const gz = ledgerGzipOn() ? await gzipJson(json) : null;
+  if (!syncReady || epoch !== syncEpoch) throw new Error("台账身份已改变，本次保存已取消");
   // gz 为 null = 未压缩：不带 content-encoding，服务端按原样解析（向后兼容老客户端/老浏览器）
   const headers: Record<string, string> = { ...PUT_HEADERS(revision) };
   if (gz) headers["content-encoding"] = "gzip";
@@ -376,15 +398,15 @@ async function refreshRevision(): Promise<string | null> {
     const r = await timeoutFetch("/api/ledger", 4e3);
     if (!r.ok) return null;
     const rev = r.headers.get("x-ledger-revision") || "";
-    ledgerRevision = rev;
     return rev;
   } catch {
     return null;
   }
 }
 
-async function pushNasLedgerNow(force = false): Promise<void> {
+async function pushNasLedgerNow(force = false, epoch = syncEpoch): Promise<void> {
   if (!nasEnabled()) return;
+  if (!syncReady || epoch !== syncEpoch) return;
   // 正在拉取台账时不要推：此刻内存里可能还是上一本台账的数据，推上去会串本。
   // force=true 仅用于「首次把本机数据升级进空台账」这条明确要走写入的路径。
   if (!force && pullDepth > 0) return;
@@ -401,14 +423,17 @@ async function pushNasLedgerNow(force = false): Promise<void> {
     return;
   }
   try {
-    let r = await putLedger(ledgerRevision);
+    let r = await putLedger(ledgerRevision, epoch);
+    if (!syncReady || epoch !== syncEpoch) return;
     if (!r.ok && r.status === 409) {
       // 冲突不再是死路：拉最新版本号，然后让用户选「以本机覆盖」还是「放弃本机」
       const fresh = await refreshRevision();
+      if (!syncReady || epoch !== syncEpoch) return;
       if (fresh === null) {
         syncFailed("同步冲突，且无法读取服务器版本，请检查网络后重试");
         return;
       }
+      ledgerRevision = fresh;
       // 409 的「取消 / Esc」= 放弃本机改动（C3）：文案把后果写明白，别让用户以为只是「稍后再说」
       const overwrite = window.confirm(
         "服务器上的台账已被其他设备修改。\n\n【确定】用本机数据覆盖服务器（服务器上别处改的那份会被丢掉）\n【取消 / Esc】放弃本机这批改动（改不回本机了），改用服务器上的版本",
@@ -419,7 +444,8 @@ async function pushNasLedgerNow(force = false): Promise<void> {
         toast.success("已加载服务器上的版本");
         return;
       }
-      r = await putLedger(ledgerRevision);
+      r = await putLedger(ledgerRevision, epoch);
+      if (!syncReady || epoch !== syncEpoch) return;
       if (r.ok) {
         ledgerRevision = r.headers.get("x-ledger-revision") || ledgerRevision;
         syncOk();
@@ -456,6 +482,7 @@ async function pushNasLedgerNow(force = false): Promise<void> {
     }
     syncFailed(`保存到服务器失败（${r.status}），请检查网络后重试`);
   } catch {
+    if (!syncReady || epoch !== syncEpoch) return;
     syncFailed("保存到服务器失败，请检查网络后重试");
   }
 }
@@ -465,7 +492,8 @@ async function pushNasLedgerNow(force = false): Promise<void> {
  * 用旧快照覆盖刚保存的新数据。
  */
 function enqueuePush(force = false): Promise<void> {
-  const run = () => pushNasLedgerNow(force);
+  const epoch = syncEpoch;
+  const run = () => pushNasLedgerNow(force, epoch);
   pushQueue = pushQueue.then(run, run);
   return pushQueue;
 }
@@ -647,15 +675,14 @@ export async function pushNasBackup(): Promise<{ filename: string; counts: Backu
 }
 
 export async function startNasSync(): Promise<boolean> {
-  await detectNas();
-  if (!nasEnabled()) return false;
-  // 开机第一次同步：允许把本机旧数据升级进当前台账（服务器上这本还是空的时）
-  await pullNasLedger({ seed: true });
-  let t: number | undefined;
+  // 只安装订阅；身份未知时不得探测后直接 seed。重试/重新登录也不能重复安装。
+  if (subscribed) return nasEnabled();
+  subscribed = true;
   const tick = () => {
+    if (!syncReady || !nasEnabled()) return;
     // 拉取还没结束时再等一轮，避免把上一本台账的状态推给新台账
     if (pullDepth > 0) {
-      t = window.setTimeout(tick, 500);
+      saveTimer = window.setTimeout(tick, 500);
       return;
     }
     pushNasLedger();
@@ -664,9 +691,10 @@ export async function startNasSync(): Promise<boolean> {
     // 服务器数据写进本地、以及纯界面动作（切年份/换主题走 store 的 runMuted）都不算本机改动：
     // 前者不能回推，后者根本不该落盘（B3：只读账号切年份原来会被判成「有改动」）
     if (syncMuted()) return;
+    if (!syncReady || !nasEnabled()) return;
     dirty = true;
-    window.clearTimeout(t);
-    t = window.setTimeout(tick, 500);
+    window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(tick, 500);
   });
   return true;
 }

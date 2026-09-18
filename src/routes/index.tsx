@@ -7,7 +7,7 @@ import { overAgeLabel } from "~/lib/idcard";
 import { contractPayable } from "~/lib/contracts-totals";
 import { money, cn } from "~/lib/utils";
 import { can, subscribePerms } from "~/lib/perms";
-import { useCan } from "~/components/can";
+import { Can, useCan } from "~/components/can";
 import type { Person } from "~/lib/types";
 
 function Home() {
@@ -17,10 +17,14 @@ function Home() {
   const years = derivedYears(store);
   // 应发合计/已发/待发/代收/已录月份与考勤页年度汇总走同一个纯函数（见 lib/attendance-summary.ts）：
   // 以前这里各写一段循环，无日期旧发放的归属年份与「有内容」判定都和考勤页不同，数字会对不上。
-  const summary = summarizeYear({ people, attendance, payments, year, fallbackYear: fallbackPayYear(store) });
+  const fallbackYear = fallbackPayYear(store);
+  const summary = React.useMemo(
+    () => summarizeYear({ people, attendance, payments, year, fallbackYear }),
+    [people, attendance, payments, year, fallbackYear],
+  );
   const { should, paid, proxyAmt, pendingAmt, proxyCount: proxy, filledMonths: monthsFilled } = summary;
   const teams = [...new Set(people.map((p) => p.team).filter(Boolean))];
-  const rows = teamRows(people);
+  const rows = React.useMemo(() => teamRows(people), [people]);
   const overPeople = people.filter((p) => overAgeLabel(p.age, p.gender) === "超龄");
   const over = overPeople.length;
   const noWage = people.filter((p) => p.payType === "month" && !p.monthWage).length;
@@ -107,10 +111,10 @@ function paidHint(p: HomeProps): string {
 /* ＝＝ 新版（仪表盘）总览 ＝＝ */
 function NewHome(p: HomeProps) {  const unavailable = p.monthsFilled < 12 ? `${12 - p.monthsFilled} 个月没录` : "全年录齐";
   const heroes = [
-    { to: "/attendance", label: "📅 录入考勤" },
-    { to: "/payments", label: "💰 新增发放" },
-    { to: "/export", label: "⬇️ 导出台账" },
-  ];
+    { to: "/attendance", label: "📅 录入考勤", perm: "attendance.view" },
+    { to: "/payments", label: "💰 新增发放", perm: "payments.view" },
+    { to: "/export", label: "⬇️ 导出台账", perm: "export.use" },
+  ] as const;
   return (
     <div className="space-y-5">
       <section className="hero-banner rounded-xl bg-gradient-to-r from-accent-strong via-accent to-violet-500 p-5 text-white shadow-panel">
@@ -126,13 +130,14 @@ function NewHome(p: HomeProps) {  const unavailable = p.monthsFilled < 12 ? `${1
           <div className="min-w-0 flex-1" />
           <div className="flex flex-wrap gap-2">
             {heroes.map((h) => (
+              <Can key={h.to} perm={h.perm}>
               <Link
-                key={h.to}
-                to={h.to as any}
+                to={h.to}
                 className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-white/15 px-3.5 text-sm text-white transition-colors hover:bg-white/25"
               >
                 {h.label}
               </Link>
+              </Can>
             ))}
           </div>
         </div>

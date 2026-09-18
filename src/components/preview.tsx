@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Download, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
+export { previewKindOf } from "~/lib/preview-kind";
 
 export interface PreviewTarget {
   /** object URL（用完要 revoke） */
@@ -22,10 +23,31 @@ export interface PreviewTarget {
  * 两个框（C3）。
  */
 export function PreviewModal({ target, onClose }: { target: PreviewTarget | null; onClose: () => void }) {
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!target) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.querySelector<HTMLButtonElement>("[data-preview-close]")?.focus();
+    return () => {
+      if (previous?.isConnected) previous.focus();
+    };
+  }, [target]);
   React.useEffect(() => {
     if (!target) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      if (e.key !== "Tab") return;
+      const controls = dialogRef.current?.querySelectorAll<HTMLElement>("button, iframe, [tabindex='0']");
+      if (!controls?.length) return;
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -34,21 +56,23 @@ export function PreviewModal({ target, onClose }: { target: PreviewTarget | null
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
     <div
+      ref={dialogRef}
       data-modal="preview"
       className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 p-3"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
+      aria-label={`预览：${target.name}`}
     >
       <div className="mb-2 flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 text-white" onClick={stop}>
-        <span className="truncate text-sm">{target.name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm" title={target.name}>{target.name}</span>
         <span className="flex shrink-0 gap-2">
           {target.download ? (
             <Button size="sm" variant="outline" type="button" onClick={target.download}>
               <Download className="mr-1 size-3" /> 下载
             </Button>
           ) : null}
-          <Button size="sm" variant="outline" type="button" onClick={onClose}>
+          <Button data-preview-close size="sm" variant="outline" type="button" onClick={onClose}>
             <X className="mr-1 size-3" /> 关闭（Esc）
           </Button>
         </span>
@@ -57,6 +81,7 @@ export function PreviewModal({ target, onClose }: { target: PreviewTarget | null
         {target.kind === "image" ? (
           <img src={target.url} alt={target.name} className="mx-auto max-h-[82vh] object-contain" />
         ) : target.kind === "pdf" ? (
+          // Chrome 内置 PDF 阅读器在 sandbox 中被禁用；kind 必须由明确的 application/pdf MIME 判定。
           <iframe src={target.url} title={target.name} className="h-[82vh] w-full border-0" />
         ) : (
           <div className="p-8 text-center text-sm text-muted">
@@ -67,13 +92,4 @@ export function PreviewModal({ target, onClose }: { target: PreviewTarget | null
       <p className="mt-2 text-xs text-white/70">点空白处或按 Esc 关闭</p>
     </div>
   );
-}
-
-/** 按扩展名/类型判断怎么预览 */
-export function previewKindOf(name: string, mime = ""): PreviewTarget["kind"] {
-  const ext = (name.split(".").pop() || "").toLowerCase();
-  if (mime.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "bmp", "gif"].includes(ext)) return "image";
-  if (mime === "application/pdf" || ext === "pdf") return "pdf";
-  // 图片/PDF 之外的常见办公文件交给本机软件：不要再新开标签页（浏览器会直接下载或白页）
-  return "other";
 }

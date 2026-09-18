@@ -204,7 +204,10 @@ before(async () => {
   books.A = { people: [p("A人员0"), p("A人员1"), p("A人员2")] };
   books.B = { people: [p("B人员0"), p("B人员1")] };
   // 自动保存的订阅只装一次（装两次会多一份 dirty 监听）
+  await SYNC.detectNas(); // health 桩明确关闭 gzip；startNasSync 不再兼任模式/配置探测。
   await SYNC.startNasSync();
+  // 此组测试的身份与权限由上面的 auth 桩确认；启动订阅自身不再开放写入或 seed。
+  SYNC.resumeNasSync();
 });
 beforeEach(async () => {
   // 上一个用例如果断言失败在半路，可能留着「挂起的 ledger 请求」把串行队列堵死 —— 先放行干净，

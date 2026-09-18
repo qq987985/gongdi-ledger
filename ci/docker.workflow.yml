@@ -1,21 +1,9 @@
-# 发版工作流（镜像 + Windows 包）：**模板**，不会自动生效 —— 见 ci/README.md §2。
-#   ⚠️ 本文件是**判断口径**；仓库里实际生效的是 `.github/workflows/docker.yml`，两者**必须一致**：
-#   2026-09-17 起本机 gh token 已带 `workflow` 权限 → 两份在**同一提交**里一起改。
-#   （此前只能网页粘贴 —— 那次 `gongzi` / `gongdi` 差一个字母就是人工搬运看不出来的；
-#    守卫 `tests/deploy-guards.test.ts` 现在两份都查。）
-#
-# 与 1.8.13 线上那版的唯一差别（A8，2026-09-17 专家评审）：**两个 job 都自己从源码构建**，
-# 不再信任仓库里那份 `app/`：
-#   · image job：docker build 之前先 `pnpm install --frozen-lockfile && pnpm build`
-#     （Dockerfile 只 `COPY app ./app`，所以镜像内容 = 现场构建出来的产物）；
-#   · windows job：打包 zip 之前同样先 install + build（win/pack.sh 也是拷 app/）。
-# 为什么：源码改了忘了重建 app/ 时，原来 `check` 的第四道闸是恒真的、而 docker job 一道闸都不跑，
-# 于是 `latest` 镜像与 Windows 包会发出**旧代码**、版本号却已经是新的 ——
-# 用户端表现为「更新完版本变了、行为没变」，极难定位。
-# 这样改之后，即使仓库里的 app/ 陈旧，也只会影响 `pnpm preview` 之类的本地用法，不会进发布物。
-#
-# 可选（**已启用**，见下面 windows job 的 `if:` 与 ci/README.md §1b/§2）：让 release 只由
-# tag / 手动触发，推 main 只构建镜像，避免「推一次文档就移动一次 Release」。
+# 发版工作流：镜像与 Windows 包。
+# 模板 ci/docker.workflow.yml 与生效文件 .github/workflows/docker.yml 必须同一提交一起改。
+# quality 在本次触发的同一提交上通过类型、回归与 Excel 往返检查后，才允许发布。
+# image/windows 分别从源码构建，不使用仓库中的旧 app/。
+# main 只发布镜像；v* tag 或手动触发才生成 Windows Release。
+# 推送权限以当前凭据为准；没有 workflow 权限时见 ci/README.md 的网页更新路径。
 
 name: docker
 on:
@@ -29,10 +17,38 @@ permissions:
   packages: write
 
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: 安装依赖（严格按 lockfile）
+        run: pnpm install --frozen-lockfile
+      - name: 类型检查
+        run: pnpm run typecheck
+      - name: 回归测试
+        run: pnpm test
+      - name: Excel 往返对拍
+        run: pnpm run test:roundtrip
+
   image:
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - uses: pnpm/action-setup@v4
         with:
           version: 12
@@ -68,12 +84,15 @@ jobs:
           cache-to: type=gha,mode=max
 
   windows:
+    needs: quality
     runs-on: ubuntu-latest
     # ★ 发版守卫（C4④）：只有当次推送是 v* tag，或网页手动触发（workflow_dispatch）才打包 + 发 Release。
     #   没有这一行时，推 main（哪怕只改了一段文档）也会移动一次 Release —— 用户侧看到「有新版本」，CI 白跑。
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - uses: pnpm/action-setup@v4
         with:
           version: 12

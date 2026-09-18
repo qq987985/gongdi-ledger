@@ -71,7 +71,13 @@ CI 靠它在构建**之前**判断「这份 app/ 是不是当前源码构建出�
 
 ---
 
-## 1b. `docker.workflow.yml` —— 镜像与 Windows 包（同样建议尽快换）
+## 1b. `docker.workflow.yml` —— 镜像与 Windows 包
+
+2026-09-18 起，模板与生效文件增加共同的 `quality` 前置任务：精确安装依赖后执行
+`typecheck`、`test`、`test:roundtrip`。镜像和 Windows 打包任务均依赖其成功，所有 checkout
+固定到同一 `${{ github.sha }}`；各打包任务仍自行构建。这样 tag / 手动发布也必须先通过测试，
+不能只依赖另一个针对 main / PR 的检查流程。守卫见 `tests/release-quality-gate.test.ts`。
+这里描述仓库配置；是否已在线运行，以推送后的 GitHub Actions 记录为准。
 
 模板包含两处改动：①（A8）两个 job 构建/打包前自己 `pnpm install --frozen-lockfile && pnpm run build`；
 ②（C4④）windows job 加了发版守卫

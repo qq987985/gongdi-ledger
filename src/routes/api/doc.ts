@@ -50,11 +50,14 @@ export const Route = createFileRoute("/api/doc")({
             const hit = await findDoc(id, kind);
             if (!hit) return new Response("not found", { status: 404 });
             const mime = MIME[`.${(hit.fileName.split(".").pop() || "").toLowerCase()}`] || "application/octet-stream";
+            // 只允许已知图片/PDF 内联；XML 等办公文件交给下载，避免同源活动内容。
+            const disposition = mime === "application/pdf" || mime.startsWith("image/") ? "inline" : "attachment";
             return new Response(new Uint8Array(hit.buf), {
               headers: {
                 "Content-Type": mime,
-                "Content-Disposition": `inline; filename="${encodeURIComponent(hit.fileName.replace(/[\r\n]/g, ""))}"`,
+                "Content-Disposition": `${disposition}; filename="${encodeURIComponent(hit.fileName.replace(/[\r\n]/g, ""))}"`,
                 "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
               },
             });
           },
@@ -81,6 +84,7 @@ export const Route = createFileRoute("/api/doc")({
         const kind = kindOf(String(form.get("kind") || ""));
         const file = form.get("file");
         if (!id || !kind || !(file instanceof File)) return Response.json({ ok: false }, { status: 400 });
+        if (file.size === 0) return Response.json({ error: "文件为空，请选择有内容的文件" }, { status: 400 });
         // id 去掉非法字符后为空时 saveDoc 会静默不写盘：先拒掉，不能让用户以为传上去了
         if (!docIdWritable(id))
           return Response.json({ error: "记录编号不合法（去掉非法字符后为空），无法保存文件" }, { status: 400 });
@@ -88,10 +92,10 @@ export const Route = createFileRoute("/api/doc")({
         if (Buffer.byteLength(file.name, "utf8") > 180)
           return Response.json({ error: "文件名太长（最多 180 字节），请改短一点再上传" }, { status: 400 });
         if (file.size > 50 * 1024 * 1024) return Response.json({ error: "文件太大，最大 50MB" }, { status: 413 });
-        const buf = Buffer.from(await file.arrayBuffer());
         const replace = String(form.get("replace") || "") === "1";
         const denied = await needDenied(request, t, kindEdit(kind));
         if (denied) return denied;
+        const buf = Buffer.from(await file.arrayBuffer());
         return runInTenant(t, async () => {
           const saved = await saveDoc(id, kind, buf, file.name, { replace });
           return Response.json({ ok: true, fileName: saved || file.name });

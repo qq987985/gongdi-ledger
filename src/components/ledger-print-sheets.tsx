@@ -30,6 +30,8 @@ const PCT = (w: number): string => `${w}%`;
 /** 纸上统一的格子样式（边框细、字号小：打印机上省纸 = 少分页，见 styles.css ②d/②e） */
 const TD = "border border-black px-1 py-1";
 const TH = `${TD} font-medium`;
+/** 月表金额含千位符且合计位数更长，少留横向空白，数字保持同一行并按小数端对齐。 */
+const MONTH_MONEY_TD = "border border-black px-0.5 py-1 tabular-nums text-right whitespace-nowrap";
 /** 单据抬头那一行的格子（1.8.11：跨页重复，裁开也认得出） */
 const CAPTION = `${TD} text-left font-semibold`;
 
@@ -127,12 +129,12 @@ export function AttendanceMonthSheet({
                 <td className={TD}>{r.team || "—"}</td>
                 <td className={TD}>{r.days}</td>
                 <td className={TD}>{r.otHours}</td>
-                <td className={TD}>{money(r.allowance)}</td>
-                <td className={TD}>{money(r.deduction)}</td>
+                <td className={MONTH_MONEY_TD}>{money(r.allowance)}</td>
+                <td className={MONTH_MONEY_TD}>{money(r.deduction)}</td>
                 <td className={TD}>{r.wageLabel}</td>
-                <td className={TD}>{money(r.ot)}</td>
-                <td className={TD}>{money(r.meal)}</td>
-                <td className={`${TD} font-medium`}>{money(r.pay)}</td>
+                <td className={MONTH_MONEY_TD}>{money(r.ot)}</td>
+                <td className={MONTH_MONEY_TD}>{money(r.meal)}</td>
+                <td className={`${MONTH_MONEY_TD} font-medium`}>{money(r.pay)}</td>
                 <td className={`${TD} text-left`}>{r.remark || ""}</td>
               </tr>
             ))}
@@ -144,12 +146,12 @@ export function AttendanceMonthSheet({
               </td>
               <td className={TD}>{totals.days}</td>
               <td className={TD} />
-              <td className={TD}>{money(totals.allowance)}</td>
-              <td className={TD}>{money(totals.deduction)}</td>
+              <td className={MONTH_MONEY_TD}>{money(totals.allowance)}</td>
+              <td className={MONTH_MONEY_TD}>{money(totals.deduction)}</td>
               <td className={TD} />
-              <td className={TD}>{money(totals.ot)}</td>
-              <td className={TD}>{money(totals.meal)}</td>
-              <td className={TD}>{money(totals.pay)}</td>
+              <td className={MONTH_MONEY_TD}>{money(totals.ot)}</td>
+              <td className={MONTH_MONEY_TD}>{money(totals.meal)}</td>
+              <td className={MONTH_MONEY_TD}>{money(totals.pay)}</td>
               <td className={TD} />
             </tr>
           </tfoot>

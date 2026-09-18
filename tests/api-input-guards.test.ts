@@ -146,6 +146,9 @@ const WRITE_CALLS = [
   "saveBackup",
   "appendAudit",
   "writeAudit",
+  // 事务入口只读快照；实际写点在回调中的 append/replace，拒绝路径可以位于回调内。
+  "tx\\.append",
+  "tx\\.replace",
   "adoptLegacyAssets",
   "pruneLocalImages",
   "startUpdateJob",
@@ -251,9 +254,16 @@ test("守卫：写接口清单非空（守卫本身不能因为解析失败而�
     "现有 12 个以上（各接口的 PUT/DELETE）",
   );
   const where = mutating.map((h) => `${h.file.replace("src/routes/api/", "")} ${h.method}`);
-  for (const expect of ["photo.ts PUT", "photo.ts DELETE", "doc.ts PUT", "doc.ts DELETE", "ledger.ts PUT", "year.ts POST"]) {
+  for (const expect of ["photo.ts PUT", "photo.ts DELETE", "doc.ts PUT", "doc.ts DELETE", "ledger.ts PUT", "year.ts POST", "audit.ts PUT", "audit.ts DELETE"]) {
     assert.equal(where.includes(expect), true, `少了解析到的写接口：${expect}（现有：${where.join("、")}）`);
   }
+});
+
+test("守卫自检：审计事务内写入不会漏出写接口清单", () => {
+  for (const sample of ["withAuditTransaction(async (tx) => { await tx.replace(rows); })", "await tx.append(row)", "await tx.replace(rows)"])
+    assert.ok(Number.isFinite(firstWriteAt(sample)), `漏识别审计写入：${sample}`);
+  assert.equal(firstWriteAt("withAuditTransaction(async (tx) => tx.entries)"), Infinity, "仅打开事务读取不算写入");
+  assert.equal(firstWriteAt("await readAudit()"), Infinity, "普通读取不算写入");
 });
 
 test("守卫：每个写 handler 都必须有鉴权（withTenant / resolveTenant / gateTenant）", () => {

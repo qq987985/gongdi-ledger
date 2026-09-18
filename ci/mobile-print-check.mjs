@@ -18,7 +18,7 @@
  *   DATA_DIR=/tmp/gongdi-e2e node ci/mobile-print-check.mjs seed
  *   # 3) 跑检查（截图落在 browser-screenshots/，已在 .gitignore 里）
  *   DATA_DIR=/tmp/gongdi-e2e node ci/mobile-print-check.mjs mobile      # 14 页 × 2 尺寸 + 弹窗
- *   DATA_DIR=/tmp/gongdi-e2e node ci/mobile-print-check.mjs print       # 8 个打印用例（截图 + PDF）
+ *   DATA_DIR=/tmp/gongdi-e2e node ci/mobile-print-check.mjs print       # 打印用例（截图 + PDF）
  *   DATA_DIR=/tmp/gongdi-e2e node ci/mobile-print-check.mjs diag /files # 某页为什么横向溢出
  *
  * 环境变量：`DATA_DIR`（必填）、`PORT`（默认 4599）、`E2E_CHROME`（Chrome 可执行文件）、
@@ -43,8 +43,8 @@ const BASE = `http://127.0.0.1:${PORT}`;
  * 都没设又找不到，就由 `browser()` 抛出「该设哪个变量」的清晰报错，而不是拿着作者机器的绝对路径
  * 一路走到看不懂的 ENOENT。
  *
- * 为什么本仓库**不装** playwright：`package.json` 里所有依赖都写 `latest`，
- * 装它会把无关依赖一起重解析（见 `开发规范.md` §10），所以只在用的时候临时指定。
+ * 浏览器驱动作为可选验证工具，从已有安装或环境变量加载，避免普通开发安装额外浏览器依赖。
+ * 项目依赖已固定精确版本；如需将浏览器工具纳入项目，按 `开发规范.md` §2 评估并维护 lockfile。
  */
 const CHROME_CANDIDATES = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // macOS

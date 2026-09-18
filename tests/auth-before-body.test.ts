@@ -45,6 +45,7 @@ const LEDGER = await import("../src/routes/api/ledger");
 type Handler = (ctx: { request: Request }) => Promise<Response>;
 const backupPost = (BACKUP.Route.options.server!.handlers as unknown as { POST: Handler }).POST;
 const docPut = (DOC.Route.options.server!.handlers as unknown as { PUT: Handler }).PUT;
+const docGet = (DOC.Route.options.server!.handlers as unknown as { GET: Handler }).GET;
 const docDelete = (DOC.Route.options.server!.handlers as unknown as { DELETE: Handler }).DELETE;
 const photoPut = (PHOTO.Route.options.server!.handlers as unknown as { PUT: Handler }).PUT;
 const ledgerPut = (LEDGER.Route.options.server!.handlers as unknown as { PUT: Handler }).PUT;
@@ -69,6 +70,41 @@ async function authPost(body: Record<string, unknown>, cookie = ""): Promise<Res
 const setup = await authPost({ op: "setup", username: "admin", password: "12345678", name: "管理员" });
 assert.equal(setup.status, 200, "前置：建管理员");
 const adminCookie = await cookieOf(setup);
+
+async function uploadDoc(id: string, name: string, content: string, replace = false) {
+  const form = new FormData();
+  form.set("id", id);
+  form.set("kind", "contract");
+  form.set("file", new File([content], name));
+  if (replace) form.set("replace", "1");
+  return docPut({ request: new Request("http://local/api/doc", {
+    method: "PUT", headers: { cookie: adminCookie }, body: form,
+  }) });
+}
+
+function downloadDoc(id: string) {
+  return docGet({ request: new Request(`http://local/api/doc?kind=contract&id=${id}`, {
+    headers: { cookie: adminCookie },
+  }) });
+}
+
+test("文档：拒绝空文件替换，旧文件仍然可读", async () => {
+  assert.equal((await uploadDoc("nonempty-test", "原合同.pdf", "original-pdf")).status, 200);
+  assert.equal((await uploadDoc("nonempty-test", "空合同.pdf", "", true)).status, 400);
+  assert.equal(await (await downloadDoc("nonempty-test")).text(), "original-pdf");
+});
+
+test("文档：XML 强制下载并禁止嗅探；PDF 保留内联预览", async () => {
+  assert.equal((await uploadDoc("xml-test", "发票.XML", "<invoice />")).status, 200);
+  const xml = await downloadDoc("xml-test");
+  assert.match(xml.headers.get("Content-Disposition") || "", /^attachment;/);
+  assert.equal(xml.headers.get("X-Content-Type-Options"), "nosniff");
+  assert.equal(xml.headers.get("Cache-Control"), "no-store");
+  assert.equal((await uploadDoc("pdf-test", "合同.pdf", "pdf")).status, 200);
+  const pdf = await downloadDoc("pdf-test");
+  assert.match(pdf.headers.get("Content-Disposition") || "", /^inline;/);
+  assert.equal(pdf.headers.get("Content-Type"), "application/pdf");
+});
 
 // ───────────────────────── ② 真实路由：未登录的大 body 必须连读都不读 ─────────────────────────
 

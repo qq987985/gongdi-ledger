@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { persistOn } from "~/lib/paths.server";
-import { appendAudit, auditUnreadable, readAudit, writeAudit } from "~/lib/nas-fs.server";
+import { readAudit, withAuditTransaction } from "~/lib/nas-fs.server";
 import { logServer } from "~/lib/log.server";
-import { resolveTenant, auditTenantDelete, withTenant } from "~/lib/accounts.server";
+import { resolveTenant, withTenant } from "~/lib/accounts.server";
 
 export const Route = createFileRoute("/api/audit")({
   server: {
@@ -25,16 +25,15 @@ export const Route = createFileRoute("/api/audit")({
         // 用 ledger.write 而不是新造一个权限位：canWriteLedger 已覆盖各类 *.edit / import.use。
         return withTenant(
           request,
-          async () => {
+          () => withAuditTransaction(async (tx) => {
             // 文件在但读不出来（损坏/权限）：绝不能拿空列表覆盖历史（PUT/DELETE 早有这个保护，POST 原来漏了）
-            await readAudit();
-            if (auditUnreadable())
+            if (tx.unreadable)
               return Response.json(
                 { error: "操作记录文件读取失败，已拒绝写入以免覆盖历史。请从 data/backups 恢复该文件。", corrupt: true },
                 { status: 503 },
               );
             try {
-              const entry = await appendAudit({
+              const entry = await tx.append({
                 userId: t.user?.id || "",
                 userName: t.user?.name || t.user?.username || "",
                 action: body.action!.trim().slice(0, 80),
@@ -47,7 +46,7 @@ export const Route = createFileRoute("/api/audit")({
               await logServer("error", "操作记录写入失败", { action: body.action, error: String(err) });
               return Response.json({ error: "操作记录写入失败，请检查 data 目录权限" }, { status: 500 });
             }
-          },
+          }),
           "ledger.write",
         );
       },
@@ -62,10 +61,10 @@ export const Route = createFileRoute("/api/audit")({
           return Response.json({ error: "请求体不是合法 JSON" }, { status: 400 });
         }
         if (!body.id) return Response.json({ error: "缺少 id" }, { status: 400 });
-        return withTenant(request, async () => {
-          const list = await readAudit();
+        return withTenant(request, () => withAuditTransaction(async (tx) => {
+          const list = tx.entries;
           // 读空 + 要改一条已存在的记录 = 大概率是读取失败，绝不能拿空列表覆盖整个文件
-          if (!list.length)
+          if (tx.unreadable || !list.length)
             return Response.json({ error: "读取操作记录失败，已拒绝写入（避免清空历史）" }, { status: 409 });
           const next = list.map((e) =>
             e.id === body.id
@@ -77,9 +76,9 @@ export const Route = createFileRoute("/api/audit")({
                 }
               : e,
           );
-          await writeAudit(next);
+          await tx.replace(next);
           return Response.json({ ok: true });
-        });
+        }));
       },
       DELETE: async ({ request }) => {
         if (!persistOn()) return Response.json({ ok: false }, { status: 400 });
@@ -88,15 +87,17 @@ export const Route = createFileRoute("/api/audit")({
         const url = new URL(request.url);
         const id = url.searchParams.get("id") || "";
         const ids = (url.searchParams.get("ids") || id).split(",").filter(Boolean);
-        return withTenant(request, async (t) => {
-          const list = await readAudit();
-          if (!list.length)
+        return withTenant(request, (t) => withAuditTransaction(async (tx) => {
+          const list = tx.entries;
+          if (tx.unreadable || !list.length)
             return Response.json({ error: "读取操作记录失败，已拒绝写入（避免清空历史）" }, { status: 409 });
           const doomed = list.filter((e) => ids.includes(e.id));
           // A5（1.8.14）：删记录这件事本身必须先留痕（谁删了、删了几条、哪些 id），
-          // 而且这条留痕不能被同一次请求删掉 —— 先 appendAudit 写进文件，再重新读一遍列表做过滤；
-          // 新记录的 id 是服务端刚生成的、不在用户传来的 ids 里。
-          await auditTenantDelete(t, {
+          // 整个过程在同一事务中；先持久化留痕，失败则不删原记录。
+          // tx.append 不会嵌套排队；新留痕明确保留，即使 id 恰巧命中请求参数也不删除。
+          const trace = await tx.append({
+            userId: t.user?.id || "",
+            userName: t.user?.name || t.user?.username || "",
             action: "删除操作记录",
             module: "审计",
             detail: `删除 ${doomed.length} 条：${doomed
@@ -104,10 +105,9 @@ export const Route = createFileRoute("/api/audit")({
               .join(",")
               .slice(0, 280)}`,
           });
-          const after = await readAudit();
-          await writeAudit(after.filter((e) => !ids.includes(e.id)));
+          await tx.replace(tx.entries.filter((e) => e.id === trace.id || !ids.includes(e.id)));
           return Response.json({ ok: true, removed: doomed.length });
-        });
+        }));
       },
     },
   },

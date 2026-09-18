@@ -56,14 +56,17 @@ async function idbDel(name: string, kind: string): Promise<void> {
 }
 
 export async function getPhoto(name: string, kind: string): Promise<string | null> {
-  if (nasEnabled())
+  if (nasEnabled()) {
     try {
-      const j = await (
-        await fetch(`/api/photo?name=${encodeURIComponent(name)}&kind=${kind}`, { credentials: "include" })
-      ).json();
+      const r = await fetch(`/api/photo?name=${encodeURIComponent(name)}&kind=${kind}`, { credentials: "include" });
+      if (!r.ok) return null;
+      const j = await r.json();
       if (j.url) return j.url;
       if (j.dataUrl) return j.dataUrl;
     } catch {}
+    // 本地缓存不含台账/账号维度，拒绝访问、文件缺失或断网时都不能回落到旧照片。
+    return null;
+  }
   return idbGet(name, kind);
 }
 
@@ -77,8 +80,10 @@ const PHOTO_KIND_LABEL: Record<string, string> = {
 };
 
 export async function setPhoto(name: string, kind: string, dataUrl: string): Promise<void> {
-  await idbSet(name, kind, dataUrl);
-  if (!nasEnabled()) return;
+  if (!nasEnabled()) {
+    await idbSet(name, kind, dataUrl);
+    return;
+  }
   const r = await fetch("/api/photo", {
     method: "PUT",
     credentials: "include",
@@ -91,8 +96,10 @@ export async function setPhoto(name: string, kind: string, dataUrl: string): Pro
 }
 
 export async function deletePhoto(name: string, kind: string): Promise<void> {
-  await idbDel(name, kind);
-  if (!nasEnabled()) return;
+  if (!nasEnabled()) {
+    await idbDel(name, kind);
+    return;
+  }
   const r = await fetch(`/api/photo?name=${encodeURIComponent(name)}&kind=${kind}`, {
     method: "DELETE",
     credentials: "include",
@@ -109,18 +116,21 @@ export interface PhotoFlags {
 }
 
 export async function listPhotoFlags(names: string[]): Promise<Record<string, PhotoFlags>> {
-  if (nasEnabled() && names.length)
+  if (!names.length) return {};
+  if (nasEnabled()) {
     try {
-      const j = await (
-        await fetch("/api/photo-flags", {
+      const r = await fetch("/api/photo-flags", {
           method: "POST",
           credentials: "include",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ names }),
-        })
-      ).json();
+        });
+      if (!r.ok) return {};
+      const j = await r.json();
       if (j.flags) return j.flags;
     } catch {}
+    return {};
+  }
   const db = await openDb();
   const flags: Record<string, PhotoFlags> = {};
   await new Promise<void>((resolve, reject) => {

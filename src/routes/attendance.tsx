@@ -136,13 +136,11 @@ function YearOverview({
   const { year, people, attendance, attendanceDocs = [], payments } = store;
   // 年度汇总与总览 KPI 走同一个纯函数（lib/attendance-summary.ts）：应发/已发/未发、
   // 「有内容」判定（含纯备注行）、无日期旧发放的归属年份都只有一套口径。
-  const { rows, filledMonths, offRowsPaid, paid, proxyAmt, proxyCount, pendingAmt, should } = summarizeYear({
-    people,
-    attendance,
-    payments,
-    year,
-    fallbackYear: fallbackPayYear(store),
-  });
+  const fallbackYear = fallbackPayYear(store);
+  const { rows, filledMonths, offRowsPaid, paid, proxyAmt, proxyCount, pendingAmt, should } = React.useMemo(
+    () => summarizeYear({ people, attendance, payments, year, fallbackYear }),
+    [people, attendance, payments, year, fallbackYear],
+  );
   const personRows = rows.map((r) => ({ p: r.person, ...r }));
   // 「本年无考勤记录」的补行只进工资汇总（决策二），工天加班表仍只列有出勤的人
   const workRows = personRows.filter((r) => !r.noAttendance);

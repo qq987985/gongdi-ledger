@@ -138,15 +138,37 @@ export function summarizeYear(args: {
   const yearPay = paymentsInYear(payments, year, fallbackYear);
   // 已发的唯一判定：lib/payments-stats.ts 的 isPaid（有发放日期即算，按实际收款人，**含代发** —— 1.8.6）
   const paidRows = yearPay.filter(isPaid);
+  // 每次汇总只建一次索引，避免每个人都扫描整本多年考勤/发放。
+  // 桶内保留原顺序与重复行，金额相加顺序和历史口径保持一致。
+  const attendanceByName = new Map<string, AttendanceRow[]>();
+  for (const a of attendance) {
+    if (a.year !== year) continue;
+    const key = nameKey(a.name);
+    const bucket = attendanceByName.get(key);
+    if (bucket) bucket.push(a);
+    else attendanceByName.set(key, [a]);
+  }
+  const paidByName = new Map<string, number>();
+  for (const p of paidRows) {
+    const key = ownerKey(p);
+    paidByName.set(key, (paidByName.get(key) ?? 0) + p.amount);
+  }
+  const peopleByName = new Map<string, Person>();
+  for (const p of people) {
+    const key = nameKey(p.name);
+    if (!peopleByName.has(key)) peopleByName.set(key, p);
+  }
   const rows: YearPersonRow[] = [];
   for (const person of people) {
-    const months = personMonths(person, attendance, year);
+    const key = nameKey(person.name);
+    const mine = attendanceByName.get(key) ?? [];
+    const worked = mine.some(hasContent);
+    if (!worked) continue;
+    const months = personMonths(person, mine, year);
     const yearPayAmt = months.reduce((s, m) => s + m.pay, 0);
     const yearDays = months.reduce((s, m) => s + m.days, 0);
     const yearOt = months.reduce((s, m) => s + m.otHours, 0);
-    const paid = paidRows.filter((x) => ownerKey(x) === nameKey(person.name)).reduce((s, x) => s + x.amount, 0);
-    const worked = attendance.some((a) => a.year === year && nameKey(a.name) === nameKey(person.name) && hasContent(a));
-    if (!worked) continue;
+    const paid = paidByName.get(key) ?? 0;
     rows.push({
       person,
       months,
@@ -172,7 +194,7 @@ export function summarizeYear(args: {
   const orphanRows: YearPersonRow[] = [...orphans.entries()]
     .map(([name, amount]) => {
       const paid = round2(amount);
-      const known = people.find((p) => nameKey(p.name) === name);
+      const known = peopleByName.get(name);
       const person: Person =
         known ?? {
           id: `pay-only:${name}`,
@@ -215,7 +237,8 @@ export function summarizeYear(args: {
   const rowsPaidSum = round2(rows.reduce((s, r) => s + r.paid, 0));
   const paidTotal = round2(paidRows.reduce((s, p) => s + p.amount, 0));
   // 安全网（决策二后恒为空）：已发记录没能落到任何一行的人与钱。正常不再触发，留着兜底。
-  const offRows = paidRows.filter((p) => !rows.some((r) => nameKey(r.person.name) === ownerKey(p)));
+  const includedNames = new Set(rows.map((r) => nameKey(r.person.name)));
+  const offRows = paidRows.filter((p) => !includedNames.has(ownerKey(p)));
   const proxyRows = paidRows.filter(isProxyPaid);
   return {
     rows,
@@ -242,13 +265,18 @@ export function summarizeYear(args: {
  * 静默删掉：面板人数之和 < 「在册人员」KPI，分组口径和列表口径对不上。
  */
 export function teamRows(people: Pick<Person, "team">[]): { team: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const p of people) {
+    const key = String(p.team ?? "").trim();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
   return groupBuckets(
     people.map((p) => p.team),
     "未分班组",
   )
     .map((b) => ({
       team: b.label,
-      count: people.filter((p) => String(p.team ?? "").trim() === b.value).length,
+      count: counts.get(b.value) ?? 0,
     }))
     .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team, "zh"));
 }

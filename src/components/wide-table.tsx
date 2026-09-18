@@ -103,10 +103,14 @@ function readWidths(id: string): number[] {
 function writeWidths(id: string, host: HTMLElement) {
   const ths = [...host.querySelectorAll("thead th")] as HTMLElement[];
   if (!ths.length) return;
-  localStorage.setItem(
-    PREFIX + id,
-    JSON.stringify(ths.map((th) => Math.round(th.getBoundingClientRect().width))),
-  );
+  try {
+    localStorage.setItem(
+      PREFIX + id,
+      JSON.stringify(ths.map((th) => Math.round(th.getBoundingClientRect().width))),
+    );
+  } catch {
+    // 禁用存储/配额已满只影响记忆列宽，不影响本次拖动与事件清理。
+  }
 }
 
 function applyWidths(host: HTMLElement, widths: number[]) {
@@ -173,25 +177,36 @@ export function WideTable({
     if (!node) return;
     const host = node;
     applyWidths(host, readWidths(id));
+    let stopDrag: (() => void) | undefined;
     function down(e: MouseEvent) {
       const th = onResizer(e, host);
       if (!th) return;
       e.preventDefault();
       e.stopPropagation();
+      stopDrag?.();
       const startX = e.clientX;
       const startW = th.getBoundingClientRect().width;
+      const previousCursor = document.body.style.cursor;
+      const previousSelect = document.body.style.userSelect;
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
       const move = (ev: MouseEvent) => setThWidth(th, startW + ev.clientX - startX);
-      const up = () => {
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        writeWidths(id, host);
+      const cleanup = () => {
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousSelect;
         window.removeEventListener("mousemove", move);
         window.removeEventListener("mouseup", up);
+        window.removeEventListener("blur", up);
+        stopDrag = undefined;
       };
+      const up = () => {
+        cleanup();
+        writeWidths(id, host);
+      };
+      stopDrag = cleanup;
       window.addEventListener("mousemove", move);
       window.addEventListener("mouseup", up);
+      window.addEventListener("blur", up);
     }
     function dbl(e: MouseEvent) {
       const th = onResizer(e, host);
@@ -204,6 +219,7 @@ export function WideTable({
     host.addEventListener("mousedown", down);
     host.addEventListener("dblclick", dbl);
     return () => {
+      stopDrag?.();
       host.removeEventListener("mousedown", down);
       host.removeEventListener("dblclick", dbl);
     };
@@ -219,7 +235,7 @@ export function WideTable({
       <p className="mb-1 text-[11px] text-muted md:hidden">
         宽表请左右滑动。有勾选框的表：点一行是勾选，「编辑」在勾选框右边。
       </p>
-      <div ref={ref} className={cn("wide-scroll overflow-x-scroll rounded-xl border border-line bg-surface", className)}>
+      <div ref={ref} tabIndex={0} role="region" aria-label="数据表格，可左右滚动" className={cn("wide-scroll overflow-x-scroll rounded-xl border border-line bg-surface focus-visible:outline-2 focus-visible:outline-accent", className)}>
         {children}
       </div>
       {pager ? (

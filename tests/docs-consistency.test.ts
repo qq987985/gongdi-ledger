@@ -26,43 +26,20 @@ const read = (p: string) => readFile(join(root, p), "utf8");
 
 /* ── B14① 用例数 ── */
 
-test("B14① 开发规范 §10 的用例数：不许再写死旧数字，且与 AGENTS 记的基线一致", async () => {
+test("B14① 用例数量只引用实际输出，不要求规范与 AGENTS 重复维护数字", async () => {
   const spec = await read("开发规范.md");
   const agents = await read("AGENTS.md");
-
-  // 旧写法长这样（「目前覆盖：**315 个用例（315 通过 / 0 个 todo）**」）—— 这种「写死一个数」的句子
-  // 每轮加测试就会过期一次，历史教训是停了 6 个版本没人发现。
-  const STALE_CLAIM = /目前覆盖[^\n]{0,80}?\d{3} 个用例（\d{3} 通过/;
-  expectRegexCatches(
-    STALE_CLAIM,
-    "**目前覆盖：** **315 个用例（315 通过 / 0 个 todo）**——1.8.4 从 291 增到 307；",
-    "B14① 旧写法（写死用例数）",
-  );
-  assert.doesNotMatch(
-    spec,
-    STALE_CLAIM,
-    "开发规范 §10 又出现了「目前覆盖：**N 个用例（N 通过…）」这种写死的说法 —— 它会随每次加测试过期，" +
-      "请只留「以 pnpm test 为准」，历史数字放进括号说明。",
-  );
-  // 必须指回唯一来源
-  assert.match(spec, /以 `pnpm test` 输出的/, "§10 必须写明「用例数以 pnpm test 输出的 ℹ tests / ℹ pass 行为准」");
-
-  // 两处文档记的「当前基线」必须一致（一个改了一个没改 = 下一轮又出现口径分叉）。
-  // 刻意不写死版本号：发版时把两处一起改成「1.8.14 的基线是 N / 1.8.14 起覆盖 N」即可，守卫继续生效。
-  const inSpec = spec.match(/(\d+\.\d+\.\d+) 的基线是 (\d+) 通过 \/ 0 个 todo/);
-  const inAgents = agents.match(/(\d+\.\d+\.\d+) 起覆盖 \*\*(\d+) 个用例/);
-  assert.ok(inSpec, "开发规范 §10 要写明基线用例数（形如「1.8.13 的基线是 392 通过 / 0 个 todo」）");
-  assert.ok(inAgents, "AGENTS.md 要写明「1.8.13 起覆盖 N 个用例」");
-  assert.equal(
-    inSpec![1],
-    inAgents![1],
-    `两份文档写的基线版本不一致（开发规范 ${inSpec![1]} vs AGENTS ${inAgents![1]}）—— 发版时要一起改`,
-  );
-  assert.equal(
-    inSpec![2],
-    inAgents![2],
-    `两份文档记的用例数不一致（开发规范 ${inSpec![2]} vs AGENTS ${inAgents![2]}）—— 改一处就要改另一处`,
-  );
+  const STALE_CLAIM = /(?:目前覆盖[^\n]{0,80}?\d{3} 个用例（\d{3} 通过|\d+\.\d+\.\d+ 的基线是 \d+ 通过|起覆盖 \*\*\d+ 个用例)/;
+  expectRegexCatches(STALE_CLAIM, "目前覆盖：315 个用例（315 通过", "旧的固定用例计数");
+  for (const [name, source] of [["开发规范", spec], ["AGENTS", agents]]) {
+    assert.doesNotMatch(source, STALE_CLAIM, `${name} 不应重复维护历史计数，计数放有日期的报告`);
+    assert.match(source, /以 `pnpm test` 输出/, `${name} 应指回实际测试输出`);
+  }
+  const sections = [...spec.matchAll(/^## (\d+)\./gm)].map((m) => Number(m[1]));
+  expectMinHits("规范稳定的章节入口", sections.length, 13, "保留 0–12 章供既有代码/报告引用");
+  assert.deepEqual(sections, Array.from({ length: 13 }, (_, i) => i));
+  assert.ok(agents.includes("开发规范.md"), "AGENTS 应链接规范，避免复制整本规则");
+  assert.ok(agents.includes("docs/开发协作/专家职责.md"), "协作入口必须能找到专家职责");
 });
 
 /* ── B14② 使用与部署说明的版本行 ── */

@@ -134,9 +134,16 @@ export interface AuthStatus {
 }
 
 export async function authStatus(): Promise<AuthStatus> {
-  const j = await (await fetch("/api/auth", { credentials: "include" })).json();
+  const r = await fetch("/api/auth", { credentials: "include" });
+  const j = await r.json();
+  // 服务端 503 broken 是可识别的账户库故障；其他失败或缺失模式不能被 Boolean(undefined)
+  // 变成“本地模式”，否则启动会开放旧缓存和本地写入。
+  const broken = r.status === 503 && j?.persist === true && j?.broken === true;
+  if ((!r.ok && !broken) || typeof j?.persist !== "boolean") {
+    throw new Error("无法确认服务器登录状态，请稍后重试");
+  }
   return {
-    persist: Boolean(j.persist),
+    persist: j.persist,
     needSetup: Boolean(j.needSetup),
     broken: Boolean(j.broken),
     user: j.user || null,

@@ -175,7 +175,7 @@ test("源码守卫：人员名单不印身份证与银行卡（纸面会贴墙�
 test("打印表格列宽必须正好加满 100%，且单列不低于 4%（打印纸不能横向滚动）", () => {
   // 背景：这几张新表会出现长文本（考勤备注、加班规则）。默认自动列宽会被长文本撑到纸面之外，
   // 右侧几列**静默被裁**；所以组件用 table-layout:fixed + <colgroup>，列宽加满 100% 才不溢出、
-  // 单列不低于 4% 才不把金额折成两行（10px 字号下 "19,800.00" 约 45px）。
+  // 4% 仅是短列下限；金额还需单独留足合计宽度，并以真实 PDF 验证。
   const groups: [string, number[], number][] = [
     ["考勤月表（12 列）", MONTH_SHEET_COLS, 12],
     ["全年月表·每月一块（6 列）", YEAR_MONTHS_COLS, 6],
@@ -185,7 +185,7 @@ test("打印表格列宽必须正好加满 100%，且单列不低于 4%（打印
   for (const [what, cols, count] of groups) {
     assert.equal(cols.length, count, `${what} 的列宽个数必须等于列数`);
     assert.equal(round2(cols.reduce((s, x) => s + x, 0)), 100, `${what} 的列宽百分比必须正好加满 100（少了右边留空，多了溢出被裁）`);
-    assert.equal(Math.min(...cols) >= 4, true, `${what} 的单列不许低于 4%（金额会被折成两行）`);
+    assert.equal(Math.min(...cols) >= 4, true, `${what} 的单列不许低于 4%（短列的基础可读性）`);
   }
   // 组件必须真的用上这些常量（改了 lib 却忘了接 = 纸面照旧溢出）
   return read("src/components/ledger-print-sheets.tsx").then((sheet) => {
@@ -195,4 +195,25 @@ test("打印表格列宽必须正好加满 100%，且单列不低于 4%（打印
     expectMinHits("打印件里 table-fixed 的表数（长文本必须在自己格子里换行，不许把表撑出纸面）", (sheet.match(/table-fixed/g) || []).length, 4, "四个打印件各一处");
     expectMinHits("打印件里 <colgroup> 数", (sheet.match(/<colgroup>/g) || []).length, 4, "四个打印件各一处");
   });
+});
+
+test("考勤月表金额列为合计留宽，行内与页脚共用紧凑金额样式（真实 PDF 曾出现合计串列）", async () => {
+  const moneyColumns = [5, 6, 8, 9];
+  expectMinHits("月表普通金额列", moneyColumns.length, 4, "补助、扣款、加班费、餐补");
+  for (const column of moneyColumns)
+    assert.ok(MONTH_SHEET_COLS[column] >= 8, `第 ${column + 1} 列需留足含千位符的合计宽度`);
+  assert.ok(MONTH_SHEET_COLS[10] >= 11, "应发合计 101,760.00 等长金额不能沿用单人金额列宽");
+
+  const sheet = await read("src/components/ledger-print-sheets.tsx");
+  const style = sheet.match(/const MONTH_MONEY_TD = "([^"]+)"/)?.[1] ?? "";
+  assert.match(style, /\bpx-0\.5\b/, "月表金额两侧仅留 2px，保留字号与千位符");
+  assert.match(style, /\btabular-nums\b/);
+  assert.match(style, /\btext-right\b/);
+  assert.match(style, /\bwhitespace-nowrap\b/, "金额不可在逗号处折成两行");
+  const month = sheet.slice(sheet.indexOf("export function AttendanceMonthSheet"), sheet.indexOf("export function AttendanceMonthsYearSheet"));
+  const moneyCell = /<td className=[^\n>]*\bMONTH_MONEY_TD\b[^\n>]*>\{money\((r|totals)\.(allowance|deduction|ot|meal|pay)\)\}<\/td>/g;
+  const cells = [...month.matchAll(moneyCell)];
+  expectMinHits("月表紧凑金额格", cells.length, 10, "5 个行内金额 + 5 个合计金额，均保持 money 格式化");
+  for (const source of ["r", "totals"])
+    assert.deepEqual(cells.filter((cell) => cell[1] === source).map((cell) => cell[2]).sort(), ["allowance", "deduction", "meal", "ot", "pay"]);
 });

@@ -6,6 +6,7 @@ import { cn } from "~/lib/utils";
 import { authOp, authStatus, gateUnlocked, lockGate } from "~/lib/auth";
 import { can, NAV_PERM, setLivePerms, subscribePerms } from "~/lib/perms";
 import { useApp } from "~/lib/store";
+import { setNasEnabled } from "~/lib/nas-flag";
 import { APP_NAME, NAV, TABS } from "./shell/nav";
 import { Brand, NavLink } from "./shell/brand";
 import { BookSwitcher } from "./shell/book-switcher";
@@ -13,25 +14,6 @@ import { YearSwitcher } from "./shell/year-switcher";
 import { VersionLog } from "./shell/version-log";
 import { SyncUnsyncedBanner } from "./shell/sync-banner";
 import { AcctLogin, BrokenAccountsScreen, LoginScreen, NoBookScreen, SetupScreen } from "./shell/screens";
-
-function useHydrateStore() {
-  React.useEffect(() => {
-    (async () => {
-      try {
-        await (useApp as any).persist.rehydrate();
-      } catch {}
-      try {
-        const { startNasSync } = await import("~/lib/nas-sync");
-        await startNasSync();
-      } catch {}
-      const add = Number(new URLSearchParams(window.location.search).get("addYear") || 0);
-      if (add >= 2e3 && add <= 2100) {
-        useApp.getState().addYear(add);
-        window.history.replaceState(null, "", window.location.pathname);
-      }
-    })();
-  }, []);
-}
 
 function WhoCard({ who }: { who: { name: string; username: string; role: string } }) {
   return (
@@ -46,7 +28,6 @@ function WhoCard({ who }: { who: { name: string; username: string; role: string 
 }
 
 export function AppShell() {
-  useHydrateStore();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const year = useApp((s) => s.year);
   const uiStyle = useApp((s) => s.uiStyle);
@@ -61,14 +42,27 @@ export function AppShell() {
   }, [uiStyle]);
   const [open, setOpen] = React.useState(false);
   const [unlocked, setUnlocked] = React.useState(() => !accessHash);
-  const [gate, setGate] = React.useState<"boot" | "setup" | "login" | "nobook" | "broken" | "app">("boot");
+  const [gate, setGate] = React.useState<"boot" | "unavailable" | "setup" | "login" | "nobook" | "broken" | "app">("boot");
   const [acct, setAcct] = React.useState("");
   const [who, setWho] = React.useState<{ name: string; username: string; role: string } | null>(null);
   const [, setPermTick] = React.useState(0);
+  const refreshAttempt = React.useRef(0);
   React.useEffect(() => subscribePerms(() => setPermTick((n) => n + 1)), []);
   async function refreshGate() {
+    const attempt = ++refreshAttempt.current;
+    const stale = () => attempt !== refreshAttempt.current;
+    setGate("boot");
     try {
-      const s = (await authStatus()) as any;
+      const sync = await import("~/lib/nas-sync");
+      if (stale()) return;
+      sync.pauseNasSync();
+      await sync.startNasSync();
+      // 缓存恢复必须先完成，才能判断归属；不得独立启动另一路 seed 或自动保存。
+      await (useApp as any).persist.rehydrate();
+      const s = await authStatus();
+      if (stale()) return;
+      // auth 返回的是已校验的明确模式；必须先设置模式，再挂载任何业务组件。
+      setNasEnabled(s.persist);
       setAcct(String(s.user?.name || s.user?.username || ""));
       setWho(s.user ? { name: String(s.user.name), username: String(s.user.username), role: String(s.user.role) } : null);
       setLivePerms(s.persist ? s.perms || [] : ["*"]);
@@ -78,23 +72,32 @@ export function AppShell() {
       else if (!s.user) setGate("login");
       else if (!s.books.length) setGate("nobook");
       else {
+        const owner = String(s.user.id || s.user.username || "");
+        const bookId = String(s.bookId || "");
+        if (!owner || !bookId) throw new Error("未确认当前账号或台账");
+        // 换过账号 / 台账时先清旧数据；只有同一归属或无归属的旧版缓存允许首次升级。
+        const cacheOwner = sync.checkCacheOwner(owner, bookId);
+        if (cacheOwner === "changed") sync.dropLocalLedger(`账号或台账变了（${owner}::${bookId}）`);
+        sync.setCacheOwner(owner, bookId);
+        await sync.detectNas();
+        if (stale()) return;
+        sync.resumeNasSync();
+        // 开机/登录后首次 seed 的唯一调用点，必须在身份、权限和缓存归属确认之后。
+        await sync.pullNasLedger({ seed: cacheOwner !== "changed" });
+        if (stale()) return;
         setGate("app");
-        try {
-          const { detectNas, pullNasLedger, checkCacheOwner, setCacheOwner, dropLocalLedger } = await import("~/lib/nas-sync");
-          // 换过账号 / 换过台账：本机还留着上一份，必须先丢掉再拉 —— 否则没有 people.view 的
-          // 账号会在总览看到上一个账号的在册人数与工资（A 组报告第 30 项）。
-          const owner = String(s.user.id || s.user.username || "");
-          if (checkCacheOwner(owner, String(s.bookId || "")) === "changed") {
-            dropLocalLedger(`账号或台账变了（${owner}::${s.bookId}）`);
-          }
-          setCacheOwner(owner, String(s.bookId || ""));
-          await detectNas();
-          // 登录后第一次进当前台账：允许把本机旧数据升级上去（空台账时）
-          await pullNasLedger({ seed: true });
-        } catch {}
+      }
+      if (!s.persist || (s.user && s.bookId && !s.broken && !s.needSetup)) {
+        const add = Number(new URLSearchParams(window.location.search).get("addYear") || 0);
+        if (add >= 2e3 && add <= 2100) {
+          useApp.getState().addYear(add);
+          window.history.replaceState(null, "", window.location.pathname);
+        }
       }
     } catch {
-      setGate("app");
+      if (stale()) return;
+      setLivePerms([]);
+      setGate("unavailable");
     }
   }
   React.useEffect(() => {
@@ -107,6 +110,12 @@ export function AppShell() {
     setOpen(false);
   }, [pathname]);
   if (gate === "boot") return <div className="flex min-h-screen items-center justify-center bg-bg text-sm text-muted">加载中…</div>;
+  if (gate === "unavailable") return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-4 text-center text-sm text-muted">
+      <p role="alert">暂时无法确认登录状态，请检查网络后重试。</p>
+      <button type="button" className="rounded-lg border border-line-strong bg-surface px-4 py-2 text-ink" onClick={() => void refreshGate()}>重新连接</button>
+    </div>
+  );
   if (gate === "broken") return <BrokenAccountsScreen />;
   if (gate === "setup") return <SetupScreen onOk={() => void refreshGate()} />;
   if (gate === "login") return <AcctLogin onOk={() => void refreshGate()} />;
@@ -123,13 +132,17 @@ export function AppShell() {
   const tabHit = visTabs.some((t) => (t.to === "/" ? pathname === "/" : pathname === t.to || pathname.startsWith(t.to)));
   const logout = () => {
     if (acct) {
-      authOp("logout").finally(() => {
-        lockGate();
-        // 退出登录就把本机这份台账清掉：下一个在这台机器上登录的账号
-        // 不能看到上一个账号的人员/工资数字（A 组报告第 30 项）
-        void import("~/lib/nas-sync").then((m) => m.dropLocalLedger("退出登录"));
-        setGate("login");
-        toast.success("已退出登录");
+      refreshAttempt.current += 1;
+      void import("~/lib/nas-sync").then(async (m) => {
+        m.pauseNasSync();
+        await authOp("logout").catch(() => {}).finally(() => {
+          lockGate();
+          // 退出登录就把本机这份台账清掉：下一个在这台机器上登录的账号
+          // 不能看到上一个账号的人员/工资数字（A 组报告第 30 项）
+          m.dropLocalLedger("退出登录");
+          setGate("login");
+          toast.success("已退出登录");
+        });
       });
       return;
     }

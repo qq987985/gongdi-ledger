@@ -1,0 +1,2 @@
+import { _ as writeBookMeta, a as ledgerRevisionOf, c as listBookIds, d as readBookMeta, f as readLedger, g as withAuditTransaction, h as saveBackup, i as isManagedBackupFile, l as pruneBackups, m as removeBookDir, n as appendAudit, o as ledgerRevisionValue, p as readVersionText, r as backupKeepCount, s as ledgerUnreadable, t as DEFAULT_BACKUP_KEEP, u as readAudit, v as writeLedger, y as writeLedgerEx } from "./nas-fs.server-Bx8iAzgO.js";
+export { removeBookDir };
