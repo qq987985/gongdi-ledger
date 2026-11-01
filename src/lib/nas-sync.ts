@@ -25,6 +25,26 @@ let syncReady = false;
 let syncEpoch = 0;
 let subscribed = false;
 let saveTimer: number | undefined;
+let transitionDepth = 0;
+let transitionGeneration = 0;
+const contextListeners = new Set<() => void>();
+function contextChanged(): void { contextListeners.forEach((fn) => fn()); }
+export function subscribeLedgerContext(fn: () => void): () => void {
+  contextListeners.add(fn);
+  return () => { contextListeners.delete(fn); };
+}
+/** 批量导入预览所绑定的身份代际；切册发起即失效，不能等 cookie 改变后的拉取完成。 */
+export function ledgerContextSnapshot(): string | null {
+  if (transitionDepth > 0 || (nasEnabled() && (!syncReady || pullDepth > 0 || bookBlocked))) return null;
+  return `${syncEpoch}:${transitionGeneration}:${pullGen}`;
+}
+async function duringBookTransition<T>(action: () => Promise<T>): Promise<T> {
+  transitionDepth++;
+  transitionGeneration++;
+  contextChanged();
+  try { return await action(); }
+  finally { transitionDepth--; contextChanged(); }
+}
 
 /** 开机、重新鉴权、退出登录先暂停；旧队列和迟到的拉取不能带入下一次身份。 */
 export function pauseNasSync(): void {
@@ -33,11 +53,13 @@ export function pauseNasSync(): void {
   window.clearTimeout(saveTimer);
   saveTimer = undefined;
   invalidateInFlightPulls();
+  contextChanged();
 }
 
 /** 仅在身份、权限和本机缓存归属均确认后调用。startNasSync 自身不会打开此门禁。 */
 export function resumeNasSync(): void {
   syncReady = true;
+  contextChanged();
 }
 /**
  * 服务器明确说「这本台账你读不了」（401 会话失效 / 403 没权限 / 404 册子不存在或已被移出，A1）。
@@ -75,6 +97,7 @@ let awaitingSeedPush = 0;
  */
 export function invalidateInFlightPulls(reason = ""): void {
   pullGen += 1;
+  contextChanged();
   const ac = inflightPull;
   inflightPull = null;
   if (ac) {
@@ -230,6 +253,7 @@ export async function pullNasLedger(opts: PullNasLedgerOptions = {}): Promise<vo
   if (!nasEnabled()) return;
   if (opts.seed && !syncReady) return;
   const gen = ++pullGen;
+  contextChanged();
   // seed 推送期间发起的拉取（409 → 「放弃本机」→ 再拉一次）要直接跑：它排队的对象正是
   // 「正在等这次推送的这次拉取」，排队就自锁（见 awaitingSeedPush 的说明）
   if (awaitingSeedPush > 0) return pullNasLedgerOnce(gen, opts);
@@ -248,6 +272,7 @@ async function pullNasLedgerOnce(gen: number, opts: PullNasLedgerOptions): Promi
   const ac = new AbortController();
   inflightPull = ac;
   pullDepth += 1;
+  contextChanged();
   try {
     const r = await timeoutFetch("/api/ledger", 4e3, undefined, ac.signal);
     // 迟到的响应：整包丢弃（不写 store、不写本机缓存、不弹提示）—— 这就是 G1 的核心
@@ -325,6 +350,7 @@ async function pullNasLedgerOnce(gen: number, opts: PullNasLedgerOptions): Promi
   } finally {
     if (inflightPull === ac) inflightPull = null;
     pullDepth -= 1;
+    contextChanged();
   }
 }
 
@@ -585,6 +611,9 @@ async function enterBookAfterTransition(what: string): Promise<string> {
  * 「有没有没保存的月表改动」仍由调用方先问（`confirmLeaveUnsaved`，文案唯一在 lib/unsaved.ts）。
  */
 export async function switchBook(id: string, opts: { action?: string; ask?: AskFn } = {}): Promise<BookTransitionResult> {
+  return duringBookTransition(() => switchBookOnce(id, opts));
+}
+async function switchBookOnce(id: string, opts: { action?: string; ask?: AskFn }): Promise<BookTransitionResult> {
   const what = opts.action || "切换台账";
   const ask = opts.ask || askConfirm;
   if ((await flushBeforeTransition(what, ask)) === "cancelled") return { status: "cancelled" };
@@ -601,6 +630,9 @@ export async function switchBook(id: string, opts: { action?: string; ask?: AskF
  * 目标册是空的 ⇒ 拉到 `emptyState()`，本机旧数据不会被推过去（§台账同步硬约束 2/3）。
  */
 export async function createBookAndEnter(name: string, opts: { action?: string; ask?: AskFn } = {}): Promise<BookTransitionResult> {
+  return duringBookTransition(() => createBookAndEnterOnce(name, opts));
+}
+async function createBookAndEnterOnce(name: string, opts: { action?: string; ask?: AskFn }): Promise<BookTransitionResult> {
   const what = opts.action || "新建台账";
   const ask = opts.ask || askConfirm;
   if ((await flushBeforeTransition(what, ask)) === "cancelled") return { status: "cancelled" };
@@ -621,6 +653,9 @@ export async function createBookAndEnter(name: string, opts: { action?: string; 
  * 删的是别的册子且当前册没变：本机数据照旧（只作废在途拉取，免得删册期间回来的旧响应把已删的东西画回屏幕）。
  */
 export async function deleteBook(id: string, opts: { action?: string; ask?: AskFn } = {}): Promise<BookTransitionResult> {
+  return duringBookTransition(() => deleteBookOnce(id, opts));
+}
+async function deleteBookOnce(id: string, opts: { action?: string; ask?: AskFn }): Promise<BookTransitionResult> {
   const what = opts.action || "删除台账";
   const ask = opts.ask || askConfirm;
   const before = await authStatus().catch(() => null);

@@ -290,7 +290,20 @@ export function duplicateNotice<T>(groups: DuplicateGroup<T>[], what: string): s
 }
 
 export function mergePayments(existing: Payment[], incoming: Payment[]): MergeResult<Payment> {
-  return mergeUnique(existing, incoming, paymentKey);
+  // 新导出带稳定编号：改过金额/日期的同一笔也不能在“增加”模式重复记账。
+  // 旧文件仍按原内容键去重，不改历史记录、不自动合并历史重复。
+  const ids = new Set(existing.map((p) => p.id).filter(Boolean));
+  const keys = new Set(existing.map(paymentKey));
+  const merged = [...existing];
+  let skipped = 0;
+  for (const row of incoming) {
+    const key = paymentKey(row);
+    if ((row.id && ids.has(row.id)) || keys.has(key)) { skipped++; continue; }
+    if (row.id) ids.add(row.id);
+    keys.add(key);
+    merged.push(row);
+  }
+  return { merged, added: merged.length - existing.length, skipped };
 }
 
 export function mergeExpenses(existing: Expense[], incoming: Expense[]): MergeResult<Expense> {

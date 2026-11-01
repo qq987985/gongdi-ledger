@@ -297,7 +297,7 @@ export interface AppActions {
    */
   addPayments: (rows: (Omit<Payment, "id"> & { id?: string })[]) => number;
   patchPayments: (ids: string[], patch: Partial<Payment>) => void;
-  replacePayments: (payments: Payment[]) => void;
+  replacePayments: (payments: Payment[], detail?: string) => void;
   removePayment: (id: string) => void;
   removePayments: (ids: string[]) => void;
   upsertContract: (c: ContractRecord) => void;
@@ -576,9 +576,9 @@ export const useApp = create<AppStore>()(
           "发放",
         );
       },
-      replacePayments: (payments) => {
+      replacePayments: (payments, detail) => {
         set({ payments });
-        logOp("导入/替换发放", `${payments.length}条`, "发放");
+        logOp("导入/替换发放", detail || `${payments.length}条`, "发放");
       },
       removePayment: (id) => {
         const p = get().payments.find((x) => x.id === id);

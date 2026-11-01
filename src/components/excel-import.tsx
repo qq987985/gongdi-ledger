@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { FilePick } from "~/components/file-pick";
+import { PaymentImportPreview } from "~/components/payment-import-preview";
+import { planPaymentImport, paymentImportSummary, type PaymentImportMode, type PaymentImportChoices } from "~/lib/payment-import";
 import {
   duplicateNotice,
   findDuplicatePayments,
@@ -14,7 +16,7 @@ import {
   parseExpenseSheet,
   parseFullAttendanceWorkbook,
   parseInsuranceMembersSheet,
-  parsePaymentSheet,
+  inspectPaymentSheet,
   parsePeopleSheet,
   planAttendanceImport,
 } from "~/lib/excel";
@@ -26,6 +28,7 @@ import { blockedImport } from "~/lib/readonly";
 // 姓名比较键的唯一实现（A-1）：导入时按姓名匹配人员/考勤，比较两侧都要 trim
 import { nameKey } from "~/lib/receiver";
 import { useApp } from "~/lib/store";
+import { ledgerContextSnapshot, subscribeLedgerContext } from "~/lib/nas-sync";
 import type { AttendanceRow, Expense, InsuranceMember, Payment, Person } from "~/lib/types";
 
 type ImportMode = "add" | "replace";
@@ -311,64 +314,54 @@ export function AttendanceImport() {
 /* ───────────── 发放导入 ───────────── */
 export function PaymentImport() {
   const store = useApp();
-  const [mode, setMode] = React.useState<ImportMode>("add");
-  const [preview, setPreview] = React.useState<{ rows: Payment[]; fileName: string; skipped: number } | null>(null);
-  // 1.8.8 D5 善后：修版前重复导入可能已经留下重复记录，这里只提示，不自动删（用户数据红线）
+  const context = React.useSyncExternalStore(subscribeLedgerContext, ledgerContextSnapshot, () => null);
+  const [mode, setMode] = React.useState<PaymentImportMode>("add");
+  const [choices, setChoices] = React.useState<PaymentImportChoices>({});
+  const [preview, setPreview] = React.useState<{ rows: Payment[]; base: Payment[]; context: string; fileName: string; request: number } | null>(null);
+  const loading = React.useRef(0);
   const dupNotice = duplicateNotice(findDuplicatePayments(store.payments), "发放记录");
   async function onFile(file: File) {
-    if (!file) return;
-    // 导入写的是整本台账（服务端 ledger.manage）：只读/缺权限在这里就拦下、不许再写盘。
-    // 判据与文案的唯一实现是 lib/readonly.ts 的 blockedImport（别在每个入口各写一段）
     if (blockedImport()) return;
-    const rows = parsePaymentSheet(await file.arrayBuffer());
-    if (!rows.length) {
-      toast.error("没有读到发放记录");
-      return;
+    const origin = ledgerContextSnapshot();
+    if (origin === null) { toast.error("台账正在切换或尚未就绪，请稍后再导入"); return; }
+    const request = ++loading.current;
+    const base = useApp.getState().payments;
+    setPreview(null);
+    try {
+      const { rows, errors } = inspectPaymentSheet(await file.arrayBuffer());
+      if (request !== loading.current) return;
+      if (base !== useApp.getState().payments || origin !== ledgerContextSnapshot()) { toast.error("读取文件期间发放数据或台账已改变，请重新选择文件"); return; }
+      if (errors.length) { toast.error(`${errors.slice(0, 3).join("\n")}${errors.length > 3 ? `\n另有 ${errors.length - 3} 项错误` : ""}；原有记录未改动`); return; }
+      if (!rows.length) { toast.error("没有读到发放记录"); return; }
+      setMode("add");
+      setChoices({});
+      setPreview({ rows, base, context: origin, fileName: file.name, request });
+    } catch {
+      if (request === loading.current) toast.error("无法读取 Excel 文件，请检查格式后重试；原有记录未改动");
     }
-    const { skipped } = mergePayments(store.payments, rows);
-    setPreview({ rows, fileName: file.name, skipped });
   }
+  const plan = preview ? planPaymentImport(preview.base, preview.rows, mode, choices) : null;
   function apply() {
-    if (!preview) return;
-    if (mode === "replace") {
-      store.replacePayments(preview.rows);
-      toast.success(`已替换为 ${preview.rows.length} 条发放记录`);
-    } else {
-      const { merged, added, skipped } = mergePayments(store.payments, preview.rows);
-      store.replacePayments(merged);
-      toast.success(`已追加 ${added} 条发放记录${skipped ? `，跳过 ${skipped} 条重复` : ""}`);
-    }
+    if (!preview || blockedImport()) return;
+    const current = useApp.getState().payments;
+    if (current !== preview.base || preview.context !== ledgerContextSnapshot()) { toast.error("预览后发放数据或台账已改变，请重新选择文件"); return; }
+    const result = planPaymentImport(current, preview.rows, mode, choices);
+    if (result.errors.length || result.unresolved.length) { toast.error(result.errors[0] || "请先为未匹配的记录选择处理方式"); return; }
+    if (mode === "replaceAll" && !confirm(`全部替换当前台账所有年份的发放记录？\n原有 ${current.length} 条 → 文件 ${preview.rows.length} 条。\n不在文件中的 ${result.removed} 条原记录将删除，此操作不受页面筛选限制。`)) return;
+    // 确认时再次取当前快照；预览不能把新录入或切册后的数据覆盖掉。
+    if (useApp.getState().payments !== current || preview.context !== ledgerContextSnapshot() || blockedImport()) return;
+    const summary = paymentImportSummary(result, mode);
+    store.replacePayments(result.rows, summary);
+    toast.success(`${summary}；已载入，服务器保存状态请看同步提示`);
     setPreview(null);
   }
   return (
     <>
       <ExcelBtn label="导入发放" onFile={onFile} />
       {dupNotice ? <p className="basis-full mt-2 text-xs text-warn">{dupNotice}</p> : null}
-      {preview ? (
-        <section className="basis-full mt-3 rounded-xl border border-accent bg-surface p-4">
-          <h2 className="font-semibold">发放导入确认</h2>
-          <p className="mt-1 text-sm text-muted">
-            {preview.fileName} · {preview.rows.length} 条
-            {preview.skipped ? ` · 跳过 ${preview.skipped} 条重复` : ""}
-          </p>
-          {dupNotice ? <p className="mt-2 text-xs text-warn">{dupNotice}</p> : null}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <label className="inline-flex items-center gap-1.5 text-sm">
-              <input type="radio" name="pay-mode" checked={mode === "add"} onChange={() => setMode("add")} /> 增加
-            </label>
-            <label className="inline-flex items-center gap-1.5 text-sm">
-              <input type="radio" name="pay-mode" checked={mode === "replace"} onChange={() => setMode("replace")} /> 替换
-            </label>
-          </div>
-          <p className="mt-2 text-xs text-muted">
-            {mode === "replace" ? "替换模式：会清空所有原有发放记录，只保留导入的。" : "增加模式：在现有发放记录后追加。"}
-          </p>
-          <div className="mt-4 flex gap-2">
-            <Button onClick={apply}>确认导入</Button>
-            <Button variant="outline" onClick={() => setPreview(null)}>取消</Button>
-          </div>
-        </section>
-      ) : null}
+      {preview && plan ? <PaymentImportPreview key={preview.request} fileName={preview.fileName} rows={preview.rows}
+        existing={preview.base} mode={mode} choices={choices} plan={plan} stale={preview.base !== store.payments || preview.context !== context}
+        onMode={setMode} onChoices={setChoices} onApply={apply} onCancel={() => { loading.current++; setPreview(null); }} /> : null}
     </>
   );
 }
