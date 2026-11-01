@@ -21,7 +21,7 @@ page.on("pageerror", (e) => errors.push(e.message));
 let rejectAll = false;
 page.on("dialog", (d) => rejectAll && d.message().startsWith("全部替换") ? d.dismiss() : d.accept());
 const report = [];
-const shotDir = "browser-screenshots/payment-import-20261101";
+const shotDir = "browser-screenshots/payment-import-simple-20261101";
 await mkdir(shotDir, { recursive: true });
 const p = (id, amount, date = "2026-11-01") => ({ id, amount, date, owner: "合成测试甲", receiver: "合成测试甲", source: "合成工程", remark: "" });
 const originals = [p("synthetic-a", 100), p("synthetic-b", 200), p("synthetic-last-year", 300, "2025-11-01")];
@@ -67,25 +67,24 @@ try {
   const changed = fileFor([p("synthetic-a", 120, "2026-11-02")]);
   await upload(changed);
   await preview().waitFor();
+  assert.equal(await preview().getByRole("radio").count(), 2);
+  assert.equal(await preview().getByRole("radio", { name: "新增导入", exact: true }).isChecked(), true);
+  assert.equal(await preview().getByRole("combobox").count(), 0);
   assert.match(await preview().innerText(), /有 1 条同编号记录已被修改/);
   await save();
   assert.deepEqual((await read()).payments, originals);
-  await upload(changed);
-  await mode("本次替换");
-  assert.equal(await page.getByLabel("第 1 条处理方式").inputValue(), "replace:synthetic-a");
-  await save();
-  assert.deepEqual((await read()).payments, [p("synthetic-a", 120, "2026-11-02"), ...originals.slice(1)]);
-  await upload(changed); await mode("本次替换"); await save();
-  assert.equal((await read()).payments.length, 3);
-  report.push("增加跳过同编号修正；本次替换仅改1笔，跨年记录保留，重复导入幂等");
+  await upload(fileFor([p("synthetic-new", 80)])); await save();
+  assert.deepEqual((await read()).payments, [...originals, p("synthetic-new", 80)]);
+  report.push("仅有新增导入/全部替换，无逐人匹配；新增跳过同编号修正且可追加新记录");
 
-  await upload(fileFor([p("ignored", 240)], false));
-  await mode("本次替换");
-  assert.equal(await preview().getByRole("button", { name: "确认导入", exact: true }).isDisabled(), true);
-  await page.getByLabel("第 1 条处理方式").selectOption("replace:synthetic-b");
-  await save();
-  assert.equal((await read()).payments.find((r) => r.id === "synthetic-b").amount, 240);
-  report.push("旧文件无编号不会猜配；手动匹配更正后保留原编号");
+  await reset();
+  await upload(fileFor([p("legacy-a", 120), p("legacy-b", 240)], false));
+  await mode("全部替换"); await preview().getByRole("checkbox").check(); await save("确认全部替换");
+  const legacy = (await read()).payments;
+  assert.deepEqual(legacy.map((r) => r.amount), [120, 240]);
+  assert.ok(legacy.every((r) => r.id) && legacy[0].id !== legacy[1].id);
+  report.push("旧文件无编号可直接全部替换，无需逐人选择");
+  await reset();
 
   await upload(fileFor([p("synthetic-a", 222)])); await mode("全部替换");
   assert.equal(await preview().getByRole("button", { name: "确认全部替换" }).isDisabled(), true);
@@ -105,13 +104,14 @@ try {
   const wb = XLSX.read(await exported.body(), { type: "buffer" });
   const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
   assert.ok(rows[1].includes("记录编号（勿修改）"));
+  rows[2][3] = 330;
   rows.push([4, "合成新增", "2026-11-03", 80, "合成工程", "合成新增", "追加", ""]);
   await upload(xlsx(rows)); await mode("全部替换"); await preview().getByRole("checkbox").check(); await save("确认全部替换");
   const appended = (await read()).payments;
   assert.equal(appended.length, 4);
-  for (const original of originals) assert.deepEqual(appended.find((r) => r.id === original.id), original);
-  assert.equal(appended.reduce((n, r) => n + r.amount, 0), 680);
-  report.push("真实接口导出全部→追加空编号新行→全部替换，原3笔编号保留且总额680");
+  for (const original of originals) assert.deepEqual(appended.find((r) => r.id === original.id), original.id === "synthetic-last-year" ? { ...original, amount: 330 } : original);
+  assert.equal(appended.reduce((n, r) => n + r.amount, 0), 710);
+  report.push("真实接口导出全部→追加空编号新行→全部替换，改正金额并保留原3笔编号，总额710");
 
   await upload(fileFor([p("copied-id", 100), p("copied-id", 200)])); await mode("全部替换");
   assert.match(await preview().innerText(), /编号为空或重复/);
@@ -126,15 +126,16 @@ try {
   for (const width of [1440, 375, 390]) {
     await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
     await reset();
-    await upload(fileFor([{ ...p("synthetic-a", 125), remark: "合成超长备注".repeat(20), source: "合成长工程名".repeat(10) }]));
-    await mode("本次替换");
+    await upload(fileFor([{ ...p("synthetic-a", 125), remark: "合成超长备注".repeat(20), source: "合成长工程名".repeat(10) }]), "合成长文件名".repeat(30) + ".xlsx");
+    await mode("全部替换");
+    await preview().getByRole("checkbox").check();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
     assert.equal(overflow, false, `${width}px 页面不能横向溢出`);
     await preview().scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${shotDir}/${width}.png`, fullPage: true });
-    await save();
+    await save("确认全部替换");
     assert.equal((await read()).payments[0].amount, 125);
-    report.push(`${width}px 长文本布局无横向溢出，确认按钮可操作且实际保存`);
+    report.push(`${width}px 长文件名布局无横向溢出，确认按钮可操作且实际保存`);
   }
 
   // 把 authStatus 的响应悬停，重现 cookie 已切换但 payments 仍是旧数组的窗口。
@@ -146,7 +147,7 @@ try {
   const bookB = bookStatus.bookId;
   assert.notEqual(bookB, "default");
   assert.equal((await ctx.request.post("/api/auth", { data: { op: "useBook", id: "default" } })).status(), 200);
-  await reset(); await upload(changed); await mode("本次替换");
+  await reset(); await upload(changed); await mode("全部替换"); await preview().getByRole("checkbox").check();
   let releaseAuth;
   const gate = new Promise((resolve) => { releaseAuth = resolve; });
   let reachedAuth;
@@ -160,7 +161,7 @@ try {
   await page.getByRole("combobox", { name: "当前台账", exact: true }).first().selectOption(bookB);
   await reached;
   await preview().getByRole("alert").filter({ hasText: "已改变" }).waitFor();
-  assert.equal(await preview().getByRole("button", { name: "确认导入", exact: true }).isDisabled(), true);
+  assert.equal(await preview().getByRole("button", { name: "确认全部替换", exact: true }).isDisabled(), true);
   assert.equal(puts, 0);
   releaseAuth();
   await page.waitForFunction(() => JSON.parse(localStorage.getItem("gongdi-ledger-v5") || "{}").state?.payments?.length === 0);

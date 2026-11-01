@@ -26,7 +26,7 @@ test("发放导出带稳定记录编号，修正金额和日期后仍对应原�
   assert.equal(row.date, "2026-11-02");
 });
 
-test("增加模式不能把同编号的修正记录追加成第二笔", () => {
+test("新增导入不能把同编号的修正记录追加成第二笔", () => {
   const current = [pay("pay-origin")];
   const incoming = [{ ...pay("pay-origin", 120), date: "2026-11-02" }];
   const result = mergePayments(current, incoming);
@@ -35,53 +35,41 @@ test("增加模式不能把同编号的修正记录追加成第二笔", () => {
   assert.deepEqual(result.merged, current);
 });
 
-test("本次替换：仅更正导出行的金额日期及收款人，跨年和待发记录保留，重复执行幂等", () => {
-  const current = [pay("old-year", 200), pay("target"), { ...pay("pending", 300), date: "" }];
-  current[0].date = "2025-01-01";
+test("全部导出改错后全部替换，金额日期收款人改正，跨年及待发记录保留，重复执行幂等", () => {
+  const current = [{ ...pay("old-year", 200), date: "2025-01-01" }, pay("target"), { ...pay("pending", 300), date: "" }];
   const before = structuredClone(current);
-  const rows = editedExport([current[1]], { "发放金额(元)": 120.12, "发放日期": "2026-11-02", "收款人": "测试乙", "备注": "更正" });
-  const plan = planPaymentImport(current, rows, "update");
-  assert.deepEqual([plan.updated, plan.added, plan.preserved, plan.removed, plan.errors.length, plan.unresolved.length], [1, 0, 2, 0, 0, 0]);
-  assert.deepEqual(plan.rows, [current[0], { ...rows[0], id: "target" }, current[2]]);
+  const rows = editedExport(current, { "发放金额(元)": 120.12, "发放日期": "2026-11-02", "收款人": "测试乙", "备注": "更正" });
+  const plan = planPaymentImport(current, rows, "replaceAll");
+  assert.deepEqual([plan.updated, plan.added, plan.preserved, plan.removed, plan.errors.length], [3, 0, 0, 0, 0]);
+  assert.deepEqual(plan.rows, rows);
+  assert.deepEqual(plan.rows.find((p) => p.id === "old-year"), { ...current[0], amount: 120.12, date: "2026-11-02", receiver: "测试乙", remark: "更正" });
+  assert.deepEqual(plan.rows.find((p) => p.id === "target"), current[1]);
+  assert.deepEqual(plan.rows.find((p) => p.id === "pending"), current[2]);
   assert.deepEqual(current, before, "不得修改输入数组或记录");
-  assert.deepEqual(planPaymentImport(plan.rows, rows, "update").rows, plan.rows);
+  assert.deepEqual(planPaymentImport(plan.rows, rows, "replaceAll").rows, plan.rows);
 });
 
-test("旧文件即使姓名日期金额相同也不猜对应关系，手工匹配保留原编号", () => {
+test("旧文件无编号也可直接全部替换，无需逐人匹配，同名同金额独立行全部保留", () => {
   const current = [pay("same-a"), pay("same-b")];
-  const rows = [pay("parsed-generated-id", 120)];
-  const blocked = planPaymentImport(current, rows, "update");
-  assert.deepEqual(blocked.unresolved, [0]);
-  assert.equal(blocked.rows, current);
-  const plan = planPaymentImport(current, rows, "update", { 0: { kind: "replace", id: "same-b" } });
-  assert.deepEqual(plan.rows.map((p) => [p.id, p.amount]), [["same-a", 100], ["same-b", 120]]);
+  const rows = [pay("new-generated-a", 120), pay("new-generated-b", 120)];
+  const plan = planPaymentImport(current, rows, "replaceAll");
+  assert.deepEqual(plan.errors, []);
+  assert.deepEqual(plan.rows, rows);
+  assert.deepEqual([plan.added, plan.updated, plan.removed], [2, 0, 2]);
 });
 
-test("本次替换可同时更正、新增及跳过，任何未决行都不产生部分写入", () => {
-  const current = [pay("a"), pay("keep")];
-  const incoming = [pay("a", 110), pay("new", 200), pay("skip", 300)];
-  const blocked = planPaymentImport(current, incoming, "update", { 1: { kind: "add" } });
-  assert.deepEqual(blocked.unresolved, [2]);
-  assert.equal(blocked.rows, current);
-  const plan = planPaymentImport(current, incoming, "update", { 1: { kind: "add" }, 2: { kind: "skip" } });
-  assert.deepEqual([plan.updated, plan.added, plan.skipped, plan.preserved], [1, 1, 1, 1]);
-  assert.deepEqual(plan.rows.map((p) => [p.id, p.amount]), [["a", 110], ["keep", 100], ["new", 200]]);
-});
-
-test("重复编号、多人选择同一原记录、已知编号转配其它记录都拒绝且保留原数据", () => {
+test("重复/空编号与已删除模式都拒绝，不能意外回落成全量覆盖", () => {
   const current = [pay("a"), pay("b")];
-  const cases = [
-    planPaymentImport(current, [pay("a"), pay("a")], "replaceAll"),
-    planPaymentImport(current, [pay("x"), pay("y")], "update", { 0: { kind: "replace", id: "a" }, 1: { kind: "replace", id: "a" } }),
-    planPaymentImport(current, [pay("a")], "update", { 0: { kind: "replace", id: "b" } }),
-    planPaymentImport(current, [pay("a")], "update", { 0: { kind: "add" } }),
-    planPaymentImport(current, [pay("x")], "update", { 0: { kind: "replace", id: "missing" } }),
-  ];
-  for (const plan of cases) { assert.ok(plan.errors.length); assert.equal(plan.rows, current); }
-  const duplicateOriginals = [pay("a"), pay("a")];
-  const duplicatePlan = planPaymentImport(duplicateOriginals, [pay("a")], "update", { 0: { kind: "replace", id: "a" } });
-  assert.ok(duplicatePlan.errors.length);
-  assert.equal(duplicatePlan.rows, duplicateOriginals);
+  for (const mode of ["add", "replaceAll"] as const) {
+    for (const rows of [[pay("a"), pay("a")], [pay("")]]) {
+      const plan = planPaymentImport(current, rows, mode);
+      assert.ok(plan.errors.length);
+      assert.equal(plan.rows, current);
+    }
+  }
+  const invalid = planPaymentImport(current, [pay("x")], "update" as any);
+  assert.ok(invalid.errors.length);
+  assert.equal(invalid.rows, current);
 });
 
 test("全部替换覆盖所有年份，保留文件中的重复内容独立记录，空文件不能清空", () => {
@@ -95,7 +83,7 @@ test("全部替换覆盖所有年份，保留文件中的重复内容独立记�
   assert.equal(empty.rows, current);
 });
 
-test("增加模式保留旧内容去重规则，修正提示包含发放方和备注变化", () => {
+test("新增导入保留旧内容去重规则，修正提示包含发放方和备注变化", () => {
   const current = [pay("a")];
   const plan = planPaymentImport(current, [{ ...pay("a"), source: "改发放方", remark: "新备注" }, pay("content-duplicate"), pay("new", 500)], "add");
   assert.deepEqual([plan.added, plan.skipped, plan.sameIdChanged], [1, 2, 1]);

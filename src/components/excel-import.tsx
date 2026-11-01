@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { FilePick } from "~/components/file-pick";
 import { PaymentImportPreview } from "~/components/payment-import-preview";
-import { planPaymentImport, paymentImportSummary, type PaymentImportMode, type PaymentImportChoices } from "~/lib/payment-import";
+import { planPaymentImport, paymentImportSummary, type PaymentImportMode } from "~/lib/payment-import";
 import {
   duplicateNotice,
   findDuplicatePayments,
@@ -316,7 +316,6 @@ export function PaymentImport() {
   const store = useApp();
   const context = React.useSyncExternalStore(subscribeLedgerContext, ledgerContextSnapshot, () => null);
   const [mode, setMode] = React.useState<PaymentImportMode>("add");
-  const [choices, setChoices] = React.useState<PaymentImportChoices>({});
   const [preview, setPreview] = React.useState<{ rows: Payment[]; base: Payment[]; context: string; fileName: string; request: number } | null>(null);
   const loading = React.useRef(0);
   const dupNotice = duplicateNotice(findDuplicatePayments(store.payments), "发放记录");
@@ -334,19 +333,18 @@ export function PaymentImport() {
       if (errors.length) { toast.error(`${errors.slice(0, 3).join("\n")}${errors.length > 3 ? `\n另有 ${errors.length - 3} 项错误` : ""}；原有记录未改动`); return; }
       if (!rows.length) { toast.error("没有读到发放记录"); return; }
       setMode("add");
-      setChoices({});
       setPreview({ rows, base, context: origin, fileName: file.name, request });
     } catch {
       if (request === loading.current) toast.error("无法读取 Excel 文件，请检查格式后重试；原有记录未改动");
     }
   }
-  const plan = preview ? planPaymentImport(preview.base, preview.rows, mode, choices) : null;
+  const plan = preview ? planPaymentImport(preview.base, preview.rows, mode) : null;
   function apply() {
     if (!preview || blockedImport()) return;
     const current = useApp.getState().payments;
     if (current !== preview.base || preview.context !== ledgerContextSnapshot()) { toast.error("预览后发放数据或台账已改变，请重新选择文件"); return; }
-    const result = planPaymentImport(current, preview.rows, mode, choices);
-    if (result.errors.length || result.unresolved.length) { toast.error(result.errors[0] || "请先为未匹配的记录选择处理方式"); return; }
+    const result = planPaymentImport(current, preview.rows, mode);
+    if (result.errors.length) { toast.error(result.errors[0]); return; }
     if (mode === "replaceAll" && !confirm(`全部替换当前台账所有年份的发放记录？\n原有 ${current.length} 条 → 文件 ${preview.rows.length} 条。\n不在文件中的 ${result.removed} 条原记录将删除，此操作不受页面筛选限制。`)) return;
     // 确认时再次取当前快照；预览不能把新录入或切册后的数据覆盖掉。
     if (useApp.getState().payments !== current || preview.context !== ledgerContextSnapshot() || blockedImport()) return;
@@ -360,8 +358,8 @@ export function PaymentImport() {
       <ExcelBtn label="导入发放" onFile={onFile} />
       {dupNotice ? <p className="basis-full mt-2 text-xs text-warn">{dupNotice}</p> : null}
       {preview && plan ? <PaymentImportPreview key={preview.request} fileName={preview.fileName} rows={preview.rows}
-        existing={preview.base} mode={mode} choices={choices} plan={plan} stale={preview.base !== store.payments || preview.context !== context}
-        onMode={setMode} onChoices={setChoices} onApply={apply} onCancel={() => { loading.current++; setPreview(null); }} /> : null}
+        existing={preview.base} mode={mode} plan={plan} stale={preview.base !== store.payments || preview.context !== context}
+        onMode={setMode} onApply={apply} onCancel={() => { loading.current++; setPreview(null); }} /> : null}
     </>
   );
 }
