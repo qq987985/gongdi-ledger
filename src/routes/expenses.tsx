@@ -662,6 +662,7 @@ function ExpenseSheets({ rows, showVoucher }: { rows: any[]; showVoucher?: boole
   const banks = [...new Set(rows.map((e) => (e.payBank || "").trim()).filter(Boolean))];
   const cards = [...new Set(rows.map((e) => (e.payCardNo || "").trim()).filter(Boolean))];
   const cols = showVoucher ? ["序号", "项目", "购买时间", "金额", "备注", "票据"] : ["序号", "项目", "购买时间", "金额", "备注"];
+  const columnWidths = showVoucher ? [9, 27, 18, 17, 17, 12] : [9, 33, 18, 17, 23];
   const emptyCells = showVoucher ? 2 : 1;
   /** 报销单抬头（1.8.11）：写进表头第一行，跨页时第 2 页顶上也会重复（原来只印在第 1 页） */
   const identity = [
@@ -672,11 +673,14 @@ function ExpenseSheets({ rows, showVoucher }: { rows: any[]; showVoucher?: boole
   ].join(" · ");
   return (
     <div className="print-only space-y-8 text-black">
-      <article className="statement border border-black p-4">
+      <article className="statement expense-statement border border-black p-4">
         <header className="border-b border-black pb-2 text-center">
           <div className="text-2xl font-semibold tracking-widest">报销单</div>
         </header>
         <table className="mt-2 w-full border-collapse text-center text-xs">
+          <colgroup>
+            {columnWidths.map((width, i) => <col key={i} style={{ width: `${width}%` }} />)}
+          </colgroup>
           <thead>
             <tr>
               <th className="border border-black px-1 py-1 text-left font-medium" colSpan={cols.length}>

@@ -511,7 +511,8 @@
      裁开分发时续页也认得出是哪张单（见 insurance / contracts / expenses 三个打印件）；
    · **一条 = 一份独立单据**（`.print-doc`，合同对账单一份合同一条）：整条放得下就与前面并排塞满、
      放不下才另起一页，绝不把一条劈成两半（1.8.12）；比一整页还高的条允许自己跨页续排；
-   · **打印态行高压缩**：`th/td` 纵向内边距压到 1px（横向不动）—— 屏幕上舒服的留白在纸上
+   · **打印态行高压缩**：一般 `th/td` 纵向内边距压到 1px（横向不动）；报销单使用下方独立字号与留白。
+     其他清单屏幕上舒服的留白在纸上
      只会把最后几行挤到下一页，制造「一大片空白 + 只印一行的第 2 页」（1.8.13）；
    · **纸面外框留白压缩**：打印件的 `article` 内边距压到 `2mm 3mm`、尾部段落 `margin-top: 1mm`
      —— `@page` 的 12mm 已经是页边距，单据自己再加一层只会把最后一行挤走（1.8.13）。
@@ -574,6 +575,27 @@
   .print-only table td {
     padding-top: 1px;
     padding-bottom: 1px;
+  }
+
+  /* 报销单优先保证纸面可读性：12 磅正文、每行上下各 2mm，不沿用清单的紧凑行高。 */
+  .print-only .expense-statement table {
+    table-layout: fixed;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+  .print-only .expense-statement th,
+  .print-only .expense-statement td {
+    padding: 2mm 1.5mm;
+    overflow-wrap: anywhere;
+    vertical-align: middle;
+  }
+  .print-only .expense-statement thead tr:first-child th {
+    font-size: 11pt;
+    text-align: left;
+  }
+  .print-only .expense-statement > p:last-child {
+    font-size: 10.5pt;
+    line-height: 1.5;
   }
 
   /* ②e 纸面上的**外框留白**也压掉：`@page` 已经有 12mm 页边距，单据自己再 `p-4`（每边 4.2mm）
