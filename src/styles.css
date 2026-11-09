@@ -577,25 +577,25 @@
     padding-bottom: 1px;
   }
 
-  /* 报销单优先保证纸面可读性：12 磅正文、每行上下各 2mm，不沿用清单的紧凑行高。 */
+  /* 报销单取适中密度：10.5 磅正文、每行上下各 1.2mm，介于原紧凑版与放大版之间。 */
   .print-only .expense-statement table {
     table-layout: fixed;
-    font-size: 12pt;
-    line-height: 1.5;
+    font-size: 10.5pt;
+    line-height: 1.4;
   }
   .print-only .expense-statement th,
   .print-only .expense-statement td {
-    padding: 2mm 1.5mm;
+    padding: 1.2mm 1.5mm;
     overflow-wrap: anywhere;
     vertical-align: middle;
   }
   .print-only .expense-statement thead tr:first-child th {
-    font-size: 11pt;
+    font-size: 10pt;
     text-align: left;
   }
   .print-only .expense-statement > p:last-child {
-    font-size: 10.5pt;
-    line-height: 1.5;
+    font-size: 9.5pt;
+    line-height: 1.4;
   }
 
   /* ②e 纸面上的**外框留白**也压掉：`@page` 已经有 12mm 页边距，单据自己再 `p-4`（每边 4.2mm）
