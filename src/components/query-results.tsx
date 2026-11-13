@@ -1,4 +1,5 @@
 import { Button } from "~/components/ui/button";
+import { QueryMonthTable } from "~/components/query-month-table";
 import { money } from "~/lib/utils";
 import { queryTeamResults, type QueryContent, type QueryPersonResult } from "~/lib/query-data";
 
@@ -64,8 +65,15 @@ export function TeamQueryResults({ summary, label, teamLabel, content, onPerson 
   return (
     <section className="rounded-xl border border-line bg-surface p-4">
       <h2 className="font-display text-xl font-semibold">{teamLabel} · {wage ? "工资" : "考勤"}</h2>
-      <p className="mt-1 text-xs text-muted">{label} · 当前人员档案中的 {summary.members.length} 人，点击姓名查看个人明细。</p>
+      <p className="mt-1 text-xs text-muted">{label} · 当前人员档案中的 {summary.members.length} 人。先看每月明细和本月小计，再看区间汇总；点击姓名查看个人明细。</p>
       {summary.ambiguousCount ? <p className="mt-3 text-sm text-warn">其中 {summary.ambiguousCount} 人存在同名，历史记录无法可靠区分，未计入合计；请先核对人员档案及历史记录。</p> : null}
+      {summary.members.length ? <div className="mt-4 space-y-4">
+        <h3 className="font-semibold">每月明细</h3>
+        {summary.months.map((month) => <div key={`${month.year}-${month.month}`} className="overflow-x-auto rounded-lg border border-line" tabIndex={0} role="region" aria-label={`${month.year}年${month.month}月班组明细`}>
+          <QueryMonthTable month={month} content={content} teamLabel={teamLabel} onPerson={onPerson} />
+        </div>)}
+      </div> : null}
+      <h3 className="mt-5 font-semibold">区间汇总</h3>
       <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label="班组查询汇总">
         <table className="fit-table query-results-table text-left text-sm">
           <thead className="text-xs text-muted"><tr>
@@ -86,7 +94,7 @@ export function TeamQueryResults({ summary, label, teamLabel, content, onPerson 
               </tr>
             ))}
             {summary.members.length ? <tr className="border-t border-line font-medium">
-              <td className="py-2">合计</td><td className="tabular-nums">{summary.totals.days}</td><td className="tabular-nums">{summary.totals.otHours}</td>
+              <td className="py-2">区间合计</td><td className="tabular-nums">{summary.totals.days}</td><td className="tabular-nums">{summary.totals.otHours}</td>
               {wage ? <><td className="tabular-nums">¥{money(summary.totals.pay)}</td><td className="tabular-nums">¥{money(summary.paidAsOwner)}</td><td className="tabular-nums">¥{money(summary.difference)}</td></> : null}<td />
             </tr> : <tr><td colSpan={wage ? 7 : 4} className="py-6 text-muted">该班组暂无人员。</td></tr>}
           </tbody>

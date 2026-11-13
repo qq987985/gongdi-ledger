@@ -153,3 +153,39 @@ test("只有备注仍显示、打印，无内容与空人员不会生成工资�
   assert.deepEqual(buildQuerySlips(noData), []);
   assert.deepEqual(buildQueryResults({ people: [], attendance: rows, payments, range }), []);
 });
+
+test("班组逐月列出每个人、当月小计和区间汇总，跨年与重复考勤不串月", () => {
+  const members = [...people, person({ id: "p3", name: "王五", team: "新组" })];
+  const rows = [...attendance, att({ id: "p3-dec", name: "王五", year: 2025, month: 12, days: 3 })];
+  const results = buildQueryResults({ people: members, attendance: rows, payments, range });
+  const before = JSON.stringify(results);
+  const summary = queryTeamResults(results, "新组", range.span);
+  assert.deepEqual(summary.months.map(({ year, month }) => [year, month]), [[2025, 12], [2026, 1]]);
+  assert.deepEqual(summary.months[0].rows.map((row) => [row.person.id, row.month.days]), [["p1", 2], ["p3", 3]]);
+  assert.deepEqual(summary.months[1].rows.map((row) => [row.person.id, row.month.days]), [["p1", 3], ["p3", 0]]);
+  assert.equal(summary.months[0].totals.days, 5);
+  assert.equal(summary.months[0].totals.pay, 570.1);
+  assert.equal(summary.months[1].totals.otHours, 1.5);
+  assert.equal(summary.months[1].totals.pay, 660.1);
+  assert.equal(summary.totals.days, 8);
+  assert.equal(summary.totals.pay, round2(summary.months.reduce((sum, month) => sum + month.totals.pay, 0)));
+  assert.equal(summary.paidAsOwner, 150.3, "逐月工资不会改变按发放日期统计的区间已发");
+  assert.equal(JSON.stringify(results), before);
+});
+
+test("逐月班组保留零记录月份与同名提示，空册按显式范围返回空月份而不猜测归属", () => {
+  const duplicate = person({ id: "duplicate", name: "张三", team: "新组" });
+  const results = buildQueryResults({ people: [...people, duplicate], attendance, payments, range });
+  const summary = queryTeamResults(results, "新组", range.span);
+  assert.equal(summary.months.length, 2);
+  assert.equal(summary.ambiguousCount, 2);
+  for (const month of summary.months) {
+    assert.equal(month.rows.length, 2);
+    assert.ok(month.rows.every((row) => row.ambiguous));
+    assert.equal(month.totals.days, 0);
+    assert.equal(month.totals.pay, 0);
+  }
+  const noRows = buildQueryResults({ people, attendance: [], payments: [], range });
+  assert.ok(queryTeamResults(noRows, "新组", range.span).months.every((month) => month.rows.length === 1 && month.totals.days === 0));
+  assert.ok(queryTeamResults([], "新组", range.span).months.every((month) => !month.rows.length && month.totals.pay === 0));
+});

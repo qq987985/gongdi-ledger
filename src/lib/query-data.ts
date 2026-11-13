@@ -127,16 +127,26 @@ export function buildQueryResults(args: {
   });
 }
 
-export function queryTeamResults(results: QueryPersonResult[], team: string) {
+export function queryTeamResults(results: QueryPersonResult[], team: string, span: QueryMonthRef[] = results.find((row) => row.months.length)?.months || []) {
   const members = results.filter((row) => inBucket(row.person.team, team));
   const totals = sumTotals(members.map((row) => row.totals));
   const paidAsOwner = round2(members.reduce((sum, row) => sum + row.paidAsOwner, 0));
+  const months = span.map(({ year, month }) => {
+    const rows = members.map((row) => ({
+      person: row.person,
+      ambiguous: row.ambiguous,
+      month: row.months.find((item) => item.year === year && item.month === month)
+        || { year, month, ...emptyTotals(), remark: "", hasContent: false },
+    }));
+    return { year, month, rows, totals: sumTotals(rows.map((row) => row.month)) };
+  });
   return {
-    members, totals, paidAsOwner,
+    members, months, totals, paidAsOwner,
     difference: round2(totals.pay - paidAsOwner),
     ambiguousCount: members.filter((row) => row.ambiguous).length,
   };
 }
+export type QueryTeamMonth = ReturnType<typeof queryTeamResults>["months"][number];
 
 /** 打印范围每次由当前班组重新约束，不能携带前一班组的勾选。 */
 export function queryPrintResults(results: QueryPersonResult[], ids: string[], team?: string): QueryPersonResult[] {

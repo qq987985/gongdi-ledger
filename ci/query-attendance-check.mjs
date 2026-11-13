@@ -215,6 +215,17 @@ try {
   assert.ok(pages.length > 1);
   assert.ok(pages.every((p) => clean(p.lines.map((l) => l.text).join("")).includes("长表班组")), "跨页重复班组抬头");
   assert.equal((clean(pages.flatMap((p) => p.lines.map((l) => l.text)).join("")).match(/班组合计/g) || []).length, 1);
+  await page.goto("/query", { waitUntil: "networkidle" });
+  await range();
+  await page.getByLabel("查询方式", { exact: true }).selectOption("team");
+  await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
+  await print();
+  const queryPages = await pdf("team-month-wage-multipage", ["长表班组", "测试工友01", "测试工友60", "本月小计", "区间合计", "6,600.00"], ["身份证", "银行卡"]);
+  assert.ok(queryPages.length > 1);
+  const queryText = clean(queryPages.flatMap((p) => p.lines.map((line) => line.text)).join(""));
+  assert.equal((queryText.match(/本月小计/g) || []).length, 1);
+  assert.equal((queryText.match(/区间合计/g) || []).length, 1);
+  assert.ok(queryPages.every((p) => clean(p.lines.map((line) => line.text).join("")).includes("长表班组")), "班组查询续页也须有抬头");
   await page.goto("about:blank");
   const created = await ctx.request.post("/api/auth", { data: { op: "createBook", name: "合成空册验证" } });
   assert.equal(created.status(), 200);
@@ -276,9 +287,46 @@ try {
   assert.equal(writes, 0, "查询与打印不能写台账");
   await readonly.close();
   report.push({ scenario: "readonly-query-print-no-write", passed: true });
+  // 用户核对场景：不同月份必须能分别看数，不能只给一行区间总数。
+  const monthlySample = { ...sample, attendance: [...attendance, { ...attendance[0], id: "q-january", year: 2026, month: 1, days: 7, otHours: 3, remark: "一月核对记录" }] };
+  await load(monthlySample);
+  await range(2025, 12, 2026, 1);
+  await page.getByLabel("查询方式", { exact: true }).selectOption("team");
+  await page.getByLabel("查询班组", { exact: true }).selectOption("乙组");
+  const december = page.getByRole("region", { name: "2025年12月班组明细", exact: true });
+  const january = page.getByRole("region", { name: "2026年1月班组明细", exact: true });
+  assert.equal(await december.locator("tfoot td").nth(1).textContent(), "2");
+  assert.equal(await january.locator("tfoot td").nth(1).textContent(), "7");
+  assert.equal(await january.locator("tfoot td").nth(2).textContent(), "3");
+  assert.equal(await page.getByRole("region", { name: "班组查询汇总", exact: true }).locator("tbody tr").last().locator("td").nth(1).textContent(), "9");
+  text = await print(); attendanceOnly(text);
+  assert.equal(await page.locator(".print-only [data-query-month]").count(), 2);
+  await pdf("team-months-attendance", ["2025年12月", "2026年1月", "本月小计", "区间合计", "一月核对记录"], ["应发", "工资", "身份证"]);
+  await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
+  assert.equal(await december.locator("tfoot td").nth(6).textContent(), "200.00");
+  assert.equal(await january.locator("tfoot td").nth(6).textContent(), "760.00");
+  await print();
+  await pdf("team-months-wage", ["2025年12月", "2026年1月", "200.00", "760.00", "960.00", "本月小计", "区间合计"], ["身份证", "银行卡"]);
+  await range(2025, 12, 2026, 2);
+  const february = page.getByRole("region", { name: "2026年2月班组明细", exact: true });
+  assert.equal(await february.locator("tfoot td").nth(1).textContent(), "0", "无考勤月份也必须有明确零值");
+  for (const width of [1440, 375, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `逐月 ${width}px 页面溢出`);
+    assert.ok(await december.isVisible());
+    await january.scrollIntoViewIfNeeded();
+    const monthBox = await january.boundingBox();
+    assert.ok(monthBox && monthBox.y >= 0 && monthBox.y + monthBox.height <= 825, `逐月 ${width}px 月表可滚动到导航上方`);
+    await page.screenshot({ path: `${out}/query-months-${width}.png` });
+    const summaryRegion = page.getByRole("region", { name: "班组查询汇总", exact: true });
+    await summaryRegion.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${out}/query-months-summary-${width}.png` });
+  }
+  report.push({ scenario: "per-month-values-subtotals-range-and-empty-month", passed: true });
   assert.deepEqual(errors, []);
   await mkdir("output/pdf", { recursive: true });
   await copyFile(`${out}/team-attendance.pdf`, "output/pdf/班组考勤核对样例.pdf");
+  await copyFile(`${out}/team-months-attendance.pdf`, "output/pdf/班组逐月考勤核对样例.pdf");
   await writeFile(`${out}/result.json`, JSON.stringify({ pdf: report, screenWidths: [1440, 375, 390], runtimeErrors: errors.length }, null, 2));
   console.log(JSON.stringify({ pdf: report, screenWidths: [1440, 375, 390], runtimeErrors: errors.length }, null, 2));
 } finally { await browser.close(); }

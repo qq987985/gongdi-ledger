@@ -270,7 +270,7 @@ function QueryPage() {
   const teams = groupBuckets(people.map((person) => person.team), "未分班组");
   const activeTeam = teams.some((bucket) => bucket.value === team) ? team : teams[0]?.value ?? "";
   const teamLabel = teams.find((bucket) => bucket.value === activeTeam)?.label || "未分班组";
-  const teamSummary = React.useMemo(() => queryTeamResults(results, activeTeam), [results, activeTeam]);
+  const teamSummary = React.useMemo(() => queryTeamResults(results, activeTeam, range.span), [results, activeTeam, range.span]);
   const printablePeople = scope === "team" ? teamSummary.members : results;
   const printableSelection = queryPrintResults(results, printIds, scope === "team" ? activeTeam : undefined);
   const slips = React.useMemo(() => buildQuerySlips(printableSelection), [printableSelection]);

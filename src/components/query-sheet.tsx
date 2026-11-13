@@ -1,5 +1,6 @@
 import { QUERY_TEAM_ATTENDANCE_COLS, QUERY_PERSON_ATTENDANCE_COLS, QUERY_TEAM_WAGE_COLS, QUERY_PERSON_WAGE_COLS } from "~/lib/print-cols";
 import { money } from "~/lib/utils";
+import { QueryMonthTable } from "~/components/query-month-table";
 import type { QueryContent, QueryPersonResult, queryTeamResults } from "~/lib/query-data";
 
 const TD = "border border-black px-1 py-1";
@@ -21,12 +22,15 @@ export function QuerySheet({ content, label, paymentLabel, person, team, teamLab
   const totals = team?.totals || person!.totals;
   return (
     <div className="print-only text-black">
+      {team ? team.months.map((month) => <article key={`${month.year}-${month.month}`} className="query-result-sheet print-doc mb-4">
+        <QueryMonthTable month={month} content={content} teamLabel={teamLabel} print />
+      </article>) : null}
       <article className="query-result-sheet print-doc">
         <table className="w-full table-fixed border-collapse text-sm">
           <colgroup>{widths.map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
           <thead>
             <tr><th className={`${TD} text-left`} colSpan={columns}>
-              <div className="text-base font-semibold">{team ? teamLabel : person!.person.name} · {wage ? "工资核对清单" : "考勤核对清单"}</div>
+              <div className="text-base font-semibold">{team ? teamLabel : person!.person.name} · {wage ? "工资核对清单" : "考勤核对清单"}{team ? " · 区间汇总" : ""}</div>
               <div className="mt-1 font-normal">考勤：{label}（按整月统计）{wage ? `；发放：${paymentLabel}（含起止当日）` : ""}</div>
               {team ? <div className="font-normal">按当前人员档案班组，共 {team.members.length} 人。{team.ambiguousCount ? `其中 ${team.ambiguousCount} 人姓名重复，未计入合计，历史记录待核对。` : ""}</div> : <div className="font-normal">班组：{person!.person.team?.trim() || "未分班组"}</div>}
             </th></tr>
@@ -49,7 +53,7 @@ export function QuerySheet({ content, label, paymentLabel, person, team, teamLab
           </tbody>
           <tfoot>
             <tr className="font-medium">
-              <td className={TD}>合计</td><td className={`${TD} query-number`}>{totals.days}</td><td className={`${TD} query-number`}>{totals.otHours}</td>
+              <td className={TD}>区间合计</td><td className={`${TD} query-number`}>{totals.days}</td><td className={`${TD} query-number`}>{totals.otHours}</td>
               {wage ? team ? <><td className={`${TD} query-number`}>{money(totals.pay)}</td><td className={`${TD} query-number`}>{money(team.paidAsOwner)}</td><td className={`${TD} query-number`}>{money(team.difference)}</td></> : <><td className={`${TD} query-number`}>{money(totals.allowance)}</td><td className={`${TD} query-number`}>{money(totals.deduction)}</td><td className={`${TD} query-number`}>{money(totals.ot)}</td><td className={`${TD} query-number`}>{money(totals.pay)}</td></> : null}
               <td className={TD} />
             </tr>
