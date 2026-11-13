@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { personMonths } from "../src/lib/attendance-summary";
+import { personMonths, summarizeYear } from "../src/lib/attendance-summary";
 import { groupBuckets } from "../src/lib/buckets";
 import { round2 } from "../src/lib/wage";
 import { buildQueryResults, buildQuerySlips, queryPrintResults, queryRange, queryTeamResults } from "../src/lib/query-data";
@@ -188,4 +188,27 @@ test("逐月班组保留零记录月份与同名提示，空册按显式范围�
   const noRows = buildQueryResults({ people, attendance: [], payments: [], range });
   assert.ok(queryTeamResults(noRows, "新组", range.span).months.every((month) => month.rows.length === 1 && month.totals.days === 0));
   assert.ok(queryTeamResults([], "新组", range.span).months.every((month) => !month.rows.length && month.totals.pay === 0));
+});
+
+test("特殊名称班组不混入其他人员或代发金额，小数工时各层合计与年度一致", () => {
+  const members = [person({ id: "a", name: "甲", team: "__all__" }), person({ id: "b", name: "乙", team: "其他组" })];
+  const rows = [
+    att({ id: "a1", name: "甲", year: 2026, month: 1, days: 0.1, otHours: 0.1 }),
+    att({ id: "a2", name: "甲", year: 2026, month: 1, days: 0.2, otHours: 0.2 }),
+    att({ id: "b1", name: "乙", year: 2026, month: 1, days: 2, otHours: 3 }),
+  ];
+  const values = buildQueryResults({ people: members, attendance: rows, payments: [pay({ id: "paid-a", owner: "甲", date: "2026-01-02", amount: 100 }), pay({ id: "paid-b", owner: "乙", date: "2026-01-02", amount: 40 })], range });
+  const selected = groupBuckets(members.map((p) => p.team), "未分班组").find((bucket) => bucket.label === "__all__")!.value;
+  const summary = queryTeamResults(values, selected, range.span);
+  assert.deepEqual(summary.members.map((row) => row.person.name), ["甲"]);
+  assert.equal(summary.paidAsOwner, 100);
+  assert.equal(summary.totals.days, 0.3);
+  assert.equal(summary.months[1].totals.otHours, 0.3);
+  assert.equal(values[0].months[1].days, 0.3);
+  assert.equal(personMonths(members[0], rows, 2026)[0].days, 0.3);
+  const crossMonth = rows.slice(0, 2).map((row, index) => ({ ...row, month: index + 1 }));
+  const annual = summarizeYear({ people: members, attendance: crossMonth, payments: [], year: 2026, fallbackYear: 2026 });
+  assert.equal(annual.rows[0].yearDays, 0.3);
+  assert.equal(annual.rows[0].yearOt, 0.3);
+  assert.deepEqual(queryPrintResults(values, ["a", "b"], selected).map((row) => row.person.name), ["甲"]);
 });

@@ -33,7 +33,7 @@
 
 ## 数据和业务红线
 
-- 日期 dates.ts，金额 round2，外部数值 num.ts，工资 wage.ts，年度统计 attendance-summary.ts；不在页面重算。
+- 日期 dates.ts，金额 round2，外部数值与工时求和 num.ts/sumQuantity，工资 wage.ts，年度统计 attendance-summary.ts；不在页面重算。分组选项键不能落盘，原名用 bucketRaw 还原。
 - 已发 isPaid，含代发，代发是已发子集；isPaidSelf 用于工资条本人视角及代发子集判定，不能替代全局已发条件。无日期待发当前年归集、单列。
 - 同实体按 ID 增删改；历史姓名关联用 nameKey/ownerKey/receiverOf。改名用事务，重名不猜测合并。
 - 变模型检查 types/store/nas-sync/excel 四层，另外检查 ledger-schema.server、备份恢复；schema 不是全部业务规则的替代。

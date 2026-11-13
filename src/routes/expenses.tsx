@@ -359,7 +359,7 @@ function ExpensesPage() {
             <select className="field-select w-auto" value={claimant} onChange={(e) => setClaimant(e.target.value)}>
               <option value={ALL_BUCKETS}>全部报销人</option>
               {claimantOpts.map((b) => (
-                <option value={b.value} key={b.value || "__empty__"}>
+                <option value={b.value} key={b.value}>
                   {b.label}
                 </option>
               ))}

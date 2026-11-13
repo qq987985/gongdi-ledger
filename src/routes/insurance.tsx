@@ -25,7 +25,7 @@ import {
 } from "~/lib/insurance";
 import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
-import { ALL_BUCKETS } from "~/lib/buckets";
+import { ALL_BUCKETS, bucketRaw } from "~/lib/buckets";
 import {
   filterMembers,
   groupTotals,
@@ -49,7 +49,7 @@ function policyCaption(policy: Pick<InsurancePolicy, "policyNo" | "name">, leade
   return [
     "团体保险人员清单",
     `${policy.policyNo}${policy.name ? ` · ${policy.name}` : ""}`,
-    leader !== ALL_BUCKETS ? `队长：${leader || "未分班组"}` : "",
+    leader !== ALL_BUCKETS ? `队长：${bucketRaw(leader) || "未分班组"}` : "",
     statusText,
   ]
     .filter(Boolean)
@@ -426,7 +426,7 @@ function InsurancePage() {
                 <select className="field-select h-9 w-auto" value={leader} onChange={(e) => setLeader(e.target.value)} aria-label="按队长筛选">
                   <option value={ALL_BUCKETS}>全部队长</option>
                   {leaders.map((b) => (
-                    <option key={b.value || "__empty__"} value={b.value}>
+                    <option key={b.value} value={b.value}>
                       {b.label}
                     </option>
                   ))}

@@ -140,7 +140,7 @@ function AttendancePage() {
             saveAttendanceMonth(year, month, rows);
             toast.success("本月考勤已保存");
           }}
-          key={`${year}-${month}-${people.length}-${lastIdentity.current || "pending"}`}
+          key={`${year}-${month}-${lastIdentity.current || "pending"}`}
         />
         </div>
         {/* 打印件必须渲染在 no-print 包裹**之外**：屏幕态隐藏（.print-only），只在打印时出现 */}
@@ -459,7 +459,16 @@ function MonthTable({
       remark: a.remark ?? "",
     }));
   const [rows, setRows] = React.useState<MonthRow[]>(() => initialRows);
-  const dirty = JSON.stringify(rows) !== JSON.stringify(initialRows);
+  const sourceSnapshot = JSON.stringify(initialRows);
+  const previousSource = React.useRef(sourceSnapshot);
+  React.useEffect(() => {
+    const previous = previousSource.current;
+    if (previous === sourceSnapshot) return;
+    previousSource.current = sourceSnapshot;
+    // 不按姓名或位置猜测合并；仅整表未编辑时刷新，脏月表完整保留。
+    setRows((current) => JSON.stringify(current) === previous ? JSON.parse(sourceSnapshot) as MonthRow[] : current);
+  }, [sourceSnapshot]);
+  const dirty = JSON.stringify(rows) !== sourceSnapshot;
   React.useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);

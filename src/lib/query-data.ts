@@ -3,6 +3,7 @@ import { inBucket } from "./buckets";
 import { isPaid, isPaidSelf, nameKey, ownerKey, receiverOf } from "./payments-stats";
 import { getWageAt, monthPay, round2, type MonthPayResult } from "./wage";
 import { hasContent } from "./work";
+import { sumQuantity } from "./num";
 import type { AttendanceRow, Payment, Person } from "./types";
 
 export type QueryContent = "attendance" | "wage";
@@ -60,6 +61,8 @@ function sumTotals(rows: QueryTotals[]): QueryTotals {
     for (const field of Object.keys(sum) as (keyof QueryTotals)[]) sum[field] += row[field];
     return sum;
   }, emptyTotals());
+  out.days = sumQuantity(rows.map((row) => row.days));
+  out.otHours = sumQuantity(rows.map((row) => row.otHours));
   for (const field of ["base", "ot", "meal", "allowance", "deduction", "pay"] as const) out[field] = round2(out[field]);
   return out;
 }

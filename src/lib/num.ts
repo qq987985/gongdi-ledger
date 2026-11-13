@@ -66,3 +66,23 @@ export function numOrWarn(v: unknown, d: number, what: string): number {
 export function parseNumber(v: unknown): number {
   return numOr(v, 0);
 }
+
+/** 工天/小时按输入数字的十进制值求和，不截小数位、不改金额舍入规则。 */
+export function sumQuantity(values: Iterable<number>): number {
+  let total = 0n;
+  let scale = 0;
+  for (const value of values) {
+    if (!Number.isFinite(value)) continue;
+    const [coefficient, exponent = "0"] = String(value).split("e");
+    const decimals = coefficient.split(".")[1]?.length || 0;
+    const shift = decimals - Number(exponent);
+    const nextScale = Math.max(0, shift);
+    let units = BigInt(coefficient.replace(".", "")) * 10n ** BigInt(Math.max(0, -shift));
+    if (nextScale > scale) {
+      total *= 10n ** BigInt(nextScale - scale);
+      scale = nextScale;
+    } else units *= 10n ** BigInt(scale - nextScale);
+    total += units;
+  }
+  return total === 0n ? 0 : Number(`${total}e-${scale}`);
+}

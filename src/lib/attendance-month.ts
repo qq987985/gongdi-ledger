@@ -12,8 +12,8 @@
  * 合计 == 各行相加（不许出现两套口径）。
  */
 import { round2 } from "./wage";
-import { ALL_BUCKETS, groupBuckets, inBucket } from "./buckets";
-import { numOr } from "./num";
+import { ALL_BUCKETS, bucketRaw, groupBuckets, inBucket } from "./buckets";
+import { numOr, sumQuantity } from "./num";
 import type { YearPersonRow } from "./attendance-summary";
 
 /** 月表页脚 / 打印表尾的合计（人数、工天、加班费、餐补、补助、扣款、应发） */
@@ -46,7 +46,7 @@ export function monthTotals(rows: readonly MonthTotalRow[]): MonthTotals {
   const sum = (pick: (r: MonthTotalRow) => number) => round2(rows.reduce((s, r) => s + (pick(r) || 0), 0));
   return {
     people: rows.length,
-    days: sum((r) => r.days),
+    days: sumQuantity(rows.map((r) => numOr(r.days, 0))),
     ot: sum((r) => r.ot),
     meal: sum((r) => r.meal),
     allowance: sum((r) => r.allowance),
@@ -70,14 +70,14 @@ export interface MonthTeamTable {
 }
 export function monthTeamTables(rows: readonly MonthWorkRow[], selectedTeam = ALL_BUCKETS): MonthTeamTable[] {
   return groupBuckets(rows.map((row) => row.team), "未分班组")
-    .filter((bucket) => inBucket(bucket.value, selectedTeam))
+    .filter((bucket) => selectedTeam === ALL_BUCKETS || bucket.value === selectedTeam)
     .map((bucket) => {
       const members = rows.filter((row) => inBucket(row.team, bucket.value));
-      return { team: bucket.value, label: bucket.label,
+      return { team: bucketRaw(bucket.value), label: bucket.label,
         rows: members.map(({ name, team, days, otHours }) => ({ name, team, days, otHours })),
         totals: { people: members.length,
-          days: round2(members.reduce((sum, row) => sum + numOr(row.days, 0), 0)),
-          otHours: round2(members.reduce((sum, row) => sum + numOr(row.otHours, 0), 0)) } };
+          days: sumQuantity(members.map((row) => numOr(row.days, 0))),
+          otHours: sumQuantity(members.map((row) => numOr(row.otHours, 0))) } };
     });
 }
 

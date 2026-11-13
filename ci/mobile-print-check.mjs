@@ -419,9 +419,11 @@ const VIEWPORTS = [
 const PROBE = `(() => {
   const vw = window.innerWidth, vh = window.innerHeight;
   const out = { vw, vh, docScrollW: document.documentElement.scrollWidth, overflow: [], deadButtons: [], tables: [], modals: [] };
-  window.scrollTo(9999, 0);
+  const previousX = window.scrollX, previousY = window.scrollY;
+  window.scrollTo(9999, previousY);
   out.maxScrollX = window.scrollX;
-  window.scrollTo(0, 0);
+  window.scrollTo(previousX, previousY);
+  const buttons = [...document.querySelectorAll('button, a[href]')];
   const scrollable = (el) => {
     let n = el;
     while (n && n !== document.body) {
@@ -450,13 +452,14 @@ const PROBE = `(() => {
     }
     // 点不到的按钮：只查**当前视口内**的元素（视口外的不该被 clamp 成「被底栏遮挡」）
     if (el.tagName === 'BUTTON' || (el.tagName === 'A' && el.getAttribute('href'))) {
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
       const r2 = el.getBoundingClientRect();
       if (r2.top < 0 || r2.bottom > vh) continue;
       if (r2.width < 4 || r2.height < 4) { out.deadButtons.push({ ...desc(el), why: '尺寸为 0' }); continue; }
       const hit = document.elementFromPoint(r2.left + r2.width / 2, r2.top + r2.height / 2);
       if (!hit) continue;
-      if (!(el === hit || el.contains(hit) || hit.contains(el)))
-        out.deadButtons.push({ ...desc(el), why: '被遮挡', by: hit.tagName.toLowerCase() + '.' + String(hit.className).slice(0, 26) });
+      if (!(el === hit || el.contains(hit)))
+        out.deadButtons.push({ ...desc(el), index: buttons.indexOf(el), why: '被遮挡', by: hit.tagName.toLowerCase() + '.' + String(hit.className).slice(0, 26) });
     }
   }
   for (const el of document.querySelectorAll('[role="dialog"], #contract-editor')) {
@@ -465,10 +468,56 @@ const PROBE = `(() => {
   }
   const seen = new Set();
   out.overflow = out.overflow.filter((o) => { const k = o.tag + o.cls + o.right; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6);
-  out.deadButtons = out.deadButtons.filter((o, i, a) => a.findIndex((x) => x.text === o.text && x.cls === o.cls) === i).slice(0, 6);
-  out.deadButtons = out.deadButtons.slice(0, 6);
   return out;
 })()`;
+
+/** 首屏被固定底栏暂时覆盖不等于不可达；实际滚到按钮后仍点不到才报错。 */
+async function unreachableButtons(page, candidates) {
+  const scroll = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
+  const unreachable = [];
+  try {
+    for (const candidate of candidates) {
+      if (candidate.index === undefined) { unreachable.push(candidate); continue; }
+      const button = page.locator('button, a[href]').nth(candidate.index);
+      await button.evaluate((el) => el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }));
+      const reachable = await button.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return Boolean(hit && (hit === el || el.contains(hit)));
+      });
+      if (!reachable) unreachable.push(candidate);
+    }
+  } finally { await page.evaluate(({ x, y }) => window.scrollTo(x, y), scroll); }
+  return unreachable;
+}
+
+async function mobileProbeSelfCheck(browser) {
+  const context = await browser.newContext({ viewport: { width: 375, height: 667 } });
+  try {
+    const page = await context.newPage();
+    const fixture = '<style>body{margin:0;height:1400px}button{position:absolute;top:600px;left:20px;height:40px}nav{position:fixed;bottom:0;height:70px;width:100%;background:white;z-index:99}</style><button>测试按钮</button><nav></nav>';
+    await page.setContent(fixture);
+    let probe = await page.evaluate(PROBE);
+    if (probe.deadButtons.length !== 1 || (await unreachableButtons(page, probe.deadButtons)).length) throw Error("手机探针未识别可滚动恢复的按钮");
+    await page.setContent(fixture + '<div style="position:fixed;inset:0;background:white;z-index:500"></div>');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    probe = await page.evaluate(PROBE);
+    if ((await unreachableButtons(page, probe.deadButtons)).length !== 1) throw Error("手机探针未识别永久遮挡坏样本");
+    await page.evaluate(() => window.scrollTo(0, 700));
+    const before = await page.evaluate(() => scrollY);
+    await page.evaluate(PROBE);
+    if (await page.evaluate(() => scrollY) !== before) throw Error("手机探针改变了受检滚动位置");
+    await page.setContent(fixture.replace('height:40px', 'height:20px') + '<button style="top:630px">测试按钮</button><div style="position:absolute;top:630px;left:20px;width:120px;height:20px;background:white;z-index:500"></div>');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    probe = await page.evaluate(PROBE);
+    const mixed = await unreachableButtons(page, probe.deadButtons);
+    if (probe.deadButtons.length !== 2 || mixed.length !== 1 || mixed[0].index !== 1) throw Error("手机探针提前丢弃了同名永久遮挡按钮");
+    await page.setContent('<button style="pointer-events:none">测试按钮</button>');
+    probe = await page.evaluate(PROBE);
+    if ((await unreachableButtons(page, probe.deadButtons)).length !== 1) throw Error("手机探针把命中祖先误当成按钮可达");
+    console.log("OK  手机探针自检：可恢复/永久遮挡与滚动位置");
+  } finally { await context.close(); }
+}
 
 /** 等应用把台账拉下来（首屏有「加载中…」占位），最多 8 秒 */
 async function waitReady(page) {
@@ -483,6 +532,7 @@ async function waitReady(page) {
 async function mobile() {
   const b = await browser();
   const problems = [];
+  await mobileProbeSelfCheck(b);
   const outDir = "browser-screenshots/mobile";
   await mkdir(outDir, { recursive: true });
   const onlyModals = process.argv.includes("--modals");
@@ -493,25 +543,28 @@ async function mobile() {
     for (const [route, name] of ROUTES) {
       await page.goto(BASE + route, { waitUntil: "networkidle" });
       await waitReady(page);
+      await page.evaluate(() => window.scrollTo(0, 0));
       const file = `${outDir}/${w}x${h}-${name}.png`;
       await page.screenshot({ path: file, fullPage: true });
       const issues = [];
-      const check = (probe, where) => {
+      const check = async (probe, where) => {
         if (probe.maxScrollX > 0)
           issues.push(`${where} 页面能真的横向滚动 maxScrollX=${probe.maxScrollX}（docScrollW=${probe.docScrollW} vw=${probe.vw}）`);
         if (probe.overflow.length) issues.push(`${where} 元素超出右边界: ${JSON.stringify(probe.overflow)}`);
-        if (probe.deadButtons.length) issues.push(`${where} 按钮被遮挡: ${JSON.stringify(probe.deadButtons)}`);
+        const blocked = await unreachableButtons(page, probe.deadButtons);
+        if (blocked.length) issues.push(`${where} 滚动后按钮仍被遮挡（${blocked.length} 个）: ${JSON.stringify(blocked.slice(0, 6))}`);
         if (probe.tables.length) issues.push(`${where} 表格不可滑: ${JSON.stringify(probe.tables)}`);
         for (const m of probe.modals) if (!m.fitsW) issues.push(`${where} 弹窗超出屏幕宽: ${JSON.stringify(m)}`);
       };
-      check(await page.evaluate(PROBE), "首屏");
+      await check(await page.evaluate(PROBE), "首屏");
       // 再滚到底看一遍：最后一行会不会被底部 fixed 导航永久压住
       await page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)");
       await page.waitForTimeout(250);
       const bottom = await page.evaluate(PROBE);
       await page.screenshot({ path: file.replace(/\.png$/, "-底部.png"), fullPage: true });
       if (bottom.maxScrollX > 0) issues.push("滚到底 页面能真的横向滚动");
-      if (bottom.deadButtons.length) issues.push(`滚到底 按钮被遮挡: ${JSON.stringify(bottom.deadButtons)}`);
+      const blockedAtBottom = await unreachableButtons(page, bottom.deadButtons);
+      if (blockedAtBottom.length) issues.push(`滚到底 按钮被遮挡（${blockedAtBottom.length} 个）: ${JSON.stringify(blockedAtBottom.slice(0, 6))}`);
       if (bottom.tables.length) issues.push(`滚到底 表格不可滑: ${JSON.stringify(bottom.tables)}`);
       if (issues.length) problems.push({ route: name, size: `${w}x${h}`, issues, shot: file });
       else console.log(`OK  ${w}x${h} ${name}`);
@@ -592,6 +645,7 @@ async function mobile() {
   await b.close();
   console.log("\n=== 移动端问题清单 ===");
   console.log(JSON.stringify(problems, null, 1));
+  if (problems.length) process.exitCode = 1;
 }
 
 /**

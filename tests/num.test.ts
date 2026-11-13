@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
-import { numOr, numOrWarn, parseNum, parseNumber } from "../src/lib/num";
+import { numOr, numOrWarn, parseNum, parseNumber, sumQuantity } from "../src/lib/num";
 // Excel barrel 仍导出 parseNumber（1.7.13 起的导入路径不许变）
 import { parseAttendanceSheet, parseContractWorkbook, parseNumber as parseNumberViaExcel } from "../src/lib/excel";
 import { normalizeEntry, splitLegacyReceipts } from "../src/lib/contracts";
@@ -20,6 +20,20 @@ import type { ContractEntry } from "../src/lib/contracts";
  * 这里如实模拟这种「外部输入」，而不是把类型改松。
  */
 const rawField = (v: unknown) => v as number;
+
+test("工天/小时十进制合计去除浮点尾数，保留输入精度、指数和抵消结果", () => {
+  assert.equal(sumQuantity([0.1, 0.2]), 0.3);
+  assert.equal(sumQuantity(Array.from({ length: 1000 }, () => 0.1)), 100);
+  assert.equal(sumQuantity([0.12345678901234566, 0]), 0.12345678901234566);
+  assert.equal(sumQuantity([0.00123, 0.00004]), 0.00127);
+  assert.equal(sumQuantity([1e-7, 2e-7]), 3e-7);
+  assert.equal(sumQuantity([1e20, 0.1, -1e20]), 0.1);
+  assert.equal(sumQuantity([1e308, -1e308, 1e-308]), 1e-308);
+  assert.equal(sumQuantity([5e-324, 5e-324]), 1e-323);
+  assert.equal(sumQuantity([0.3, -0.1, -0.2]), 0);
+  assert.equal(Object.is(sumQuantity([-0]), -0), false);
+  assert.equal(sumQuantity([]), 0);
+});
 
 test("parseNum：number 直通；NaN/Infinity 读不出来", () => {
   assert.equal(parseNum(0), 0);

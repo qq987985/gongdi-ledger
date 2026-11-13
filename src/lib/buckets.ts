@@ -16,8 +16,20 @@
 
 /** 「全部」选项的固定 value（空值桶要用空串，不能兼任「全部」） */
 export const ALL_BUCKETS = "__all__";
+const BUCKET_ESCAPE = "__bucket__:";
+
+/** 下拉选项键。保留常规值，转义真实的保留名称及前缀，避免「全部」与业务值冲突。 */
+export function bucketValue(value: string): string {
+  return value === ALL_BUCKETS || value.startsWith(BUCKET_ESCAPE) ? BUCKET_ESCAPE + value : value;
+}
+
+/** 选项键还原为业务原值；显示或落盘前调用，不能把选项编码存入台账。 */
+export function bucketRaw(value: string): string {
+  return value.startsWith(BUCKET_ESCAPE) ? value.slice(BUCKET_ESCAPE.length) : value;
+}
 
 export interface Bucket {
+  /** 筛选选项键，不是可直接落盘的业务值；原值用 bucketRaw(value) 还原。 */
   value: string;
   label: string;
   /** 该桶是否为「未填」桶 */
@@ -42,7 +54,7 @@ export function groupBuckets(
   }
   const out: Bucket[] = [...seen]
     .sort((a, b) => a.localeCompare(b, "zh"))
-    .map((value) => ({ value, label: value, empty: false }));
+    .map((value) => ({ value: bucketValue(value), label: value, empty: false }));
   if (hasEmpty) out.push({ value: "", label: emptyLabel, empty: true });
   return out;
 }
@@ -50,5 +62,5 @@ export function groupBuckets(
 /** 某行的字段值是否落在选中的桶里（`ALL_BUCKETS` = 不过滤） */
 export function inBucket(value: string | null | undefined, bucket: string): boolean {
   if (bucket === ALL_BUCKETS) return true;
-  return String(value ?? "").trim() === bucket;
+  return String(value ?? "").trim() === bucketRaw(bucket);
 }

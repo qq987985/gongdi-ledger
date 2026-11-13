@@ -17,7 +17,7 @@ await ctx.addInitScript(() => {
   window.print = () => { window.__printCount++; window.__printSnapshot = [...document.querySelectorAll(".print-only")].map((el) => el.textContent).join("\n"); };
 });
 const page = await ctx.newPage();
-const out = "browser-screenshots/query-attendance-20261113";
+const out = process.env.E2E_OUTPUT_DIR || "browser-screenshots/query-attendance-20261113";
 await mkdir(out, { recursive: true });
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
@@ -177,6 +177,23 @@ try {
   text = await print("按班组打印考勤");
   assert.ok(text.includes(names[0]) && text.includes("刷新组") && !text.includes(names[2]));
   text = await print("打印月表"); assert.ok(text.includes("2,300.00"), "同册工资变更须重新发布月表");
+  const localDays = page.locator(".no-print tbody tr").filter({ hasText: names[0] }).first().locator('input[type="number"]').first();
+  await localDays.fill("21.5");
+  const refreshedPeople = people.map((p, i) => i ? p : { ...p, team: "刷新组", dailyWage: 110 });
+  const extraPerson = { ...people[0], id: "q-new", name: "无关新增人员", team: "旁组" };
+  await put({ ...refreshSample, people: [...refreshedPeople, extraPerson] });
+  await page.evaluate(() => window.__pullLedger({ discardLocal: true }));
+  assert.equal(await localDays.inputValue(), "21.5", "同册增加无关人员不能丢失月表编辑");
+  await put({ ...refreshSample, people: refreshedPeople });
+  await page.evaluate(() => window.__pullLedger({ discardLocal: true }));
+  assert.equal(await localDays.inputValue(), "21.5", "同册减少人员也不能丢失月表编辑");
+  const saved = page.waitForResponse((response) => response.url().endsWith("/api/ledger") && response.request().method() === "PUT" && response.status() === 200);
+  await page.getByRole("button", { name: "保存本月", exact: true }).click();
+  await saved;
+  const changedRows = refreshSample.attendance.map((row) => row.id === "q-a0" ? { ...row, days: 20.5 } : row);
+  await put({ ...refreshSample, people: [...refreshedPeople, extraPerson], attendance: changedRows });
+  await page.evaluate(() => window.__pullLedger({ discardLocal: true }));
+  assert.equal(await localDays.inputValue(), "20.5", "未编辑月表应接纳服务器的新数据");
   let release;
   const blocked = new Promise((resolve) => { release = resolve; });
   let requestStarted;
@@ -323,10 +340,58 @@ try {
     await page.screenshot({ path: `${out}/query-months-summary-${width}.png` });
   }
   report.push({ scenario: "per-month-values-subtotals-range-and-empty-month", passed: true });
+  const specialPeople = people.map((p, i) => ({ ...p, team: ["__all__", "普通组", "__bucket__:__all__", ""][i] }));
+  const specialRows = [
+    { ...attendance[0], id: "fraction-a", team: "__all__", days: 0.1, otHours: 0.1 },
+    { ...attendance[0], id: "fraction-b", team: "__all__", days: 0.2, otHours: 0.2 },
+    { ...attendance[1], team: "普通组", days: 1, otHours: 2 },
+    { ...attendance[2], team: "__bucket__:__all__", days: 1, otHours: 1 },
+  ];
+  const specialPays = [
+    { ...payments[0], id: "special-paid-a", source: "__all__", amount: 100 },
+    { ...payments[0], id: "special-paid-b", owner: names[1], receiver: names[1], source: "其他发放方", amount: 40 },
+  ];
+  await load({ ...sample, people: specialPeople, attendance: specialRows, payments: specialPays });
+  await range();
+  await page.getByLabel("查询方式", { exact: true }).selectOption("team");
+  await page.getByLabel("查询班组", { exact: true }).selectOption({ label: "__all__" });
+  const specialMonth = page.getByRole("region", { name: "2026年11月班组明细", exact: true });
+  assert.equal(await specialMonth.locator("tfoot td").nth(1).textContent(), "0.3");
+  assert.equal(await specialMonth.locator("tfoot td").nth(2).textContent(), "0.3");
+  text = await print(); attendanceOnly(text);
+  assert.ok(text.includes(names[0]) && !text.includes(names[1]) && !text.includes(names[2]));
+  await pdf("reserved-team-fractions", ["__all__", names[0], "0.3", "区间合计"], [names[1], names[2], "0.300000", "__bucket__:", "工资"]);
+  await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
+  text = await print();
+  assert.ok(text.includes("100.00") && !text.includes("140.00"), "特殊班组已发不能混入其他组");
+  await page.getByLabel("查询班组", { exact: true }).selectOption({ label: "__bucket__:__all__" });
+  text = await print(); assert.ok(text.includes(names[2]) && !text.includes(names[0]));
+  await page.goto("/attendance", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /^11月/ }).first().click();
+  await page.getByLabel("打印班组", { exact: true }).selectOption({ label: "__all__" });
+  text = await print("按班组打印考勤");
+  assert.ok(text.includes(names[0]) && !text.includes(names[1]) && text.includes("0.3"));
+  await page.goto("/people", { waitUntil: "networkidle" });
+  await page.getByLabel("人员班组筛选", { exact: true }).selectOption({ label: "__all__" });
+  text = await print("打印人员名单");
+  assert.ok(text.includes(names[0]) && !text.includes(names[1]) && !text.includes("__bucket__:"));
+  await page.goto("/payments", { waitUntil: "networkidle" });
+  await page.getByLabel("发放方筛选", { exact: true }).selectOption({ label: "__all__" });
+  const detailButton = page.getByRole("button", { name: /^打印明细/ }).first();
+  text = await print(await detailButton.innerText());
+  assert.ok(text.includes("__all__") && !text.includes("__bucket__:") && !text.includes(names[1]));
+  await page.getByRole("button", { name: "按应发生成待发放", exact: true }).click();
+  const generated = page.waitForResponse((response) => response.url().endsWith("/api/ledger") && response.request().method() === "PUT" && response.status() === 200);
+  await page.getByRole("button", { name: /^确认生成 \d+ 笔$/ }).click();
+  await generated;
+  const pending = (await (await ctx.request.get("/api/ledger")).json()).payments.filter((payment) => !payment.date);
+  assert.ok(pending.length > 0 && pending.every((payment) => payment.source === "__all__"), "生成待发放必须保存原始发放方，不能落盘选项编码");
+  report.push({ scenario: "reserved-buckets-fractional-quantities-and-original-source-save", passed: true });
   assert.deepEqual(errors, []);
   await mkdir("output/pdf", { recursive: true });
   await copyFile(`${out}/team-attendance.pdf`, "output/pdf/班组考勤核对样例.pdf");
   await copyFile(`${out}/team-months-attendance.pdf`, "output/pdf/班组逐月考勤核对样例.pdf");
+  await copyFile(`${out}/reserved-team-fractions.pdf`, "output/pdf/查询复核样例-20261114.pdf");
   await writeFile(`${out}/result.json`, JSON.stringify({ pdf: report, screenWidths: [1440, 375, 390], runtimeErrors: errors.length }, null, 2));
   console.log(JSON.stringify({ pdf: report, screenWidths: [1440, 375, 390], runtimeErrors: errors.length }, null, 2));
 } finally { await browser.close(); }

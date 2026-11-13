@@ -20,7 +20,7 @@ import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
 import { confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { useGuardedClose } from "~/lib/confirm-close";
-import { ALL_BUCKETS, groupBuckets } from "~/lib/buckets";
+import { ALL_BUCKETS, bucketRaw, groupBuckets, inBucket } from "~/lib/buckets";
 import { useApp } from "~/lib/store";
 import type { Person, WageHistory } from "~/lib/types";
 
@@ -84,7 +84,7 @@ function PeoplePage() {
   // 以前 filter(Boolean) 把这一桶删掉，这些人在「按班组筛选」里选不到）
   const teams = React.useMemo(() => groupBuckets(people.map((p) => p.team), "未分班组"), [people]);
   const filtered = people.filter((p) => {
-    if (team !== ALL_BUCKETS && String(p.team ?? "").trim() !== team) return false;
+    if (!inBucket(p.team, team)) return false;
     if (!q.trim()) return true;
     const s = q.trim();
     return [p.name, p.team, p.idCard, p.phone, p.personNo].some((x) => String(x).includes(s));
@@ -93,7 +93,7 @@ function PeoplePage() {
   const pageRows = pager.rows;
   // 打印人员名单的抬头要写清「这一份印的是哪一批人」：当前筛选条件 + 人数（与屏幕上「共 N 条」同值）。
   // 名单直接取筛选中的人员（不是当前这一页）—— 贴墙/交财务要的是整份名单，跟发放页打印全筛选结果同一口径。
-  const rosterFilter = [q.trim() ? `搜索「${q.trim()}」` : "", team !== ALL_BUCKETS ? `班组：${team || "未分班组"}` : ""]
+  const rosterFilter = [q.trim() ? `搜索「${q.trim()}」` : "", team !== ALL_BUCKETS ? `班组：${bucketRaw(team) || "未分班组"}` : ""]
     .filter(Boolean)
     .join(" · ") || "全部人员";
   function closeEditor() {
@@ -149,10 +149,10 @@ function PeoplePage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <select className="field-select" value={team} onChange={(e) => setTeam(e.target.value)}>
+          <select aria-label="人员班组筛选" className="field-select" value={team} onChange={(e) => setTeam(e.target.value)}>
             <option value={ALL_BUCKETS}>全部</option>
             {teams.map((b) => (
-              <option key={b.value || "__empty__"} value={b.value}>
+              <option key={b.value} value={b.value}>
                 {b.label}
               </option>
             ))}

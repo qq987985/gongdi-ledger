@@ -15,7 +15,7 @@ import { money, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
 import { useGuardedClose } from "~/lib/confirm-close";
-import { ALL_BUCKETS } from "~/lib/buckets";
+import { ALL_BUCKETS, bucketRaw } from "~/lib/buckets";
 import { round2 } from "~/lib/wage";
 import {
   PROXY_INLINE_LABEL,
@@ -95,7 +95,7 @@ function PaymentsPage() {
   // 以前这里 `.slice(0, 12)`，超过 12 个人就不显示，面板金额之和 < 汇总（用户报的「统计显示不全」）。
   const panel = React.useMemo(() => panelRows(filtered), [filtered]);
   const printOwners = React.useMemo(() => printOwnerBuckets(filtered), [filtered]);
-  const printOwnerLabel = printOwner === ALL_BUCKETS ? "全部实际收款人" : printOwner || "（未填实际收款人）";
+  const printOwnerLabel = printOwner === ALL_BUCKETS ? "全部实际收款人" : bucketRaw(printOwner) || "（未填实际收款人）";
   const detail = React.useMemo(() => detailSections(filtered, printOwner), [filtered, printOwner]);
   const summary = React.useMemo(() => printSummary(filtered, printOwner), [filtered, printOwner]);
   // 打印表尾的「总计」必须与打印出来的行同源：选单人时是该人的合计（已发含代发 + 待发放），不是全部人的
@@ -164,7 +164,7 @@ function PaymentsPage() {
     [people, store.attendance, payments, year, q],
   );
   /** 生成时带上的发放方：跟随当前「发放方」筛选（全部发放方时不填） */
-  const pendingSource = batch === ALL_BUCKETS ? "" : batch;
+  const pendingSource = batch === ALL_BUCKETS ? "" : bucketRaw(batch);
   // 预览弹窗自己吃 Esc（与 components/preview.tsx 同一写法）：
   // 带 data-modal 后，外层编辑弹窗的「有未保存的更改」不会因为一次 Esc 被连带触发（C3）
   React.useEffect(() => {
@@ -262,10 +262,10 @@ function PaymentsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Input className="max-w-xs" placeholder="搜索实际收款人 / 收款人" value={q} onChange={(e) => setQ(e.target.value)} />
-          <select className="field-select w-auto max-w-xs" value={batch} onChange={(e) => setBatch(e.target.value)}>
+          <select aria-label="发放方筛选" className="field-select w-auto max-w-xs" value={batch} onChange={(e) => setBatch(e.target.value)}>
             <option value={ALL_BUCKETS}>全部发放方</option>
             {batches.map((b) => (
-              <option value={b.value} key={b.value || "__empty__"}>
+              <option value={b.value} key={b.value}>
                 {b.label}
               </option>
             ))}
@@ -299,7 +299,7 @@ function PaymentsPage() {
             >
               <option value={ALL_BUCKETS}>全部实际收款人</option>
               {printOwners.map((b) => (
-                <option value={b.value} key={b.value || "__empty__"}>
+                <option value={b.value} key={b.value}>
                   {b.label}
                 </option>
               ))}
@@ -569,7 +569,7 @@ function PaymentsPage() {
         <PaymentSheets
           mode={printMode}
           label={label}
-          filterText={`${batch === ALL_BUCKETS ? "全部发放方" : batch ? `发放方：${batch}` : "发放方：未填发放方"} · ${printOwnerLabel}`}
+          filterText={`${batch === ALL_BUCKETS ? "全部发放方" : batch ? `发放方：${bucketRaw(batch)}` : "发放方：未填发放方"} · ${printOwnerLabel}`}
           sections={detail}
           summary={summary}
           totals={printMode === "detail" ? detailTotal : summaryTotal}

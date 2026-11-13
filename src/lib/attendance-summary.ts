@@ -24,7 +24,8 @@
 import { derivedYears, monthStatus, paymentsInYear, type YearSources } from "./dates";
 import { getWageAt, monthPay, round2 } from "./wage";
 import { hasContent } from "./work";
-import { groupBuckets } from "./buckets";
+import { bucketRaw, groupBuckets } from "./buckets";
+import { sumQuantity } from "./num";
 import { isPaid, isPending, isProxyPaid } from "./payments-stats";
 // 姓名比较键的唯一实现（A-1）：比较**两侧**都要过 nameKey —— 存量数据里「张三 」与「张三」
 // 本来是同一个人的两行（年度表拆行、出勤静默归零），本文件不许再写裸 `a.name === person.name`
@@ -104,7 +105,7 @@ export function personMonths(person: Person, attendance: AttendanceRow[], year: 
     const rows = mine.filter((a) => a.month === month);
     if (!rows.length) return { days: 0, pay: 0, otHours: 0, allowance: 0, deduction: 0 };
     const wage = getWageAt(person, year, month);
-    return rows.reduce<MonthCell>(
+    const total = rows.reduce<MonthCell>(
       (acc, a) => {
         const calc = monthPay(a, wage);
         return {
@@ -117,6 +118,7 @@ export function personMonths(person: Person, attendance: AttendanceRow[], year: 
       },
       { days: 0, pay: 0, otHours: 0, allowance: 0, deduction: 0 },
     );
+    return { ...total, days: sumQuantity(rows.map((row) => row.days || 0)), otHours: sumQuantity(rows.map((row) => row.otHours || 0)) };
   });
 }
 
@@ -166,8 +168,8 @@ export function summarizeYear(args: {
     if (!worked) continue;
     const months = personMonths(person, mine, year);
     const yearPayAmt = months.reduce((s, m) => s + m.pay, 0);
-    const yearDays = months.reduce((s, m) => s + m.days, 0);
-    const yearOt = months.reduce((s, m) => s + m.otHours, 0);
+    const yearDays = sumQuantity(months.map((m) => m.days));
+    const yearOt = sumQuantity(months.map((m) => m.otHours));
     const paid = paidByName.get(key) ?? 0;
     rows.push({
       person,
@@ -276,7 +278,7 @@ export function teamRows(people: Pick<Person, "team">[]): { team: string; count:
   )
     .map((b) => ({
       team: b.label,
-      count: counts.get(b.value) ?? 0,
+      count: counts.get(bucketRaw(b.value)) ?? 0,
     }))
     .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team, "zh"));
 }
