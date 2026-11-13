@@ -66,3 +66,19 @@ test("发放导入上下文：切册失败会解除忙状态但旧预览不复�
   setNasEnabled(false);
   assert.notEqual(sync.ledgerContextSnapshot(), null, "本地模式不能被服务器身份门禁误锁");
 });
+
+test("本地月表编辑器身份：同册再次拉取只作废导入预览，不改变编辑器身份", async (t) => {
+  sync.pauseNasSync();
+  sync.dropLocalLedger("身份测试重置");
+  setNasEnabled(true);
+  sync.resumeNasSync();
+  const before = sync.ledgerIdentitySnapshot();
+  const contextBefore = sync.ledgerContextSnapshot();
+  assert.notEqual(before, null);
+  t.mock.method(globalThis, "fetch", async () => Response.json({ empty: true }));
+  await sync.pullNasLedger();
+  assert.equal(sync.ledgerIdentitySnapshot(), before);
+  assert.notEqual(sync.ledgerContextSnapshot(), contextBefore);
+  sync.pauseNasSync();
+  assert.equal(sync.ledgerIdentitySnapshot(), null);
+});

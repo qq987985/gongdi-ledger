@@ -14,8 +14,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { monthPrintTables, monthTotals } from "../src/lib/attendance-month";
-import { MONTH_SHEET_COLS, PAYROLL_COLS, ROSTER_COLS, YEAR_MONTHS_COLS } from "../src/lib/print-cols";
+import { monthPrintTables, monthTotals, monthTeamTables } from "../src/lib/attendance-month";
+import { MONTH_SHEET_COLS, MONTH_TEAM_COLS, PAYROLL_COLS, ROSTER_COLS, YEAR_MONTHS_COLS } from "../src/lib/print-cols";
 import { summarizeYear } from "../src/lib/attendance-summary";
 import { round2 } from "../src/lib/wage";
 import { expectMinHits, expectRegexCatches } from "./min-hits";
@@ -91,6 +91,45 @@ test("monthTotals：屏幕月表页脚与打印表尾的合计唯一实现（rou
   // 浮点尾差不许漏到纸上：0.1 + 0.2 必须印成 0.30 而不是 0.30000000000000004
   const dust = monthTotals([{ days: 0, allowance: 0, deduction: 0, ot: 0, meal: 0, pay: 0.1 }, { days: 0, allowance: 0, deduction: 0, ot: 0, meal: 0, pay: 0.2 }]);
   assert.equal(dust.pay, 0.3);
+});
+
+test("班组月考勤：空格归同组、未分班组保留，天数与加班合计不重算工资", () => {
+  const rows = [
+    { name: "甲", team: " 一班 ", days: 20.5, otHours: 1.25, pay: 999 },
+    { name: "乙", team: "一班", days: 0, otHours: 2.5, pay: 888 },
+    { name: "丙", team: "", days: 3, otHours: 0 },
+    { name: "丁", team: "  ", days: 0, otHours: 0 },
+    { name: "甲", team: "二班", days: 4, otHours: 5 },
+  ];
+  const before = structuredClone(rows);
+  const tables = monthTeamTables(rows);
+  assert.equal(tables.length, 3);
+  const one = tables.find((t) => t.team === "一班")!;
+  assert.deepEqual(one.totals, { people: 2, days: 20.5, otHours: 3.75 });
+  assert.deepEqual(one.rows.map((r) => r.name), ["甲", "乙"]);
+  assert.ok(one.rows.every((r) => !("pay" in r)), "核对考勤不能带出薪资");
+  const unassigned = tables.find((t) => t.team === "")!;
+  assert.equal(unassigned.label, "未分班组");
+  assert.deepEqual(unassigned.totals, { people: 2, days: 3, otHours: 0 });
+  assert.equal(tables.find((t) => t.team === "二班")!.rows[0].name, "甲", "同名不跨班组猜测合并");
+  assert.deepEqual(rows, before, "不修改当前月表数据");
+});
+
+test("班组月考勤：选单组/空组/不存在的组，不能混入其他班组", () => {
+  const rows = [{ name: "甲", team: "一班", days: 1, otHours: 2 }, { name: "乙", team: "", days: 3, otHours: 4 }];
+  assert.deepEqual(monthTeamTables(rows, "一班").map((t) => t.rows.map((r) => r.name)), [["甲"]]);
+  assert.deepEqual(monthTeamTables(rows, "").map((t) => t.rows.map((r) => r.name)), [["乙"]]);
+  assert.deepEqual(monthTeamTables(rows, "不存在"), []);
+  assert.deepEqual(monthTeamTables([]), []);
+});
+
+test("班组月考勤：浮点合计取整，重复姓名行与零工天行仍逐条保留", () => {
+  const rows = [{ name: "甲", team: "一班", days: 0.1, otHours: 0.2 }, { name: "甲", team: "一班", days: 0.2, otHours: 0.1 }, { name: "乙", team: "一班", days: 0, otHours: 0 }];
+  const [table] = monthTeamTables(rows);
+  assert.deepEqual(table.totals, { people: 3, days: 0.3, otHours: 0.3 });
+  assert.equal(table.rows.length, 3);
+  assert.deepEqual(MONTH_TEAM_COLS, [10, 40, 25, 25]);
+  assert.equal(MONTH_TEAM_COLS.reduce((a, b) => a + b, 0), 100);
 });
 
 test("monthPrintTables：逐格 == 年度汇总行（同一份 MonthCell），只列有记录的月份与人员", () => {

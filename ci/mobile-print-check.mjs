@@ -403,7 +403,7 @@ const ROUTES = [
   ["/insurance", "保险"],
   ["/photos", "照片"],
   ["/files", "影像资料"],
-  ["/query", "个人查询"],
+  ["/query", "查询"],
   ["/audit", "操作记录"],
   ["/import", "导入"],
   ["/export", "导出"],
@@ -746,11 +746,12 @@ function printCases() {
       },
     },
     {
-      name: "个人查询-工资条",
+      name: "查询-工资条",
       route: "/query",
-      button: "打印",
+      button: "打印工资条",
       file: "query-payslips",
       setup: async (page) => {
+        await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
         const btn = page.getByRole("button", { name: "选择人员" });
         if (await btn.count()) {
           await btn.click();
@@ -772,6 +773,7 @@ function printCases() {
       // 故意选 2 月：种子数据里 2 月的备注最长（「春节放假…」），用来量「长文本会不会把表撑出纸面」
       setup: (page) => openMonth(page, 2),
     },
+    { name: "班组考勤-全部班组", route: "/attendance", button: "按班组打印考勤", file: "attendance-teams", setup: (page) => openMonth(page, 3) },
     { name: "考勤全年月表", route: "/attendance", button: "打印全年月表", file: "attendance-months-year" },
     { name: "年度工资汇总", route: "/attendance", button: "打印年度工资汇总", file: "attendance-payroll-year" },
     { name: "人员名单", route: "/people", button: "打印人员名单", file: "people-roster" },

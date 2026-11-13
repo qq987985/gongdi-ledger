@@ -185,7 +185,7 @@ test("A-1 源码守卫：年度汇总/Excel 汇总/工资条的姓名比较必�
   expectMinHits("A-1 excel/full 的姓名键调用点", countHits(full, /nameKey\(|ownerKey\(/), 5, "现有 5 处");
   assert.equal(/x\.name === p\.name|x\.owner === p\.name/.test(full), false, "full.ts 里不许再出现裸姓名比较");
   // 工资条（单人视角）：第 3/4 套收款人判定已收敛
-  const query = stripLineComments(await read("src/routes/query.tsx"));
+  const query = stripLineComments(await read("src/routes/query.tsx") + "\n" + await read("src/lib/query-data.ts"));
   expectMinHits("A-1/B-10 query 页的姓名键/收款人判定调用点", countHits(query, /nameKey\(|ownerKey\(|receiverOf\(/), 6, "现有 8 处");
   const BARE_OWNER_NAME = /\.(?:owner|receiver)\s*(?:===|!==)\s*[\w.]*\bname\b/;
   expectRegexCatches(BARE_OWNER_NAME, "const mine = pays.filter((x) => x.owner !== name);", "B-10 裸 owner/name 比较正则");

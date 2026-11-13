@@ -125,7 +125,7 @@ export function IdCardSlot({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
   async function onFile(file: File, kind: "id" | "idBack") {
-    if (!file || !name) return;
+    if (readOnly || !file || !name) return;
     setBusy(true);
     try {
       const url = await fileToDataUrl(file);
@@ -204,7 +204,7 @@ export function IdCardSlot({
           ) : null}
         </div>
       </div>
-      <input
+      {!readOnly ? <><input
         ref={frontRef}
         type="file"
         accept={photoAccept}
@@ -225,7 +225,7 @@ export function IdCardSlot({
           e.target.value = "";
           if (f) onFile(f, "idBack");
         }}
-      />
+      /></> : null}
     </div>
   );
   if (compact) return compactView;
@@ -340,6 +340,7 @@ function SinglePhotoSlot({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
   async function onFile(file: File) {
+    if (readOnly || !file || !name) return;
     setBusy(true);
     try {
       const dataUrl = await fileToDataUrl(file);
@@ -363,6 +364,7 @@ function SinglePhotoSlot({
         {url ? <PhotoFlag ok={true} /> : null}
       </div>
       <DropSurface
+        disabled={readOnly || busy}
         accept={photoAccept}
         onFiles={(files) => onFile(files[0])}
         className={cn(

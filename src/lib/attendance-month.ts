@@ -12,6 +12,8 @@
  * 合计 == 各行相加（不许出现两套口径）。
  */
 import { round2 } from "./wage";
+import { ALL_BUCKETS, groupBuckets, inBucket } from "./buckets";
+import { numOr } from "./num";
 import type { YearPersonRow } from "./attendance-summary";
 
 /** 月表页脚 / 打印表尾的合计（人数、工天、加班费、餐补、补助、扣款、应发） */
@@ -51,6 +53,32 @@ export function monthTotals(rows: readonly MonthTotalRow[]): MonthTotals {
     deduction: sum((r) => r.deduction),
     pay: sum((r) => r.pay),
   };
+}
+
+/** 班组考勤只投影月表的姓名/班组/出勤/加班，不重新读取账户或重算工资。 */
+export interface MonthWorkRow {
+  name: string;
+  team: string;
+  days: number;
+  otHours: number;
+}
+export interface MonthTeamTable {
+  team: string;
+  label: string;
+  rows: MonthWorkRow[];
+  totals: { people: number; days: number; otHours: number };
+}
+export function monthTeamTables(rows: readonly MonthWorkRow[], selectedTeam = ALL_BUCKETS): MonthTeamTable[] {
+  return groupBuckets(rows.map((row) => row.team), "未分班组")
+    .filter((bucket) => inBucket(bucket.value, selectedTeam))
+    .map((bucket) => {
+      const members = rows.filter((row) => inBucket(row.team, bucket.value));
+      return { team: bucket.value, label: bucket.label,
+        rows: members.map(({ name, team, days, otHours }) => ({ name, team, days, otHours })),
+        totals: { people: members.length,
+          days: round2(members.reduce((sum, row) => sum + numOr(row.days, 0), 0)),
+          otHours: round2(members.reduce((sum, row) => sum + numOr(row.otHours, 0), 0)) } };
+    });
 }
 
 /** 分月表的一行：只搬年度汇总 `MonthCell` 里屏幕上可见的三项（天数、加班时数、应发） */

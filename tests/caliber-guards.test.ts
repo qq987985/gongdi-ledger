@@ -36,7 +36,7 @@ test("守卫：'有内容'（备注也算）只有 work.ts 一份实现，各处
   const users: [string, RegExp][] = [
     ["src/lib/dates.ts", /hasContent\(r\)/],
     ["src/lib/attendance-summary.ts", /import \{ hasContent \}/],
-    ["src/routes/query.tsx", /hasContent\(a\)/],
+    ["src/lib/query-data.ts", /hasContent\(a\)/],
     ["src/lib/excel/full.ts", /return hasContent\(a\)/],
     ["src/routes/api/file/$kind.ts", /if \(!hasContent\(a\)\) continue/],
   ];
@@ -104,7 +104,7 @@ test("守卫：「已发」判定是 isPaid、「本人收款」是 isPaidSelf�
     "年度汇总又拿 isPaidSelf 判已发了 —— 这正是 1.8.5 把代发扣出已发的错",
   );
   // 单人视角（工资条）：本人已打款走 isPaidSelf
-  assert.match(await src("src/routes/query.tsx"), /filter\(isPaidSelf\)/, "工资条「已打款（本人）」走 isPaidSelf");
+  assert.match(await src("src/lib/query-data.ts"), /filter\(isPaidSelf\)/, "工资条「已打款（本人）」走 isPaidSelf");
   // 两种清单的口径小字各只有一处定义，且明确不同
   assert.equal((payLib.match(/export const PRINT_CALIBER_NOTE_DETAIL/g) || []).length, 1);
   assert.equal((payLib.match(/export const PRINT_CALIBER_NOTE_SUMMARY/g) || []).length, 1);

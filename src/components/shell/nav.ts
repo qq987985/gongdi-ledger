@@ -28,7 +28,7 @@ export const NAV = [
   { to: "/insurance", label: "团体保险", icon: ShieldCheck },
   { to: "/photos", label: "照片", icon: Camera },
   { to: "/files", label: "影像资料", icon: FolderOpen },
-  { to: "/query", label: "个人查询", icon: ClipboardList },
+  { to: "/query", label: "查询", icon: ClipboardList },
   { to: "/audit", label: "操作记录", icon: History },
   { to: "/import", label: "导入", icon: Upload },
   { to: "/export", label: "导出", icon: Download },

@@ -92,10 +92,10 @@ const PERM_TABLE = [
   },
   {
     key: "query",
-    label: "个人查询",
+    label: "查询",
     items: [
       { id: "query.view", label: "查看" },
-      { id: "query.print", label: "打印工资条" },
+      { id: "query.print", label: "打印查询结果与工资条" },
     ],
   },
   {

@@ -318,6 +318,21 @@
     margin-inline: auto;
   }
 
+  .query-results-table {
+    max-width: none;
+  }
+  .query-results-table th,
+  .query-results-table td {
+    padding: 0.5rem 0.75rem;
+    white-space: nowrap;
+  }
+  .query-results-table td:last-child {
+    min-width: 10rem;
+    max-width: 24rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   .wide-scroll {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
@@ -520,6 +535,10 @@
    unlayered 规则），否则 `.min-h-screen` 的清零会被 utilities 覆盖。
    ══════════════════════════════════════════════════════════════════════════ */
 @media print {
+  /* 手机底部导航的预留不能占纸面；长表刚好两页时会额外撑出空白第三页。 */
+  main {
+    padding-bottom: 0 !important;
+  }
   /* ① 外壳：打印态不许撑满一屏，也不许当滚动容器（滚动容器在分页媒体里会裁内容） */
   .app-bg {
     min-height: 0 !important;
@@ -596,6 +615,25 @@
   .print-only .expense-statement > p:last-child {
     font-size: 9.5pt;
     line-height: 1.4;
+  }
+
+  /* 班组考勤仅四列，用适中的字号和行高，长姓名仍可自然换行与跨页。 */
+  .print-only.attendance-team-sheet table,
+  .print-only .query-result-sheet table {
+    font-size: 10.5pt;
+    line-height: 1.4;
+  }
+  .print-only.attendance-team-sheet th,
+  .print-only.attendance-team-sheet td,
+  .print-only .query-result-sheet th,
+  .print-only .query-result-sheet td {
+    padding: 1.2mm 1.5mm;
+    overflow-wrap: anywhere;
+  }
+  .print-only .query-result-sheet .query-number {
+    white-space: nowrap;
+    overflow-wrap: normal;
+    font-variant-numeric: tabular-nums;
   }
 
   /* ②e 纸面上的**外框留白**也压掉：`@page` 已经有 12mm 页边距，单据自己再 `p-4`（每边 4.2mm）

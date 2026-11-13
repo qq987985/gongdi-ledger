@@ -4,23 +4,23 @@ import { toast } from "sonner";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
-import { Need, useCanSave } from "~/components/can";
-import { YmPick, ymKey, monthsInRange, rangeLabel } from "~/components/ym-pick";
+import { Need, useCan, useCanSave } from "~/components/can";
+import { YmPick, rangeLabel } from "~/components/ym-pick";
+import { PersonQueryResults, TeamQueryResults } from "~/components/query-results";
+import { QuerySheet } from "~/components/query-sheet";
 import { PhotoSlot } from "~/components/photo-slot";
 import { DocActions } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
 import { derivedYears } from "~/lib/dates";
-import { monthPay, parseOtRule, wageLabel, getWageAt } from "~/lib/wage";
-import { hasContent } from "~/lib/work";
-import { groupBuckets } from "~/lib/buckets";
+import { parseOtRule, wageLabel } from "~/lib/wage";
+import { buildQueryResults, buildQuerySlips, queryPrintResults, queryRange, queryTeamResults, type QueryContent, type QuerySlip } from "~/lib/query-data";
+import { groupBuckets, inBucket } from "~/lib/buckets";
 // 收款人判定（receiverOf / isProxyReceiver）与姓名比较键（nameKey / ownerKey）都只有一处实现
-import { isPaidSelf, isProxyReceiver, nameKey, ownerKey, receiverOf } from "~/lib/payments-stats";
+import { isProxyReceiver, nameKey, receiverOf } from "~/lib/payments-stats";
 import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
 import { overAgeLabel } from "~/lib/idcard";
 import { money, copyText } from "~/lib/utils";
-import type { Person, Payment, AttendanceRow } from "~/lib/types";
-import type { MonthAttendance } from "~/lib/wage";
 
 function CopyField({ label, value, mono = false }: { label: string; value: string | number | undefined; mono?: boolean }) {
   const text = value == null || value === "" ? "" : String(value);
@@ -57,101 +57,9 @@ function CopyField({ label, value, mono = false }: { label: string; value: strin
   );
 }
 
-function buildSlips({
-  people,
-  names,
-  span,
-  attendance,
-  payments,
-  dateFrom,
-  dateTo,
-}: {
-  people: Person[];
-  names: string[];
-  span: { year: number; month: number }[];
-  attendance: AttendanceRow[];
-  payments: Payment[];
-  dateFrom: string;
-  dateTo: string;
-}) {
-  return names
-    .map((rawName) => {
-      // 工资条是「单人视角」：姓名与收款人的比较全部走 nameKey / ownerKey / receiverOf
-      // （A-1 + B-10）—— 这里原来是第 3/4 套裸比较（x.owner !== name），
-      // 姓名带尾空格的人在工资条里一行也查不到
-      const name = nameKey(rawName);
-      const p = people.find((x) => nameKey(x.name) === name);
-      if (!p) return null;
-      const months: any[] = [];
-      for (const { year, month } of span) {
-        const a = attendance.find((x) => x.year === year && x.month === month && nameKey(x.name) === name);
-        // 「有内容」= 有工天/加班/补助/扣款，或只有备注（如整月「工伤休息」）：
-        // 与月度表/年度汇总/Excel 同口径，只填备注的人不再从工资条里消失
-        if (!hasContent(a)) continue;
-        const wage = getWageAt(p, year, month);
-        const calc = monthPay(a as MonthAttendance, wage);
-        months.push({
-          year,
-          month,
-          days: calc.days,
-          base: calc.base,
-          otHours: calc.otHours,
-          ot: calc.ot,
-          allowance: calc.allowance,
-          deduction: calc.deduction,
-          pay: calc.pay,
-          remark: a?.remark || "",
-        });
-      }
-      const pays = payments
-        .filter((x) => {
-          // 「这笔钱与他有关」= 他名下的钱（owner）或别人名下由他代收的钱（receiverOf，空=本人）
-          if (ownerKey(x) !== name && receiverOf(x) !== name) return false;
-          const d = x.date || "";
-          if (!d) return false;
-          if (dateFrom && d < dateFrom) return false;
-          if (dateTo && d > dateTo) return false;
-          return true;
-        })
-        .slice()
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map((x) => ({
-          date: x.date,
-          amount: x.amount || 0,
-          // owner 必须留下：下面的「已打款（本人）/ 代收他人 / 他人代领」三步判定都要用它。
-          // 1.8.5 之前这里把 owner 丢掉了，`x.owner === name` 永远为 false，
-          // 工资条「已打款合计（本人）」恒为 ¥0.00（本次连同口径统一一起修掉）。
-          owner: x.owner,
-          receiver: x.receiver || x.owner,
-          source: x.source || "",
-          remark: x.remark || "",
-        }));
-      if (!months.length && !pays.length) return null;
-      // 【单人视角】「已打款（本人）」＝打进本人名下、且**收款人就是本人**的款 —— 回答「这笔钱他本人有没有拿到」。
-      // 判定走 lib/payments-stats.ts 的 isPaidSelf（与「其中代发」的子集标注同一处实现）。
-      // ⚠️ 这不是发放页/年度表/总览 KPI 的汇总口径：那边「已发放」按实际收款人计入、**含代发**（1.8.6 纠正）。
-      // 代收他人的钱记在 collected 里单列，否则工资条上会出现负数未打款。
-      const paid = pays.filter(isPaidSelf).reduce((s: number, x: any) => s + x.amount, 0);
-      const collected = pays.filter((x: any) => ownerKey(x) !== name).reduce((s: number, x: any) => s + x.amount, 0);
-      // 本人名下的钱但由别人代领：单人视角下「他本人没拿到」，单列说明，不让它静默消失
-      const proxyOut = pays.filter((x: any) => ownerKey(x) === name && !isPaidSelf(x)).reduce((s: number, x: any) => s + x.amount, 0);
-      return {
-        person: p,
-        hasHistory: (p.wageHistory || []).some((h) => (h.fromDate || "").trim() !== ""),
-        months,
-        total: months.reduce((s, m) => s + m.pay, 0),
-        pays,
-        paid,
-        collected,
-        proxyOut,
-      };
-    })
-    .filter(Boolean);
-}
-
-function groupSlips(slips: any[], showMonths: boolean, showPays: boolean): any[][] {
-  const groups: any[][] = [];
-  const isBig = (s: any) => {
+function groupSlips(slips: QuerySlip[], showMonths: boolean, showPays: boolean): QuerySlip[][] {
+  const groups: QuerySlip[][] = [];
+  const isBig = (s: QuerySlip) => {
     // 内容行数 = 月份数（打印工资时）+ 打款记录数（打印打款时），超过 8 行视为内容多，单人一张
     const lines = (showMonths ? s.months.length : 0) + (showPays ? s.pays.length : 0);
     return lines > 8;
@@ -181,18 +89,18 @@ function PayslipSheets({
   rangeLabel: label,
   printMode,
 }: {
-  slips: NonNullable<ReturnType<typeof buildSlips>>;
+  slips: QuerySlip[];
   rangeLabel: string;
   printMode: "wage" | "both" | "pays";
 }) {
   const showMonths = printMode !== "pays";
   const showPays = printMode !== "wage";
-  const groups = React.useMemo(() => groupSlips(slips as any[], showMonths, showPays), [slips, showMonths, showPays]);
+  const groups = React.useMemo(() => groupSlips(slips, showMonths, showPays), [slips, showMonths, showPays]);
   return (
     <div className="print-only text-black">
       {groups.map((group, gi) => (
         <div key={gi} className="payslip-page">
-          {group.map((s: any) => (
+          {group.map((s) => (
             <article key={s.person.id} className="payslip border border-black p-4">
               <header className="border-b border-black pb-2 text-center">
                 <div className="text-lg font-semibold tracking-widest">{printMode === "pays" ? "台账 · 打款记录" : "台账 · 工资条"}</div>
@@ -220,7 +128,7 @@ function PayslipSheets({
                 </tr>
               </thead>
               <tbody>
-                {s.months.map((m: any) => (
+                {s.months.map((m) => (
                   <tr key={`${m.year}-${m.month}`}>
                     <td className="border border-black px-1 py-1">
                       {m.year}年{m.month}月
@@ -237,12 +145,12 @@ function PayslipSheets({
                 ))}
                 <tr>
                   <td className="border border-black px-1 py-1 font-medium">合计</td>
-                  <td className="border border-black px-1 py-1">{s.months.reduce((n: number, m: any) => n + m.days, 0)}</td>
-                  <td className="border border-black px-1 py-1">{money(s.months.reduce((n: number, m: any) => n + m.base, 0))}</td>
-                  <td className="border border-black px-1 py-1">{s.months.reduce((n: number, m: any) => n + m.otHours, 0) || ""}</td>
-                  <td className="border border-black px-1 py-1">{money(s.months.reduce((n: number, m: any) => n + m.ot, 0))}</td>
-                  <td className="border border-black px-1 py-1">{money(s.months.reduce((n: number, m: any) => n + m.allowance, 0))}</td>
-                  <td className="border border-black px-1 py-1">{money(s.months.reduce((n: number, m: any) => n + m.deduction, 0))}</td>
+                  <td className="border border-black px-1 py-1">{s.totals.days}</td>
+                  <td className="border border-black px-1 py-1">{money(s.totals.base)}</td>
+                  <td className="border border-black px-1 py-1">{s.totals.otHours || ""}</td>
+                  <td className="border border-black px-1 py-1">{money(s.totals.ot)}</td>
+                  <td className="border border-black px-1 py-1">{money(s.totals.allowance)}</td>
+                  <td className="border border-black px-1 py-1">{money(s.totals.deduction)}</td>
                   <td className="border border-black px-1 py-1 font-semibold">{money(s.total)}</td>
                   <td className="border border-black px-1 py-1" />
                 </tr>
@@ -272,7 +180,7 @@ function PayslipSheets({
                     </tr>
                   </thead>
                   <tbody>
-                    {s.pays.map((x: any, i: number) => (
+                    {s.pays.map((x, i) => (
                       <tr key={`${x.date}-${i}`}>
                         <td className="border border-black px-1 py-1">{x.date}</td>
                         <td className="border border-black px-1 py-1">{money(x.amount)}</td>
@@ -285,7 +193,7 @@ function PayslipSheets({
                       <td className="border border-black px-1 py-1 font-medium">已打款合计（本人）</td>
                       <td className="border border-black px-1 py-1 font-semibold">{money(s.paid)}</td>
                       <td className="border border-black px-1 py-1" colSpan={3}>
-                        {showMonths ? `未打款 ¥${money(s.total - s.paid)}` : ""}
+                        {showMonths ? `未打款 ¥${money(s.unpaidSelf)}` : ""}
                       </td>
                     </tr>
                     {s.collected ? (
@@ -328,207 +236,138 @@ function QueryPage() {
   const { year, people, attendance, attendanceDocs, payments, patchAttendanceDoc, removeAttendanceDocs } = store;
   const years = derivedYears(store);
   const yearOpts = years.length ? years : [year];
-  // A10（2026-09-17 专家评审）：查询页原来只看 query.view，只读账号也能点「传照片 / 替换考勤影像」，
-  // 而服务端 /api/photo 要 photos.edit、/api/doc 要 attendance.edit —— 点下去必回 403。
-  // 用 useCanSave（判据 = lib/readonly 的 canSaveToServer：canManageLedger 且该模块 .edit，
-  // 且会随权限变化重渲染）：存不下去就不给入口。
   const canEditPhotos = useCanSave("photos.edit");
   const canEditDocs = useCanSave("attendance.edit");
+  const canPrint = useCan("query.print");
+  const [scope, setScope] = React.useState<"person" | "team">("person");
+  const [content, setContent] = React.useState<QueryContent>("attendance");
+  const [team, setTeam] = React.useState("");
   const [name, setName] = React.useState("");
-  const [printNames, setPrintNames] = React.useState<string[]>([]);
+  const [selectedId, setSelectedId] = React.useState("");
+  const [printIds, setPrintIds] = React.useState<string[]>([]);
   const [printMode, setPrintMode] = React.useState<"wage" | "both" | "pays">("both");
   const [showPicker, setShowPicker] = React.useState(false);
+  const [printKind, setPrintKind] = React.useState<"query" | "slips">("query");
+  const [printRequest, setPrintRequest] = React.useState(0);
+  React.useEffect(() => { if (printRequest) window.print(); }, [printRequest]);
   const [fromY, setFromY] = React.useState(year);
   const [fromM, setFromM] = React.useState(1);
   const [fromD, setFromD] = React.useState(1);
   const [toY, setToY] = React.useState(year);
   const [toM, setToM] = React.useState(12);
   const [toD, setToD] = React.useState(31);
-  const personKey = nameKey(name);
-  const p = people.find((x) => nameKey(x.name) === personKey);
-  const span = React.useMemo(() => monthsInRange(fromY, fromM, toY, toM), [fromY, fromM, toY, toM]);
-  const swapped = ymKey(fromY, fromM) > ymKey(toY, toM);
-  // 日期字符串（YYYY-MM-DD）比较：无时区问题；日 clamp 到当月最后一天（防 2 月 31 溢出到下月）
-  const pad2 = (n: number) => String(n).padStart(2, "0");
-  const startDate = `${fromY}-${pad2(fromM)}-${pad2(Math.min(fromD, new Date(fromY, fromM, 0).getDate()))}`;
-  const endDate = `${toY}-${pad2(toM)}-${pad2(Math.min(toD, new Date(toY, toM, 0).getDate()))}`;
-  const rows = span.map(({ year: y, month: m }) => {
-    const a = attendance.find((x) => x.year === y && x.month === m && nameKey(x.name) === personKey);
-    const wage = getWageAt(p, y, m);
-    const calc = monthPay(a, wage);
-    return {
-      year: y,
-      month: m,
-      days: calc.days,
-      otHours: calc.otHours,
-      allowance: calc.allowance,
-      deduction: calc.deduction,
-      ot: calc.ot,
-      pay: calc.pay,
-      remark: a?.remark || "",
-    };
-  });
-  const should = rows.reduce((s, r) => s + r.pay, 0);
-  const start = span[0];
-  const end = span[span.length - 1];
-  const pays = payments.filter((x) => {
-    if (ownerKey(x) !== personKey && receiverOf(x) !== personKey) return false;
-    const d = x.date || "";
-    if (!d) return false;
-    return d >= startDate && d <= endDate;
-  });
-  const paidAsOwner = pays.filter((x) => ownerKey(x) === personKey).reduce((s, x) => s + x.amount, 0);
+  const range = React.useMemo(() => queryRange(
+    { year: fromY, month: fromM, day: fromD }, { year: toY, month: toM, day: toD },
+  ), [fromY, fromM, fromD, toY, toM, toD]);
+  const { span, startDate, endDate, swapped } = range;
   const rangeLabelText = rangeLabel(fromY, fromM, toY, toM);
-  const slips = React.useMemo(
-    () => buildSlips({ people, names: printNames, span, attendance, payments, dateFrom: startDate, dateTo: endDate }),
-    [people, printNames, span, attendance, payments, startDate, endDate],
-  );
-  // 打印内容按模式过滤：仅打款记录 → 只留有打款的人（避免打款记录空单）；
-  // 仅工资 → 只留有出勤月的人（避免工资空单）；工资+打款记录 → 不设限，按需显示。
-  const effectiveSlips = React.useMemo(() => {
-    if (printMode === "pays") return slips.filter((s: any) => s.pays.length > 0);
-    if (printMode === "wage") return slips.filter((s: any) => s.months.length > 0);
-    return slips;
-  }, [slips, printMode]);
-  // 按班组快捷勾选：含「未分班组」（没填班组的人也要能被一次选中，不再被 filter(Boolean) 漏掉）
-  const teams = groupBuckets(
-    people.map((x) => x.team),
-    "未分班组",
-  );
+  const paymentRangeLabel = `${startDate} 至 ${endDate}`;
+  const results = React.useMemo(() => buildQueryResults({ people, attendance, payments, range }), [people, attendance, payments, range]);
+  const matches = results.filter((row) => nameKey(row.person.name) === nameKey(name));
+  const result = (selectedId ? matches.find((row) => row.person.id === selectedId) : undefined) || (matches.length === 1 ? matches[0] : undefined);
+  const p = result?.person;
+  const pays = result?.pays || [];
+  const teams = groupBuckets(people.map((person) => person.team), "未分班组");
+  const activeTeam = teams.some((bucket) => bucket.value === team) ? team : teams[0]?.value ?? "";
+  const teamLabel = teams.find((bucket) => bucket.value === activeTeam)?.label || "未分班组";
+  const teamSummary = React.useMemo(() => queryTeamResults(results, activeTeam), [results, activeTeam]);
+  const printablePeople = scope === "team" ? teamSummary.members : results;
+  const printableSelection = queryPrintResults(results, printIds, scope === "team" ? activeTeam : undefined);
+  const slips = React.useMemo(() => buildQuerySlips(printableSelection), [printableSelection]);
+  const effectiveSlips = slips.filter((slip) => printMode === "pays" ? slip.pays.length > 0 : printMode === "wage" ? slip.months.length > 0 : true);
+  const selectedCount = printableSelection.length;
+  function chooseScope(next: "person" | "team") {
+    setScope(next);
+    setPrintKind("query");
+    setPrintIds([]);
+    setShowPicker(false);
+  }
+  function showPerson(id: string) {
+    const row = results.find((item) => item.person.id === id);
+    if (!row) return;
+    setName(row.person.name);
+    setSelectedId(id);
+    chooseScope("person");
+  }
   return (
     <Need perm="query.view">
       <div className="space-y-6">
         <div className="no-print space-y-6">
-          <header className="flex flex-wrap items-end justify-between gap-3">
+          <header className="space-y-3">
             <div>
-              <h1 className="font-display text-2xl font-semibold">个人查询</h1>
-              <p className="mt-1 text-sm text-muted">按月份区间查。查单月就把起止设成同一个月，例如 7月到7月。</p>
+              <h1 className="font-display text-2xl font-semibold">查询</h1>
+              <p className="mt-1 text-sm text-muted">按个人或班组查询区间考勤、工资。考勤按整月统计，发放按起止日期筛选。</p>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                list="query-people-list"
-                className="field-select w-auto min-w-[8rem]"
-                value={name}
-                placeholder="输入或选择姓名"
-                onChange={(e) => setName(e.target.value)}
-              />
-              <datalist id="query-people-list">
-                {people.map((x) => (
-                  <option key={x.id} value={x.name} />
-                ))}
-              </datalist>
-              {name ? (
-                <Button variant="ghost" size="icon" className="size-9" type="button" onClick={() => setName("")} aria-label="清空">
-                  <X className="size-4" />
-                </Button>
-              ) : null}
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="space-y-1 text-sm">
+                <span className="block text-xs text-muted">查询方式</span>
+                <select className="field-select w-auto" aria-label="查询方式" value={scope} onChange={(e) => chooseScope(e.target.value as "person" | "team")}>
+                  <option value="person">按个人</option><option value="team">按班组</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="block text-xs text-muted">查询内容</span>
+                <select className="field-select w-auto" aria-label="查询内容" value={content} onChange={(e) => { setContent(e.target.value as QueryContent); setPrintKind("query"); setShowPicker(false); }}>
+                  <option value="attendance">考勤</option><option value="wage">工资</option>
+                </select>
+              </label>
+              {scope === "team" ? (
+                <label className="min-w-0 space-y-1 text-sm">
+                  <span className="block text-xs text-muted">班组</span>
+                  <select className="field-select max-w-full" aria-label="查询班组" value={activeTeam} onChange={(e) => { setTeam(e.target.value); setPrintKind("query"); setPrintIds([]); }}>
+                    {teams.map((bucket) => <option key={bucket.value} value={bucket.value}>{bucket.label}</option>)}
+                    {!teams.length ? <option value="">未分班组</option> : null}
+                  </select>
+                </label>
+              ) : (
+                <div className="flex min-w-0 max-w-full items-center gap-2">
+                  <input list="query-people-list" aria-label="查询姓名" className="field-select min-w-0 w-48 max-w-full" value={name} placeholder="输入或选择姓名" onChange={(e) => { setName(e.target.value); setSelectedId(""); setPrintKind("query"); }} />
+                  <datalist id="query-people-list">{people.map((person) => <option key={person.id} value={person.name}>{person.team || "未分班组"}</option>)}</datalist>
+                  {name ? <Button variant="ghost" size="icon" className="size-9 shrink-0" type="button" onClick={() => { setName(""); setSelectedId(""); }} aria-label="清空姓名"><X className="size-4" /></Button> : null}
+                </div>
+              )}
             </div>
           </header>
           <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4">
-            <YmPick label="从" years={yearOpts} y={fromY} m={fromM} d={fromD} onY={setFromY} onM={setFromM} onD={setFromD} />
+            <YmPick label="从" years={yearOpts} y={fromY} m={fromM} d={fromD} onY={setFromY} onM={setFromM} onD={content === "wage" ? setFromD : undefined} />
             <span className="pb-2 text-sm text-muted">到</span>
-            <YmPick label="到" years={yearOpts} y={toY} m={toM} d={toD} onY={setToY} onM={setToM} onD={setToD} />
-            <p className="w-full text-xs text-muted">
-              当前查询：{rangeLabelText}
-              {swapped ? "（起止已自动对调）" : ""} · 共 {span.length} 个月 · {fromD}日 至 {toD}日
-            </p>
+            <YmPick label="到" years={yearOpts} y={toY} m={toM} d={toD} onY={setToY} onM={setToM} onD={content === "wage" ? setToD : undefined} />
+            <p className="w-full text-xs text-muted">考勤：{rangeLabelText}，按整月统计，共 {span.length} 个月{swapped ? "（起止已自动对调）" : ""}。{content === "wage" ? `发放：${paymentRangeLabel}，含起止当日。` : ""}</p>
           </div>
-          <section className="rounded-xl border border-line bg-surface p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold">打印工资条</h2>
-                <p className="mt-1 text-xs text-muted">
-                  按上面查的 {rangeLabelText} 生成，每人一张。可勾选是否附带打款记录。
-                </p>
+          {canPrint ? <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" type="button" disabled={scope === "team" ? !teamSummary.members.length : !result || result.ambiguous} onClick={() => { setPrintKind("query"); setPrintRequest((value) => value + 1); }}>打印查询结果</Button>
+            <span className="text-xs text-muted">仅打印当前{scope === "team" ? `班组「${teamLabel}」` : "个人"}的{content === "wage" ? "工资" : "考勤"}核对清单。</span>
+          </div> : null}
+          {content === "wage" && canPrint ? (
+            <section className="rounded-xl border border-line bg-surface p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div><h2 className="text-sm font-semibold">打印工资条</h2><p className="mt-1 text-xs text-muted">考勤 {rangeLabelText}；打款 {paymentRangeLabel}。{scope === "team" ? `仅限当前班组「${teamLabel}」。` : "可勾选人员与打印内容。"}</p></div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" type="button" onClick={() => setShowPicker((value) => !value)}>选择人员{selectedCount ? `（已选 ${selectedCount}）` : ""}<ChevronDown className={`size-3.5 transition-transform ${showPicker ? "rotate-180" : ""}`} /></Button>
+                  <label className="inline-flex items-center gap-1.5 text-sm">打印<select className="field-select w-auto px-2 py-1.5" aria-label="工资条打印内容" value={printMode} onChange={(e) => setPrintMode(e.target.value as "wage" | "both" | "pays")}><option value="both">工资 + 打款记录</option><option value="wage">仅工资</option><option value="pays">仅打款记录</option></select></label>
+                  <Button size="sm" type="button" onClick={() => {
+                    if (!selectedCount) { toast.error("先勾选要打印的人"); return; }
+                    if (!effectiveSlips.length) { toast.error(printMode === "pays" ? "所选人在该区间没有打款记录" : "所选人在该区间没有出勤或打款，没有工资条"); return; }
+                    setPrintKind("slips");
+                    setPrintRequest((value) => value + 1);
+                  }}>打印工资条 {effectiveSlips.length} 张</Button>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={() => setShowPicker((v) => !v)}
-                >
-                  选择人员{printNames.length ? `（已选 ${printNames.length}）` : ""}
-                  <ChevronDown className={`size-3.5 transition-transform ${showPicker ? "rotate-180" : ""}`} />
-                </Button>
-                <label className="inline-flex items-center gap-1.5 text-sm">
-                  打印
-                  <select
-                    className="field-select w-auto px-2 py-1.5"
-                    value={printMode}
-                    onChange={(e) => setPrintMode(e.target.value as "wage" | "both" | "pays")}
-                  >
-                    <option value="both">工资 + 打款记录</option>
-                    <option value="wage">仅工资</option>
-                    <option value="pays">仅打款记录</option>
-                  </select>
-                </label>
-                <Button
-                  size="sm"
-                  type="button"
-                  onClick={() => {
-                    if (!printNames.length) {
-                      toast.error("先勾选要打印的人");
-                      return;
-                    }
-                    if (!effectiveSlips.length) {
-                      toast.error(
-                        printMode === "pays"
-                          ? "所选人在该区间没有打款记录"
-                          : "所选人在该区间没有出勤或打款，没有工资条",
-                      );
-                      return;
-                    }
-                    window.print();
-                  }}
-                >
-                  打印 {effectiveSlips.length} 张
-                </Button>
-              </div>
-            </div>
-            {showPicker ? (
-              <div className="mt-3 rounded-lg border border-line bg-bg-elevated p-3">
+              {showPicker ? <div className="mt-3 rounded-lg border border-line bg-bg-elevated p-3">
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="ghost" size="sm" type="button" onClick={() => setPrintNames(people.map((x) => x.name))}>
-                    全选
-                  </Button>
-                  <Button variant="ghost" size="sm" type="button" onClick={() => setPrintNames([])}>
-                    清空
-                  </Button>
-                  {teams.map((b) => (
-                    <Button
-                      key={b.value || "__empty__"}
-                      variant="ghost"
-                      size="sm"
-                      type="button"
-                      onClick={() => setPrintNames(people.filter((x) => String(x.team ?? "").trim() === b.value).map((x) => x.name))}
-                    >
-                      {b.label}
-                    </Button>
-                  ))}
+                  <Button variant="ghost" size="sm" type="button" onClick={() => setPrintIds(printablePeople.filter((row) => !row.ambiguous).map((row) => row.person.id))}>全选{scope === "team" ? "本班组" : ""}</Button>
+                  <Button variant="ghost" size="sm" type="button" onClick={() => setPrintIds([])}>清空</Button>
+                  {scope === "person" ? teams.map((bucket) => <Button key={bucket.value} variant="ghost" size="sm" type="button" onClick={() => setPrintIds(results.filter((row) => !row.ambiguous && inBucket(row.person.team, bucket.value)).map((row) => row.person.id))}>{bucket.label}</Button>) : null}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                  {people.map((x) => (
-                    <label key={x.id} className="inline-flex items-center gap-1.5">
-                      <input
-                        type="checkbox"
-                        className="size-4"
-                        checked={printNames.includes(x.name)}
-                        onChange={(e) =>
-                          setPrintNames((s) =>
-                            e.target.checked ? [...new Set([...s, x.name])] : s.filter((n) => n !== x.name),
-                          )
-                        }
-                      />
-                      {x.name}
-                    </label>
-                  ))}
+                  {printablePeople.map((row) => <label key={row.person.id} className="inline-flex items-center gap-1.5"><input type="checkbox" className="size-4" disabled={row.ambiguous} checked={printableSelection.some((item) => item.person.id === row.person.id)} onChange={(e) => setPrintIds((ids) => e.target.checked ? [...new Set([...ids, row.person.id])] : ids.filter((id) => id !== row.person.id))} />{row.person.name}{row.ambiguous ? "（同名待核对）" : ""}</label>)}
                 </div>
-              </div>
-            ) : null}
-          </section>
-          {p ? (
+              </div> : null}
+            </section>
+          ) : null}
+          {scope === "team" ? <TeamQueryResults summary={teamSummary} label={rangeLabelText} teamLabel={teamLabel} content={content} onPerson={showPerson} /> : p && result ? (
             <>
+              {content === "wage" && !result.ambiguous ? <>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-display text-xl font-semibold">{p.name}</h2>
                 <Badge>{p.team}</Badge>
@@ -553,58 +392,11 @@ function QueryPage() {
                 <PhotoSlot name={p.name} kind="bank" readOnly={!canEditPhotos} />
                 <PhotoSlot name={p.name} kind="ic" readOnly={!canEditPhotos} />
               </div>
+              </> : <div className="flex flex-wrap items-center gap-2"><h2 className="font-display text-xl font-semibold">{p.name}</h2><Badge>{p.team?.trim() || "未分班组"}</Badge></div>}
+              <PersonQueryResults result={result} label={rangeLabelText} content={content} />
+              {content === "wage" && !result.ambiguous ? <>
               <section className="rounded-xl border border-line bg-surface p-4">
-                <h3 className="text-sm font-semibold">
-                  {rangeLabelText} 考勤
-                </h3>
-                <div className="mt-3 overflow-x-auto">
-                  <table className="fit-table text-left text-sm">
-                    <thead className="text-xs text-muted">
-                      <tr>
-                        <th className="py-2">年月</th>
-                        <th>出勤</th>
-                        <th>加班小时</th>
-                        <th>补助</th>
-                        <th>扣款</th>
-                        <th>加班费</th>
-                        <th>应发</th>
-                        <th>备注</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r) => (
-                        <tr className="border-t border-line" key={`${r.year}-${r.month}`}>
-                          <td className="py-2">
-                            {r.year}年{r.month}月
-                          </td>
-                          <td className="tabular-nums">{r.days || "—"}</td>
-                          <td className="tabular-nums">{r.otHours || "—"}</td>
-                          <td className="tabular-nums">{r.allowance ? `¥${money(r.allowance)}` : "—"}</td>
-                          <td className="tabular-nums">{r.deduction ? `¥${money(r.deduction)}` : "—"}</td>
-                          <td className="tabular-nums">{r.ot ? `¥${money(r.ot)}` : "—"}</td>
-                          <td className="tabular-nums">{r.pay ? `¥${money(r.pay)}` : "—"}</td>
-                          <td className="text-muted">{r.remark}</td>
-                        </tr>
-                      ))}
-                      <tr className="border-t border-line font-medium">
-                        <td className="py-2">合计</td>
-                        <td className="tabular-nums">{rows.reduce((s, r) => s + r.days, 0)}</td>
-                        <td className="tabular-nums">{rows.reduce((s, r) => s + r.otHours, 0)}</td>
-                        <td className="tabular-nums">¥{money(rows.reduce((s, r) => s + r.allowance, 0))}</td>
-                        <td className="tabular-nums">¥{money(rows.reduce((s, r) => s + r.deduction, 0))}</td>
-                        <td className="tabular-nums">¥{money(rows.reduce((s, r) => s + r.ot, 0))}</td>
-                        <td className="tabular-nums">¥{money(should)}</td>
-                        <td />
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-3 text-sm">
-                  应发合计 ¥{money(should)} · 已记入实际收款人 ¥{money(paidAsOwner)} · 差额 ¥{money(should - paidAsOwner)}
-                </p>
-              </section>
-              <section className="rounded-xl border border-line bg-surface p-4">
-                <h3 className="text-sm font-semibold">{rangeLabelText} 相关发放</h3>
+                <h3 className="text-sm font-semibold">{paymentRangeLabel} 相关发放</h3>
                 <ul className="mt-3 space-y-2 text-sm">
                   {pays.length === 0 ? <li className="text-muted">该区间暂无</li> : null}
                   {pays.map((x) => (
@@ -659,22 +451,15 @@ function QueryPage() {
                   ) : null}
                 </ul>
               </section>
+              </> : null}
             </>
-          ) : people.length === 0 ? (
-            <p className="text-sm text-muted">还没有人员。先在「人员」里添加。</p>
-          ) : (
-            <p className="text-sm text-muted">
-              上面的输入框里选一个人，这里就显示他的工资、考勤、发放和影像；只想打印工资条的话，
-              点「选择人员」勾选人名后直接点「打印」。
-            </p>
-          )}
+          ) : people.length === 0 ? <p className="text-sm text-muted">还没有人员。先在「人员」里添加。</p> : matches.length > 1 ? <p className="text-sm text-warn">人员档案存在同名，历史记录无法按姓名可靠区分。请先核对人员档案及历史记录。</p> : <p className="text-sm text-muted">{name ? "未找到该姓名，请选择已有人员。" : content === "attendance" ? "选择人员后显示出勤天数、加班小时和备注。" : "选择人员后显示工资、考勤、发放和影像；也可先选择人员打印工资条。"}</p>}
         </div>
-        <PayslipSheets slips={effectiveSlips} rangeLabel={rangeLabelText} printMode={printMode} />
+        {canPrint && (printKind === "query" || content === "attendance") ? <QuerySheet content={content} label={rangeLabelText} paymentLabel={paymentRangeLabel} person={scope === "person" ? result : undefined} team={scope === "team" ? teamSummary : undefined} teamLabel={teamLabel} /> : null}
+        {content === "wage" && canPrint && printKind === "slips" ? <PayslipSheets slips={effectiveSlips} rangeLabel={`考勤：${rangeLabelText}；打款：${paymentRangeLabel}`} printMode={printMode} /> : null}
       </div>
     </Need>
   );
 }
 
-export const Route = createFileRoute("/query")({
-  component: QueryPage,
-});
+export const Route = createFileRoute("/query")({ component: QueryPage });

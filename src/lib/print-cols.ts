@@ -20,6 +20,13 @@
  */
 export const MONTH_SHEET_COLS = [4, 6, 8, 5, 5, 8, 8, 8, 8, 8, 11, 21];
 
+/** 班组月考勤（序号/姓名/出勤天数/加班小时），不含工资或个人证件信息。 */
+export const MONTH_TEAM_COLS = [10, 40, 25, 25];
+export const QUERY_TEAM_ATTENDANCE_COLS = [24, 18, 18, 40];
+export const QUERY_PERSON_ATTENDANCE_COLS = [24, 18, 18, 40];
+export const QUERY_TEAM_WAGE_COLS = [12, 10, 10, 16, 18, 16, 18];
+export const QUERY_PERSON_WAGE_COLS = [14, 8, 9, 12, 12, 12, 14, 19];
+
 /** 全年月表·每个月的块（6 列：序号/姓名/班组/出勤天数/加班小时/应发） */
 export const YEAR_MONTHS_COLS = [8, 15, 17, 15, 15, 30];
 

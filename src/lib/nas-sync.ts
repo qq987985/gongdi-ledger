@@ -38,6 +38,10 @@ export function ledgerContextSnapshot(): string | null {
   if (transitionDepth > 0 || (nasEnabled() && (!syncReady || pullDepth > 0 || bookBlocked))) return null;
   return `${syncEpoch}:${transitionGeneration}:${pullGen}`;
 }
+/** 本地编辑器绑定账号/台账切换代际；同册重复拉取不重新挂载、丢失未保存输入。 */
+export function ledgerIdentitySnapshot(): string | null {
+  return ledgerContextSnapshot() === null ? null : `${syncEpoch}:${transitionGeneration}`;
+}
 async function duringBookTransition<T>(action: () => Promise<T>): Promise<T> {
   transitionDepth++;
   transitionGeneration++;

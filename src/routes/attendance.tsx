@@ -8,6 +8,7 @@ import { WideTable } from "~/components/wide-table";
 import { Can, Need, ReadonlyNotice, useCanSave } from "~/components/can";
 // B16（1.8.15）打印入口：月表 / 全年月表 / 年度工资汇总的打印件（唯一实现在 components 里）
 import { AttendanceMonthSheet, AttendanceMonthsYearSheet, PayrollYearSheet } from "~/components/ledger-print-sheets";
+import { AttendanceTeamSheet } from "~/components/attendance-team-sheet";
 import type { MonthSheetData, MonthSheetRow } from "~/components/ledger-print-sheets";
 import { FilePick } from "~/components/file-pick";
 import { AttendanceImport, TplLink } from "~/components/excel-import";
@@ -19,7 +20,9 @@ import { fallbackPayYear, summarizeYear } from "~/lib/attendance-summary";
 import { canSaveMonthDays, negativeDayRows, negativeDaysNotice } from "~/lib/attendance-input";
 import { monthPay, parseOtRule, wageLabel, getWageAt, round2 } from "~/lib/wage";
 // 月表合计与「年度汇总 → 分月表」的唯一实现（屏幕页脚与打印表尾共用，见文件头）
-import { monthPrintTables, monthTotals } from "~/lib/attendance-month";
+import { monthPrintTables, monthTotals, monthTeamTables } from "~/lib/attendance-month";
+import { ALL_BUCKETS, groupBuckets } from "~/lib/buckets";
+import { ledgerIdentitySnapshot, subscribeLedgerContext } from "~/lib/nas-sync";
 import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
 import { confirmLeaveUnsaved } from "~/lib/unsaved";
@@ -32,6 +35,9 @@ const UNSAVED_MSG = "本月考勤有未保存的修改，离开就会丢失";
 
 function AttendancePage() {
   const store = useApp();
+  const identity = React.useSyncExternalStore(subscribeLedgerContext, ledgerIdentitySnapshot, () => null);
+  const lastIdentity = React.useRef(identity);
+  if (identity !== null) lastIdentity.current = identity;
   const { year, people, attendance, saveAttendanceMonth, addYear } = store;
   const [month, setMonth] = React.useState<number | null>(null);
   const existing = attendance.filter((a) => a.year === year && a.month === (month || 0));
@@ -42,7 +48,22 @@ function AttendancePage() {
   const canEditMonth = useCanSave("attendance.edit");
   const [monthDirty, setMonthDirty] = React.useState(false);
   // 打印月表用的数据由 MonthTable 交上来（**与屏幕同一份 rows 与合计**，打印件自己不重算）
-  const [monthSheet, setMonthSheet] = React.useState<MonthSheetData>({ rows: [], totals: monthTotals([]), dirty: false });
+  const [monthSheet, setMonthSheet] = React.useState<MonthSheetData & { year: number; month: number; identity: string }>({ rows: [], totals: monthTotals([]), dirty: false, year: 0, month: 0, identity: "" });
+  const [monthPrint, setMonthPrint] = React.useState<"full" | "team">("full");
+  const [printTeam, setPrintTeam] = React.useState(ALL_BUCKETS);
+  const [printRequest, setPrintRequest] = React.useState(0);
+  const printedRequest = React.useRef(0);
+  const monthReady = identity !== null && monthSheet.identity === identity && monthSheet.year === year && monthSheet.month === month;
+  const teamOptions = groupBuckets(monthReady ? monthSheet.rows.map((row) => row.team) : [], "未分班组");
+  const teamTables = React.useMemo(() => monthReady ? monthTeamTables(monthSheet.rows, printTeam) : [], [monthReady, monthSheet.rows, printTeam]);
+  React.useEffect(() => { setPrintTeam(ALL_BUCKETS); setMonthPrint("full"); }, [year, month, identity]);
+  // 先提交打印件，再调用浏览器打印；切换打印类型不能印到上一种内容。
+  React.useEffect(() => {
+    if (!printRequest || printRequest === printedRequest.current) return;
+    printedRequest.current = printRequest;
+    if (monthReady && (monthPrint === "full" ? monthSheet.rows.length : teamTables.length)) window.print();
+  }, [printRequest, monthReady, monthPrint, monthSheet.rows.length, teamTables.length]);
+  const printMonth = (kind: "full" | "team") => { setMonthPrint(kind); setPrintRequest((n) => n + 1); };
   useUnsavedChanges(monthDirty, UNSAVED_MSG, canEditMonth);
   const leaveMonth = (action: () => void) => {
     if (!confirmLeaveUnsaved()) return;
@@ -79,10 +100,10 @@ function AttendancePage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* 打印是只读操作：入口只按 attendance.view（页面本身）控制，不看能不能编辑 */}
-            <Button variant="outline" size="sm" type="button" disabled={!monthSheet.rows.length} onClick={() => window.print()}>
+            <Button variant="outline" size="sm" type="button" disabled={!monthReady || !monthSheet.rows.length} onClick={() => printMonth("full")}>
               打印月表
             </Button>
-            <select className="field-select w-auto" value={month} onChange={(e) => leaveMonth(() => setMonth(Number(e.target.value)))}>
+            <select aria-label="考勤月份" className="field-select w-auto" value={month} onChange={(e) => leaveMonth(() => setMonth(Number(e.target.value)))}>
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option value={m} key={m}>
                   {m}月
@@ -91,33 +112,45 @@ function AttendancePage() {
             </select>
           </div>
         </header>
+        <section aria-label="按班组打印考勤" className="flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-4">
+          <label className="min-w-44 flex-1 text-sm">打印班组
+            <select aria-label="打印班组" className="field-select mt-1 w-full" value={printTeam} onChange={(e) => setPrintTeam(e.target.value)}>
+              <option value={ALL_BUCKETS}>全部班组（分别列印）</option>
+              {teamOptions.map((team) => <option key={team.value} value={team.value}>{team.label}</option>)}
+            </select>
+          </label>
+          <Button variant="outline" size="sm" type="button" disabled={!monthReady || !teamTables.length} onClick={() => printMonth("team")}>按班组打印考勤</Button>
+          <p className="basis-full text-xs text-muted">只打印本月姓名、出勤天数、加班小时及班组合计，不含工资金额。{monthSheet.dirty ? "使用当前月表，含未保存的修改。" : ""}</p>
+          {monthReady && !teamTables.length && <p className="basis-full text-sm text-muted">所选班组本月没有考勤记录。</p>}
+        </section>
         <MonthFiles year={year} month={month} />
         <MonthTable
           year={year}
           month={month}
+          identity={identity}
           people={people}
           existing={existing}
           onDirtyChange={(d) => {
             setMonthDirty(Boolean(d) && canEditMonth);
           }}
-          onData={setMonthSheet}
+          onData={(data) => setMonthSheet({ ...data, year, month, identity: identity || "" })}
           onSave={(rows) => {
             // 只读账号不落盘、也不弹「已保存」（A 组报告第 17 项同源）
             if (blockedWrite("attendance.edit", permLabel("attendance.edit"))) return;
             saveAttendanceMonth(year, month, rows);
             toast.success("本月考勤已保存");
           }}
-          key={`${year}-${month}-${people.length}`}
+          key={`${year}-${month}-${people.length}-${lastIdentity.current || "pending"}`}
         />
         </div>
         {/* 打印件必须渲染在 no-print 包裹**之外**：屏幕态隐藏（.print-only），只在打印时出现 */}
-        <AttendanceMonthSheet
+        {monthPrint === "full" ? <AttendanceMonthSheet
           year={year}
           month={month}
-          rows={monthSheet.rows}
+          rows={monthReady ? monthSheet.rows : []}
           totals={monthSheet.totals}
           dirty={monthSheet.dirty}
-        />
+        /> : <AttendanceTeamSheet year={year} month={month} tables={teamTables} dirty={monthSheet.dirty} />}
       </div>
     </Need>
   );
@@ -393,6 +426,7 @@ interface MonthRow {
 function MonthTable({
   year,
   month,
+  identity,
   people,
   existing,
   onDirtyChange,
@@ -401,6 +435,7 @@ function MonthTable({
 }: {
   year: number;
   month: number;
+  identity: string | null;
   people: ReturnType<typeof useApp.getState>["people"];
   existing: ReturnType<typeof useApp.getState>["attendance"];
   onDirtyChange?: (dirty: boolean) => void;
@@ -513,11 +548,11 @@ function MonthTable({
   }));
   const reportRef = React.useRef(onData);
   reportRef.current = onData;
-  // 交给父级的打印件（依赖只写 rows/dirty：sheetRows 与 totals 都是由它们确定性派生的）
+  // 打印件同时依赖人员工资/班组；同册刷新资料也必须重新发布，且保留本地编辑行。
   // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     reportRef.current?.({ rows: sheetRows, totals, dirty });
-  }, [rows, dirty]);
+  }, [rows, dirty, people, year, month, identity]);
   // B-12②：负出勤天数（自己填的或 Excel 导入的存量数据）—— 月表上方列名字，保存前拦住
   const negativeRows = negativeDayRows(rows);
   const negativeNotice = negativeDaysNotice(rows);
