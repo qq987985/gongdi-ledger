@@ -30,7 +30,7 @@ export function QuerySheet({ content, label, paymentLabel, person, team, teamLab
           <colgroup>{widths.map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
           <thead>
             <tr><th className={`${TD} text-left`} colSpan={columns}>
-              <div className="text-base font-semibold">{team ? teamLabel : person!.person.name} · {wage ? "工资核对清单" : "考勤核对清单"}{team ? " · 区间汇总" : ""}</div>
+              <div className="text-base font-semibold">{team ? teamLabel : person!.person.name} · {label}{wage ? "工资" : "考勤"}汇总</div>
               <div className="mt-1 font-normal">考勤：{label}（按整月统计）{wage ? `；发放：${paymentLabel}（含起止当日）` : ""}</div>
               {team ? <div className="font-normal">按当前人员档案班组，共 {team.members.length} 人。{team.ambiguousCount ? `其中 ${team.ambiguousCount} 人姓名重复，未计入合计，历史记录待核对。` : ""}</div> : <div className="font-normal">班组：{person!.person.team?.trim() || "未分班组"}</div>}
             </th></tr>

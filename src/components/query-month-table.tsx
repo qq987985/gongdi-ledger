@@ -3,7 +3,7 @@ import type { QueryContent, QueryTeamMonth } from "~/lib/query-data";
 import { QUERY_PERSON_WAGE_COLS, QUERY_TEAM_ATTENDANCE_COLS } from "~/lib/print-cols";
 import { money } from "~/lib/utils";
 
-/** 班组逐月明细的屏幕与打印共用表；只排版纯函数给出的行和本月小计。 */
+/** 班组各月汇总的屏幕与打印共用表；只排版纯函数给出的行和本月小计。 */
 export function QueryMonthTable({ month, content, teamLabel, print = false, onPerson }: {
   month: QueryTeamMonth;
   content: QueryContent;
@@ -20,7 +20,7 @@ export function QueryMonthTable({ month, content, teamLabel, print = false, onPe
     {print ? <colgroup>{widths.map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup> : null}
     <thead>
       <tr><th colSpan={wage ? 8 : 4} className={`${cell} text-left`}>
-        <span className="font-semibold">{teamLabel} · {month.year}年{month.month}月{wage ? "工资" : "考勤"}明细</span>
+        <span className="font-semibold">{teamLabel} · {month.year}年{month.month}月{wage ? "工资" : "考勤"}汇总</span>
       </th></tr>
       <tr className={print ? "" : "text-xs text-muted"}>
         <th className={cell}>姓名</th><th className={cell}>出勤天数</th><th className={cell}>加班小时</th>

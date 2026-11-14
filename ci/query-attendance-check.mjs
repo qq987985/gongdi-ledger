@@ -91,7 +91,7 @@ try {
   let text = await print();
   assert.ok(text.includes("20.5") && text.includes("2.25"));
   attendanceOnly(text);
-  attendanceOnly(await page.getByRole("region", { name: "个人查询明细", exact: true }).innerText());
+  attendanceOnly(await page.getByRole("region", { name: "个人查询汇总", exact: true }).innerText());
   assert.ok(!(await page.locator("main").innerText()).includes("SYNTHETIC-SECRET"));
   await pdf("person-attendance", [names[0], "20.5", "2.25"], [names[1], "应发", "银行卡"]);
   await page.getByLabel("查询方式", { exact: true }).selectOption("team");
@@ -104,14 +104,14 @@ try {
   text = await print();
   assert.ok(text.includes("2,095.00") && text.includes("700.00"), text);
   assert.ok(!text.includes("900.00"), "待发不能计入已发");
-  await pdf("team-wage", ["工资核对", "2,095.00", "700.00"], ["ID-SYNTHETIC", "BANK-SYNTHETIC"]);
+  await pdf("team-wage", ["工资汇总", "2,095.00", "700.00"], ["ID-SYNTHETIC", "BANK-SYNTHETIC"]);
   await page.getByRole("button", { name: "选择人员", exact: true }).click();
   await page.getByRole("button", { name: "全选本班组", exact: true }).click();
   text = await print("打印工资条 2 张");
-  assert.ok(text.includes("工资条") && !text.includes("工资核对清单"));
+  assert.ok(text.includes("工资条") && !text.includes("工资汇总"));
   assert.equal(await page.locator(".payslip").count(), 2);
   assert.ok(!text.includes(`姓名:${names[1]}`), "代领人可出现在打款明细，但不能多印其工资条");
-  text = await print(); assert.ok(text.includes("工资核对清单") && !text.includes("台账·工资条"));
+  text = await print(); assert.ok(text.includes("工资汇总") && !text.includes("台账·工资条"));
   await page.getByLabel("查询班组", { exact: true }).selectOption("甲组");
   assert.ok(await page.getByRole("button", { name: "打印工资条 0 张", exact: true }).count());
   await page.getByLabel("查询班组", { exact: true }).selectOption("");
@@ -120,7 +120,7 @@ try {
   await page.getByLabel("查询姓名", { exact: true }).fill(names[0]);
   await range(2026, 11, 2025, 12);
   text = await print(); assert.ok(text.includes("2025年12月") && text.includes("22.5"));
-  await pdf("person-wage", [names[0], "工资核对", "2025年12月", "22.5"], [names[1], "身份证"]);
+  await pdf("person-wage", [names[0], "工资汇总", "2025年12月", "22.5"], [names[1], "身份证"]);
   for (const width of [1440, 375, 390]) {
     await page.setViewportSize({ width, height: 900 });
     for (const scope of ["person", "team"]) for (const content of ["attendance", "wage"]) {
@@ -310,8 +310,8 @@ try {
   await range(2025, 12, 2026, 1);
   await page.getByLabel("查询方式", { exact: true }).selectOption("team");
   await page.getByLabel("查询班组", { exact: true }).selectOption("乙组");
-  const december = page.getByRole("region", { name: "2025年12月班组明细", exact: true });
-  const january = page.getByRole("region", { name: "2026年1月班组明细", exact: true });
+  const december = page.getByRole("region", { name: "2025年12月班组汇总", exact: true });
+  const january = page.getByRole("region", { name: "2026年1月班组汇总", exact: true });
   assert.equal(await december.locator("tfoot td").nth(1).textContent(), "2");
   assert.equal(await january.locator("tfoot td").nth(1).textContent(), "7");
   assert.equal(await january.locator("tfoot td").nth(2).textContent(), "3");
@@ -325,15 +325,19 @@ try {
   await print();
   await pdf("team-months-wage", ["2025年12月", "2026年1月", "200.00", "760.00", "960.00", "本月小计", "区间合计"], ["身份证", "银行卡"]);
   await range(2025, 12, 2026, 2);
-  const february = page.getByRole("region", { name: "2026年2月班组明细", exact: true });
+  const february = page.getByRole("region", { name: "2026年2月班组汇总", exact: true });
   assert.equal(await february.locator("tfoot td").nth(1).textContent(), "0", "无考勤月份也必须有明确零值");
   for (const width of [1440, 375, 390]) {
     await page.setViewportSize({ width, height: 900 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `逐月 ${width}px 页面溢出`);
     assert.ok(await december.isVisible());
-    await january.scrollIntoViewIfNeeded();
+    await january.evaluate((el) => el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }));
     const monthBox = await january.boundingBox();
-    assert.ok(monthBox && monthBox.y >= 0 && monthBox.y + monthBox.height <= 825, `逐月 ${width}px 月表可滚动到导航上方`);
+    const visibleBottom = await page.evaluate(() => Math.min(innerHeight, ...[...document.querySelectorAll("nav")].filter((nav) => {
+      const rect = nav.getBoundingClientRect();
+      return getComputedStyle(nav).position === "fixed" && rect.width > 0 && rect.height > 0 && rect.bottom >= innerHeight - 1;
+    }).map((nav) => nav.getBoundingClientRect().top)));
+    assert.ok(monthBox && monthBox.y >= 0 && monthBox.y + monthBox.height <= visibleBottom + 1, `逐月 ${width}px 月表可滚动到导航上方`);
     await page.screenshot({ path: `${out}/query-months-${width}.png` });
     const summaryRegion = page.getByRole("region", { name: "班组查询汇总", exact: true });
     await summaryRegion.scrollIntoViewIfNeeded();
@@ -355,7 +359,7 @@ try {
   await range();
   await page.getByLabel("查询方式", { exact: true }).selectOption("team");
   await page.getByLabel("查询班组", { exact: true }).selectOption({ label: "__all__" });
-  const specialMonth = page.getByRole("region", { name: "2026年11月班组明细", exact: true });
+  const specialMonth = page.getByRole("region", { name: "2026年11月班组汇总", exact: true });
   assert.equal(await specialMonth.locator("tfoot td").nth(1).textContent(), "0.3");
   assert.equal(await specialMonth.locator("tfoot td").nth(2).textContent(), "0.3");
   text = await print(); attendanceOnly(text);

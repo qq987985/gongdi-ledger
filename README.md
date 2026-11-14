@@ -8,7 +8,7 @@
 人员、考勤、工资发放、报销、合同收款、保险、影像资料。浏览器操作，数据只存在自己的 NAS / 电脑上。
 
 仓库：https://github.com/qq987985/gongdi-ledger  
-当前版本：**1.9.3**（以根目录 `VERSION.txt` 第一行为准）
+当前版本：**1.9.4**（以根目录 `VERSION.txt` 第一行为准）
 
 镜像：
 
@@ -28,6 +28,10 @@ ghcr.1ms.run/qq987985/gongdi-ledger:latest
 
 发版时同步 `VERSION.txt`、`package.json` 和本 README；`app/VERSION.txt` 由构建生成。
 更新记录写入 `VERSION.txt`（网页左下角只显示最近 10 条），完整步骤见 [开发规范](开发规范.md)。
+
+### 1.9.4
+
+- 查询各月改称「考勤汇总／工资汇总」，最终汇总标题写明起止月份，页面和打印同步。
 
 ### 1.9.3
 
