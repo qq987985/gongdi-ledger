@@ -252,6 +252,7 @@ export const Route = createFileRoute("/api/file/$kind")({
             return saveXlsx(
               buildFullWorkbook({
                 year: range.year,
+                teams: rec.teams || [],
                 people,
                 attendance,
                 payments,

@@ -159,6 +159,7 @@ function sliceState(s: LedgerState) {
     schemaVersion: s.schemaVersion || LEDGER_SCHEMA_VERSION,
     year: s.year,
     years: s.years,
+    teams: s.teams,
     people: s.people,
     attendance: s.attendance,
     attendanceDocs: s.attendanceDocs || [],
@@ -329,6 +330,7 @@ async function pullNasLedgerOnce(gen: number, opts: PullNasLedgerOptions): Promi
         schemaVersion: j.schemaVersion || LEDGER_SCHEMA_VERSION,
         year: j.year || 2026,
         years: j.years || [j.year || 2026],
+        teams: j.teams || [],
         people: j.people,
         attendance: j.attendance || [],
         attendanceDocs: j.attendanceDocs || [],
@@ -690,6 +692,7 @@ export async function pushNasBackup(): Promise<{ filename: string; counts: Backu
   const input: BackupBookInput = {
     year: s.year,
     years: s.years,
+    teams: s.teams,
     people: s.people,
     attendance: s.attendance,
     payments: s.payments,

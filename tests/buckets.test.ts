@@ -28,5 +28,5 @@ test("特殊班组的打印表与首页人数只使用该组成员，不串组�
   assert.deepEqual(tables[0].rows.map((row) => row.name), ["甲"]);
   assert.deepEqual(tables[0].totals, { people: 1, days: 1, otHours: 2 });
   assert.equal(tables[0].team, ALL_BUCKETS, "业务字段保持真实名称");
-  assert.deepEqual(teamRows(rows).find((row) => row.team === ALL_BUCKETS), { team: ALL_BUCKETS, count: 1 });
+  assert.deepEqual(teamRows(rows).find((row) => row.team === ALL_BUCKETS), { key: bucket.value, team: ALL_BUCKETS, count: 1 });
 });

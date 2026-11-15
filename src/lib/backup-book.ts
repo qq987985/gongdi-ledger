@@ -10,6 +10,7 @@ import type {
   InsurancePolicy,
   Payment,
   Person,
+  Team,
 } from "./types";
 
 /**
@@ -34,6 +35,7 @@ export interface BackupBookInput {
   /** 台账里展开过的年份（可选；会与考勤里出现的年份合并） */
   years?: number[];
   people: Person[];
+  teams?: Team[];
   attendance: AttendanceRow[];
   payments: Payment[];
   expenses?: Expense[];
@@ -59,6 +61,7 @@ export function buildBackupWorkbook(input: BackupBookInput): XLSX.WorkBook {
   return buildFullWorkbook({
     year: input.year,
     people: input.people,
+    teams: input.teams || [],
     attendance: input.attendance,
     payments: input.payments,
     expenses: input.expenses || [],
@@ -71,6 +74,7 @@ export function buildBackupWorkbook(input: BackupBookInput): XLSX.WorkBook {
 }
 
 export interface BackupCounts {
+  teams: number;
   people: number;
   /** 真正会写进月表的考勤行（有姓名 + 有内容，与导出同口径） */
   attendance: number;
@@ -84,6 +88,7 @@ export interface BackupCounts {
 
 export function backupCounts(input: BackupBookInput): BackupCounts {
   return {
+    teams: (input.teams || []).length,
     people: input.people.length,
     attendance: input.attendance.filter((a) => (a.name || "").trim() && hasContent(a)).length,
     payments: input.payments.length,
@@ -99,6 +104,7 @@ export function backupCounts(input: BackupBookInput): BackupCounts {
 export function backupSummaryText(c: BackupCounts): string {
   const parts = [
     `已备份 ${c.people} 人`,
+    `${c.teams} 个班组`,
     `${c.attendance} 条考勤`,
     `${c.payments} 笔发放`,
     `${c.expenses} 条报销`,

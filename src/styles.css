@@ -630,10 +630,25 @@
     padding: 1.2mm 1.5mm;
     overflow-wrap: anywhere;
   }
+  /* 工资清单分列出勤/加班工资，真实 A4 纸宽下给大额金额留足空间。 */
+  .print-only .query-result-sheet .query-wage-table {
+    font-size: 9pt;
+  }
+  .print-only .query-result-sheet .query-wage-table th,
+  .print-only .query-result-sheet .query-wage-table td {
+    padding-left: 0.6mm;
+    padding-right: 0.6mm;
+  }
   .print-only .query-result-sheet .query-number {
     white-space: nowrap;
     overflow-wrap: normal;
     font-variant-numeric: tabular-nums;
+  }
+  .print-only .wage-calculation {
+    font-size: 10.5pt;
+    line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   /* ②e 纸面上的**外框留白**也压掉：`@page` 已经有 12mm 页边距，单据自己再 `p-4`（每边 4.2mm）

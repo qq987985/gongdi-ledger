@@ -218,7 +218,7 @@ try {
   await print();
   assert.equal(await page.locator(".query-result-sheet tbody td").first().textContent(), longName);
   // 名字正常折成两行，PDF按纵坐标抽取时会被相邻金额行隔开；分别核对两段及完整DOM姓名。
-  await pdf("team-wage-long", ["长姓名测", "试工友甲", "9,364,219.50", "现场核对备注"], ["ID-SYNTHETIC", "BANK-SYNTHETIC"]);
+  await pdf("team-wage-long", ["长姓名测试工", "友甲", "9,364,219.50", "现场核对备注"], ["ID-SYNTHETIC", "BANK-SYNTHETIC"]);
   await page.getByLabel("查询方式", { exact: true }).selectOption("person");
   await page.getByLabel("查询姓名", { exact: true }).fill(longName);
   await print();
@@ -320,10 +320,12 @@ try {
   assert.equal(await page.locator(".print-only [data-query-month]").count(), 2);
   await pdf("team-months-attendance", ["2025年12月", "2026年1月", "本月小计", "区间合计", "一月核对记录"], ["应发", "工资", "身份证"]);
   await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
-  assert.equal(await december.locator("tfoot td").nth(6).textContent(), "200.00");
-  assert.equal(await january.locator("tfoot td").nth(6).textContent(), "760.00");
+  assert.equal(await december.locator("tfoot td").nth(7).textContent(), "200.00");
+  assert.equal(await january.locator("tfoot td").nth(7).textContent(), "760.00");
+  assert.equal(await january.locator("tfoot td").nth(3).textContent(), "700.00", "出勤工资独立列示");
+  assert.equal(await january.locator("tfoot td").nth(6).textContent(), "60.00", "加班工资独立列示");
   await print();
-  await pdf("team-months-wage", ["2025年12月", "2026年1月", "200.00", "760.00", "960.00", "本月小计", "区间合计"], ["身份证", "银行卡"]);
+  await pdf("team-months-wage", ["2025年12月", "2026年1月", "出勤工资", "加班工资", "700.00", "60.00", "200.00", "760.00", "960.00", "本月小计", "区间合计"], ["身份证", "银行卡"]);
   await range(2025, 12, 2026, 2);
   const february = page.getByRole("region", { name: "2026年2月班组汇总", exact: true });
   assert.equal(await february.locator("tfoot td").nth(1).textContent(), "0", "无考勤月份也必须有明确零值");

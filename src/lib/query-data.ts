@@ -4,6 +4,7 @@ import { isPaid, isPaidSelf, nameKey, ownerKey, receiverOf } from "./payments-st
 import { getWageAt, monthPay, round2, type MonthPayResult } from "./wage";
 import { hasContent } from "./work";
 import { sumQuantity } from "./num";
+import { buildQueryWageCalculation, type QueryWageCalculation } from "./query-wage";
 import type { AttendanceRow, Payment, Person } from "./types";
 
 export type QueryContent = "attendance" | "wage";
@@ -14,6 +15,43 @@ export interface QueryRange {
   startDate: string;
   endDate: string;
   swapped: boolean;
+}
+
+export interface QueryDateBounds { from: QueryDate; to: QueryDate }
+
+/** 自动日期仅来自当前可关联的记录；考勤只有月份，发放才有实际日期。 */
+export function queryAvailableDates(args: {
+  people: Person[]; attendance: AttendanceRow[]; payments: Payment[];
+  scope: "person" | "team"; content: QueryContent;
+  name?: string; personId?: string; team?: string;
+}): QueryDateBounds | null {
+  const counts = new Map<string, number>();
+  for (const person of args.people) counts.set(nameKey(person.name), (counts.get(nameKey(person.name)) || 0) + 1);
+  const selectedName = nameKey(args.name);
+  const explicit = args.people.find((person) => person.id === args.personId && (!selectedName || nameKey(person.name) === selectedName));
+  const people = args.people.filter((person) => args.scope === "team" ? inBucket(person.team, args.team || "")
+    : explicit ? person.id === explicit.id : !selectedName || nameKey(person.name) === selectedName);
+  const names = new Set(people.map((person) => nameKey(person.name)).filter((name) => name && counts.get(name) === 1));
+  let first = "", last = "";
+  const include = (from: string, to = from) => {
+    if (!from || !to) return;
+    if (!first || from < first) first = from;
+    if (!last || to > last) last = to;
+  };
+  for (const row of args.attendance) {
+    if (names.has(nameKey(row.name)) && hasContent(row)) include(ymd(row.year, row.month, 1), ymd(row.year, row.month, daysInMonth(row.year, row.month)));
+  }
+  if (args.content === "wage") for (const row of args.payments) {
+    if (!isPaid(row) || (!names.has(ownerKey(row)) && !names.has(receiverOf(row)))) continue;
+    const date = parseDateYmd(row.date);
+    if (date) include(date);
+  }
+  if (!first || !last) return null;
+  const parts = (date: string): QueryDate => {
+    const [year, month, day] = date.split("-").map(Number);
+    return { year, month, day };
+  };
+  return { from: parts(first), to: parts(last) };
 }
 
 /** 考勤取整月；发放取规范化后的闭区间，连同日一起对调反向范围。 */
@@ -38,6 +76,7 @@ export type QueryTotals = Pick<MonthPayResult, "days" | "otHours" | "base" | "ot
 export interface QueryMonth extends QueryTotals, QueryMonthRef {
   remark: string;
   hasContent: boolean;
+  calculation?: QueryWageCalculation;
 }
 export interface QueryPersonResult {
   person: Person;
@@ -108,11 +147,17 @@ export function buildQueryResults(args: {
     const months = ambiguous ? [] : range.span.map(({ year, month }): QueryMonth => {
       const rows = mine.filter((row) => row.year === year && row.month === month);
       const wage = getWageAt(person, year, month);
+      const entries = rows.map((row) => monthPay(row, wage));
+      const totals = sumTotals(entries);
+      const content = rows.some((a) => hasContent(a));
+      // 历史负工时仍可能产生工资数值；解释其金额，不改变 hasContent 的统计口径。
+      const explain = content || entries.some((entry) => Object.values(entry).some((value) => typeof value === "number" && value !== 0));
       return {
         year, month,
-        ...sumTotals(rows.map((row) => monthPay(row, wage))),
+        ...totals,
+        calculation: explain ? buildQueryWageCalculation(wage, entries, totals) : undefined,
         remark: rows.map((row) => row.remark || "").filter((remark) => remark.trim()).join("；"),
-        hasContent: rows.some((a) => hasContent(a)),
+        hasContent: content,
       };
     });
     const pays = ambiguous ? [] : paymentsByName.get(key) || [];
@@ -139,7 +184,7 @@ export function queryTeamResults(results: QueryPersonResult[], team: string, spa
       person: row.person,
       ambiguous: row.ambiguous,
       month: row.months.find((item) => item.year === year && item.month === month)
-        || { year, month, ...emptyTotals(), remark: "", hasContent: false },
+        || { year, month, ...emptyTotals(), remark: "", hasContent: false, calculation: undefined },
     }));
     return { year, month, rows, totals: sumTotals(rows.map((row) => row.month)) };
   });

@@ -7,7 +7,8 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { WideTable, usePager } from "~/components/wide-table";
-import { Can, Need, ReadonlyNotice, useCan, useCanSave } from "~/components/can";
+import { Can, Need, ReadonlyNotice, useCanSave } from "~/components/can";
+import { TeamEditor } from "~/components/team-editor";
 import { PeopleImport, TplLink } from "~/components/excel-import";
 import { PhotoSlot, ScanPhotosButton, usePhotoFlags } from "~/components/photo-slot";
 // B16（1.8.15）打印入口：人员名单（打印件唯一实现在 components/ledger-print-sheets.tsx）
@@ -22,6 +23,8 @@ import { confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { useGuardedClose } from "~/lib/confirm-close";
 import { ALL_BUCKETS, bucketRaw, groupBuckets, inBucket } from "~/lib/buckets";
 import { useApp } from "~/lib/store";
+import { availableTeamNames } from "~/lib/teams";
+import { ledgerIdentitySnapshot, subscribeLedgerContext } from "~/lib/nas-sync";
 import type { Person, WageHistory } from "~/lib/types";
 
 function emptyWageHistory(): WageHistory {
@@ -66,6 +69,11 @@ function emptyPerson(): Person {
 
 function PeoplePage() {
   const people = useApp((s) => s.people);
+  const registeredTeams = useApp((s) => s.teams);
+  const identity = React.useSyncExternalStore(subscribeLedgerContext, ledgerIdentitySnapshot, () => null);
+  const previousIdentity = React.useRef(identity);
+  const [editorIdentity, setEditorIdentity] = React.useState<string | null>(null);
+  const [creatingTeam, setCreatingTeam] = React.useState(false);
   const upsert = useApp((s) => s.upsertPerson);
   const addPerson = useApp((s) => s.addPerson);
   const removePeople = useApp((s) => s.removePeople);
@@ -77,7 +85,20 @@ function PeoplePage() {
   const [photoTick, setPhotoTick] = React.useState(0);
   // 编辑入口就按权限拦：没有 people.edit（或整本台账写不了）的账号，编辑框点不开、
   // 也不会再出现「已保存」的假象（A 组报告第 17 项）
-  const canEditPeople = useCan("people.edit");
+  const canEditPeople = useCanSave("people.edit") && identity !== null;
+  const teamNames = React.useMemo(() => availableTeamNames(registeredTeams, people), [registeredTeams, people]);
+  // 同册刷新保留输入；换台账/账号后清理草稿，保存时还会再核对绑定身份。
+  React.useEffect(() => {
+    if (identity === null) return;
+    if (previousIdentity.current !== identity) {
+      setEditing(null);
+      setCreating(false);
+      setCreatingTeam(false);
+      setEditorIdentity(null);
+      setSelected([]);
+    }
+    previousIdentity.current = identity;
+  }, [identity]);
   const names = React.useMemo(() => people.map((p) => p.name), [people]);
   const flags = usePhotoFlags(names, photoTick);
   // 班组下拉：当前人员表里真实存在的桶 + 「未分班组」（班组是必填，但历史/导入数据可能为空；
@@ -110,7 +131,7 @@ function PeoplePage() {
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold">人员管理</h1>
-            <p className="mt-1 text-sm text-muted">带 * 的必须填：姓名、班组。日工资可以填 0。按月计薪才必须填月工资。</p>
+            <p className="mt-1 text-sm text-muted">先创建班组，再新增人员并选择班组。带 * 的必须填：姓名、班组。日工资可以填 0，按月计薪须填月工资。</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Can perm="photos.edit">
@@ -131,8 +152,18 @@ function PeoplePage() {
               <PeopleImport />
             </Can>
             <Can perm="people.edit">
+              <Button variant="outline" disabled={!canEditPeople} onClick={() => {
+                if (blockedWrite("people.edit", permLabel("people.edit")) || identity === null) return;
+                closeEditor();
+                setEditorIdentity(identity);
+                setCreatingTeam(true);
+              }}>创建班组</Button>
               <Button
+                disabled={!canEditPeople}
                 onClick={() => {
+                  if (blockedWrite("people.edit", permLabel("people.edit")) || identity === null) return;
+                  setCreatingTeam(false);
+                  setEditorIdentity(identity);
                   setCreating(true);
                   setEditing(emptyPerson());
                 }}
@@ -142,6 +173,12 @@ function PeoplePage() {
             </Can>
           </div>
         </header>
+        <section aria-label="班组列表" className="rounded-xl border border-line bg-surface p-3">
+          <p className="text-sm font-medium">已有班组（{teamNames.length}）</p>
+          {teamNames.length ? <div className="mt-2 flex flex-wrap gap-2">{teamNames.map((name) => (
+            <span key={name} className="max-w-full break-all rounded-md bg-accent-soft px-2 py-1 text-xs">{name} · {people.filter((person) => person.team.trim() === name).length} 人</span>
+          ))}</div> : <p className="mt-1 text-xs text-muted">暂无班组，请先点「创建班组」。历史人员的班组会自动保留在这里。</p>}
+        </section>
         <div className="flex flex-wrap gap-2">
           <Input
             className="max-w-xs"
@@ -245,6 +282,8 @@ function PeoplePage() {
                         title={canEditPeople ? undefined : `你是只读账号（缺「${permLabel("people.edit")}」权限），改动不会保存。`}
                         onClick={() => {
                           if (blockedWrite("people.edit", permLabel("people.edit"))) return;
+                          if (identity === null) return;
+                          setEditorIdentity(identity);
                           setEditing(p);
                         }}
                       >
@@ -273,6 +312,8 @@ function PeoplePage() {
                         disabled={!canEditPeople}
                         onClick={() => {
                           if (blockedWrite("people.edit", permLabel("people.edit"))) return;
+                          if (identity === null) return;
+                          setEditorIdentity(identity);
                           setEditing(p);
                         }}
                       >
@@ -285,9 +326,12 @@ function PeoplePage() {
             </tbody>
           </table>
         </WideTable>
-        {editing ? (
+        {creatingTeam && editorIdentity !== null ? <TeamEditor identity={editorIdentity} onClose={() => setCreatingTeam(false)} /> : null}
+        {editing && editorIdentity !== null ? (
           <PersonEditor
             person={editing}
+            identity={editorIdentity}
+            teamNames={teamNames}
             creating={creating}
             refresh={photoTick}
             onClose={closeEditor}
@@ -296,6 +340,7 @@ function PeoplePage() {
               // 只读账号在入口就被拦（编辑按钮已禁用），这里再兜一层：
               // 宁可什么都不做 + 明确提示，也绝不弹「已保存」（A 组报告第 17 项）
               if (blockedWrite("people.edit", permLabel("people.edit"))) return false;
+              if (ledgerIdentitySnapshot() !== editorIdentity) { toast.error("台账正在切换或加载，请稍后重试"); return false; }
               // 同名统一口径（总览/Excel/考勤都按姓名匹配）：新增与改名都拦截，避免一人多档
               const dupName = people.some((x) => x.name === p.name && (!editing || x.id !== editing.id));
               if (dupName) {
@@ -313,6 +358,7 @@ function PeoplePage() {
             }}
             onDelete={() => {
               if (blockedWrite("people.delete", permLabel("people.delete"))) return;
+              if (ledgerIdentitySnapshot() !== editorIdentity) return;
               if (!confirmBatchDelete("人员", 1, `将删除 ${editing.name} 的档案。考勤和发放记录里的名字还在。`)) return;
               removePeople([editing.id]);
               setSelected((s) => s.filter((id) => id !== editing.id));
@@ -372,6 +418,8 @@ function personForm(person: Person): Person {
 
 function PersonEditor({
   person,
+  identity,
+  teamNames,
   creating,
   refresh = 0,
   onClose,
@@ -380,6 +428,8 @@ function PersonEditor({
   onChanged,
 }: {
   person: Person;
+  identity: string;
+  teamNames: string[];
   creating: boolean;
   refresh?: number;
   onClose: () => void;
@@ -401,7 +451,7 @@ function PersonEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [person.id]);
   // 编辑框里的「保存 / 删除」也要按权限禁用：只读账号连点都不该点得动
-  const canEditSelf = useCanSave("people.edit");
+  const canEditSelf = useCanSave("people.edit") && ledgerIdentitySnapshot() === identity;
   const { markDirty, resetDirty, requestClose } = useGuardedClose(onClose);
   function set<K extends keyof Person>(k: K, v: Person[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -413,7 +463,7 @@ function PersonEditor({
   }
   const errors = {
     name: !form.name.trim() ? "请填写姓名" : "",
-    team: !form.team.trim() ? "请填写班组" : "",
+    team: !form.team.trim() ? "请选择班组" : !teamNames.includes(form.team.trim()) ? "请选择已有班组" : "",
     monthWage: form.payType === "month" && (!form.monthWage || form.monthWage <= 0) ? "请填写月工资" : "",
   };
   const missing = Object.values(errors).filter(Boolean);
@@ -508,7 +558,11 @@ function PersonEditor({
             <Input value={form.name} onChange={(e) => set("name", e.target.value)} aria-required />
           </Field>
           <Field label="班组" required error={tried ? errors.team : ""}>
-            <Input value={form.team} onChange={(e) => set("team", e.target.value)} aria-required />
+            <select aria-label="人员班组" className="field-select w-full" value={form.team.trim()} onChange={(e) => set("team", e.target.value)} aria-required>
+              <option value="">请选择班组</option>
+              {teamNames.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+            {!teamNames.length && <span className="text-xs text-muted">请先关闭编辑框，在人员管理中「创建班组」。</span>}
           </Field>
           <Field label="计薪方式" hint="大多数人选按工天。按月的人当月有出勤就发月工资，缺勤用扣款。">
             <PayTypePick value={form.payType === "month" ? "month" : "day"} onChange={(v) => set("payType", v)} />

@@ -30,6 +30,8 @@ import { runMuted } from "./sync-mute";
 import { nameKey } from "./receiver";
 import type { AttendanceDoc, AttendanceRow, Expense, InsuranceMember, InsurancePolicy, LedgerState, Payment, Person } from "./types";
 import { LEDGER_SCHEMA_VERSION } from "./types";
+import type { Team } from "./types";
+import { mergeTeams, teamNameError } from "./teams";
 
 /**
  * 外部输入数值（表单 / Excel / 旧版持久化数据）统一入口：
@@ -44,6 +46,7 @@ export function emptyState(): LedgerState {
     schemaVersion: LEDGER_SCHEMA_VERSION,
     year,
     years: [year],
+    teams: [],
     people: [],
     attendance: [],
     attendanceDocs: [],
@@ -249,6 +252,7 @@ export function demoState(): LedgerState {
   return {
     year,
     years: derivedYears({ year, years: [year], attendance }),
+    teams: [{ id: uid(), name: "一班" }, { id: uid(), name: "二班" }],
     people,
     attendance,
     attendanceDocs: [],
@@ -275,6 +279,8 @@ export interface AppActions {
   setYear: (year: number) => void;
   addYear: (y?: number) => number;
   removeYear: (y: number) => void;
+  addTeam: (name: string) => { ok: boolean; error?: string; team?: Team };
+  importTeams: (teams: Team[]) => number;
   upsertPerson: (p: Person) => void;
   /**
    * 人员改名（事务式）：姓名是考勤/发放的关联键，改名必须与这些记录一起改（F3 / A14）。
@@ -784,11 +790,27 @@ export const useApp = create<AppStore>()(
       setAccessHash: (accessHash) => set({ accessHash }),
       // 界面风格是**本机偏好**（不进 sliceState，也不上传）：同样静音，别为换主题推一次整本台账（B3）
       setUiStyle: (uiStyle) => runMuted(() => set({ uiStyle })),
-      setAll: (s) => set({ ...s, years: derivedYears(s) }),
+      addTeam: (raw) => {
+        const error = teamNameError(raw, get().teams, get().people);
+        if (error) return { ok: false, error };
+        const team = { id: uid(), name: raw.trim() };
+        set({ teams: [...get().teams, team] });
+        logOp("新增班组", team.name, "人员");
+        return { ok: true, team };
+      },
+      importTeams: (incoming) => {
+        const merged = mergeTeams(get().teams, incoming);
+        if (merged.added) {
+          set({ teams: merged.teams });
+          logOp("导入班组", `${merged.added}个班组`, "人员");
+        }
+        return merged.added;
+      },
+      setAll: (s) => set({ ...s, schemaVersion: LEDGER_SCHEMA_VERSION, teams: s.teams || [], years: derivedYears(s) }),
     }),
     {
       name: "gongdi-ledger-v5",
-      version: 10,
+      version: 11,
       skipHydration: true,
       storage: createJSONStorage(() =>
         typeof window === "undefined" ? emptyStorage : localStorage,
@@ -827,6 +849,7 @@ export const useApp = create<AppStore>()(
         return {
           ...s,
           schemaVersion: LEDGER_SCHEMA_VERSION,
+          teams: s.teams || [],
           people,
           attendance,
           contracts,
@@ -845,6 +868,7 @@ export const useApp = create<AppStore>()(
         schemaVersion: LEDGER_SCHEMA_VERSION,
         year: s.year,
         years: s.years,
+        teams: s.teams,
         people: s.people,
         attendance: s.attendance,
         attendanceDocs: s.attendanceDocs || [],

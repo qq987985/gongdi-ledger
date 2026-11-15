@@ -13,7 +13,9 @@ import type {
   InsurancePolicy,
   Payment,
   Person,
+  Team,
 } from "../types";
+import { mergeTeams } from "../teams";
 import type { ContractEntry, ContractRecord } from "../contracts";
 import {
   cellStr,
@@ -29,6 +31,7 @@ import {
   readWb,
   sheetFromAoa,
   sheetRecords,
+  sheetToRows,
   utils,
   type Row,
 } from "./common";
@@ -41,6 +44,7 @@ import { buildContractWorkbook } from "./contracts";
 export interface FullBookParse {
   year: number;
   people: Person[];
+  teams: Team[];
   attendance: AttendanceRow[];
   payments: Payment[];
   expenses: Expense[];
@@ -53,6 +57,10 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
   const year = detectWorkbookYear(wb, fallbackYear);
   const peopleName = wb.SheetNames.find((n) => n.includes("人员")) || wb.SheetNames[0];
   const people = sheetRecords(wb.Sheets[peopleName]).map(rowToPerson).filter((x): x is Person => Boolean(x));
+  const teamSheet = wb.Sheets["班组列表"];
+  const teams = teamSheet ? mergeTeams([], sheetToRows(teamSheet).map((row) => ({
+    id: pick(row, ["班组编号"]), name: pick(row, ["班组名称"]),
+  }))).teams : [];
   const attendance: AttendanceRow[] = [];
   for (const name of wb.SheetNames) {
     if (isDerivedSheet(name) && !/\d+\s*月/.test(name)) continue;
@@ -134,6 +142,7 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
   return {
     year,
     people,
+    teams,
     attendance,
     payments: payName
       ? sheetRecords(wb.Sheets[payName]).map(rowToPayment).filter((x): x is Payment => x !== null)
@@ -147,6 +156,7 @@ export function parseFullAttendanceWorkbook(buf: ArrayBuffer | Uint8Array, fallb
 }
 export interface FullWorkbookArgs {
   year: number;
+  teams?: Team[];
   people: Person[];
   attendance: AttendanceRow[];
   payments: Payment[];
@@ -187,6 +197,9 @@ export function buildFullWorkbook(args: FullWorkbookArgs): XLSX.WorkBook {
   const yearSet = [...new Set(monthList.map((x) => x.year))].sort((a, b) => a - b);
   const singleYear = yearSet.length <= 1;
   if (!skipPeople) utils.book_append_sheet(wb, sheetFromAoa(peopleSheetAoa(people)), "人员信息");
+  if (!skipPeople && (args.teams || []).length) utils.book_append_sheet(wb, sheetFromAoa([
+    ["班组编号", "班组名称"], ...(args.teams || []).map((team) => [team.id, team.name]),
+  ]), "班组列表");
   for (const { year: y, month: m } of monthList) {
     const monthRows = attendance.filter(
       (a) => a.year === y && a.month === m && a.name.trim() && hasAttContent(a),

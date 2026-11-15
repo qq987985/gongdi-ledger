@@ -12,12 +12,16 @@
  * - 校验只用于**拒绝明显坏掉的写入**；通过后写的仍是原始 body（不做转换，避免悄悄改数据）。
  */
 import { z } from "zod";
+import { TEAM_NAME_LIMIT } from "./teams";
 
 /** coerce：接受数字或数字字符串，拒绝 "abc" / null / undefined */
 const num = z.coerce.number().finite();
 const str = z.string();
 
 const person = z.object({ id: str, name: str }).passthrough();
+const team = z.object({ id: str.trim().min(1), name: str.trim().min(1).max(TEAM_NAME_LIMIT) }).passthrough();
+const teams = z.array(team).refine((rows) => new Set(rows.map((row) => row.id)).size === rows.length, "班组编号重复")
+  .refine((rows) => new Set(rows.map((row) => row.name)).size === rows.length, "班组名称重复");
 const attendance = z.object({ name: str, year: num, month: num }).passthrough();
 const attendanceDoc = z.object({ fileName: str }).passthrough();
 const payment = z.object({ owner: str, amount: num }).passthrough();
@@ -34,6 +38,7 @@ const TELLTALE_KEYS = [
   "year",
   "years",
   "people",
+  "teams",
   "attendance",
   "payments",
   "contracts",
@@ -52,6 +57,7 @@ export const ledgerPayloadSchema = z
     // 历史上还能直接登录成管理员。写入时由 nas-fs.server.ts 的 dropLegacyAccessHash 丢弃、
     // 读视图里也不再返回；老客户端多发这个字段依然放行（passthrough），只是不再落盘。
     people: z.array(person).optional(),
+    teams: teams.optional(),
     attendance: z.array(attendance).optional(),
     attendanceDocs: z.array(attendanceDoc).optional(),
     payments: z.array(payment).optional(),
@@ -84,6 +90,7 @@ export function ledgerPayloadSummary(body: unknown): Record<string, unknown> {
     schemaVersion: o.schemaVersion ?? "(无)",
     year: o.year ?? "-",
     people: count(o.people),
+    teams: count(o.teams),
     attendance: count(o.attendance),
     payments: count(o.payments),
     contracts: count(o.contracts),

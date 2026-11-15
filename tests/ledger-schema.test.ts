@@ -68,3 +68,13 @@ test("人员/考勤/报销/保单的基本字段都要在", () => {
   assert.equal(validateLedgerPayload({ ...ok, expenses: [{ name: "办公用品", amount: 500 }] }), null);
   assert.match(String(validateLedgerPayload({ ...ok, insurancePolicies: [{ 没保单号: 1 }] })), /insurancePolicies/);
 });
+
+test("班组列表可独立于人员保存，拒绝坏结构、空名称和重复编号/名称，旧册可缺列表", () => {
+  assert.equal(validateLedgerPayload({ ...ok, teams: [{ id: "team-1", name: "待进场班组" }] }), null);
+  assert.equal(validateLedgerPayload(ok), null);
+  for (const teams of [
+    {}, [{ id: "t" }], [{ id: "", name: "一班" }], [{ id: "t", name: "  " }],
+    [{ id: "t", name: "一班" }, { id: "t", name: "二班" }],
+    [{ id: "a", name: "一班" }, { id: "b", name: " 一班 " }],
+  ]) assert.match(String(validateLedgerPayload({ ...ok, teams })), /teams/);
+});

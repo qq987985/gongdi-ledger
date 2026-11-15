@@ -8,12 +8,14 @@ import { Need, useCan, useCanSave } from "~/components/can";
 import { YmPick, rangeLabel } from "~/components/ym-pick";
 import { PersonQueryResults, TeamQueryResults } from "~/components/query-results";
 import { QuerySheet } from "~/components/query-sheet";
+import { WageCalculation, WageTotalCalculation } from "~/components/wage-calculation";
 import { PhotoSlot } from "~/components/photo-slot";
 import { DocActions } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
 import { derivedYears } from "~/lib/dates";
 import { parseOtRule, wageLabel } from "~/lib/wage";
-import { buildQueryResults, buildQuerySlips, queryPrintResults, queryRange, queryTeamResults, type QueryContent, type QuerySlip } from "~/lib/query-data";
+import { buildQueryResults, buildQuerySlips, queryAvailableDates, queryPrintResults, queryRange, queryTeamResults, type QueryContent, type QueryDateBounds, type QuerySlip } from "~/lib/query-data";
+import { ledgerIdentitySnapshot, subscribeLedgerContext } from "~/lib/nas-sync";
 import { groupBuckets, inBucket } from "~/lib/buckets";
 // 收款人判定（receiverOf / isProxyReceiver）与姓名比较键（nameKey / ownerKey）都只有一处实现
 import { isProxyReceiver, nameKey, receiverOf } from "~/lib/payments-stats";
@@ -60,8 +62,8 @@ function CopyField({ label, value, mono = false }: { label: string; value: strin
 function groupSlips(slips: QuerySlip[], showMonths: boolean, showPays: boolean): QuerySlip[][] {
   const groups: QuerySlip[][] = [];
   const isBig = (s: QuerySlip) => {
-    // 内容行数 = 月份数（打印工资时）+ 打款记录数（打印打款时），超过 8 行视为内容多，单人一张
-    const lines = (showMonths ? s.months.length : 0) + (showPays ? s.pays.length : 0);
+    // 每月含工资计算说明，按 5 行权重预估；另加打款行数，超过 8 则单独排一位。
+    const lines = (showMonths ? s.months.length * 5 : 0) + (showPays ? s.pays.length : 0);
     return lines > 8;
   };
   let i = 0;
@@ -111,8 +113,7 @@ function PayslipSheets({
                 <div>班组：{s.person.team || "—"}</div>
                 {printMode === "pays" ? null : (
                   <>
-                    <div>工资：{s.hasHistory ? "按各月生效工资（见明细）" : wageLabel(s.person)}</div>
-                    <div>加班：{parseOtRule(s.person.otRule).label || "—"}</div>
+                    <div className="col-span-2">日工资、工资标准及加班折算见下方各月计算。</div>
                   </>
                 )}
               </div>
@@ -120,7 +121,7 @@ function PayslipSheets({
             <table className="mt-3 w-full border-collapse text-center text-xs">
               <thead>
                 <tr>
-                  {["年月", "出勤", "底薪", "加班小时", "加班费", "补助", "扣款", "应发", "备注"].map((h) => (
+                  {["年月", "出勤", "出勤工资", "加班小时", "加班工资", "其他补助", "罚款/扣款", "应发", "备注"].map((h) => (
                     <th key={h} className="border border-black px-1 py-1 font-medium">
                       {h}
                     </th>
@@ -129,7 +130,7 @@ function PayslipSheets({
               </thead>
               <tbody>
                 {s.months.map((m) => (
-                  <tr key={`${m.year}-${m.month}`}>
+                  <React.Fragment key={`${m.year}-${m.month}`}><tr>
                     <td className="border border-black px-1 py-1">
                       {m.year}年{m.month}月
                     </td>
@@ -141,7 +142,7 @@ function PayslipSheets({
                     <td className="border border-black px-1 py-1">{m.deduction ? money(m.deduction) : ""}</td>
                     <td className="border border-black px-1 py-1 font-medium">{money(m.pay)}</td>
                     <td className="border border-black px-1 py-1 text-left">{m.remark}</td>
-                  </tr>
+                  </tr><tr><td className="border border-black px-1 py-1" colSpan={9}><WageCalculation title={`${s.person.name} · ${m.year}年${m.month}月`} calculation={m.calculation} /></td></tr></React.Fragment>
                 ))}
                 <tr>
                   <td className="border border-black px-1 py-1 font-medium">合计</td>
@@ -160,10 +161,7 @@ function PayslipSheets({
             <p className="mt-3 text-xs">本区间无出勤记录。</p>
           )) : null}
           {showMonths ? (
-            <p className="mt-2 text-xs">
-              {s.person.payType === "month" ? "按月：当月有出勤发月工资 + 加班费 + 补助 − 扣款。" : "按工天：应发 = 出勤×日工资 + 加班费 + 补助 − 扣款。"}
-              本区间应发合计 ¥{money(s.total)}。
-            </p>
+            <div className="mt-2"><WageTotalCalculation totals={s.totals} /></div>
           ) : null}
           {showPays ? (
             <section className="mt-4">
@@ -235,7 +233,6 @@ function QueryPage() {
   const store = useApp();
   const { year, people, attendance, attendanceDocs, payments, patchAttendanceDoc, removeAttendanceDocs } = store;
   const years = derivedYears(store);
-  const yearOpts = years.length ? years : [year];
   const canEditPhotos = useCanSave("photos.edit");
   const canEditDocs = useCanSave("attendance.edit");
   const canPrint = useCan("query.print");
@@ -250,12 +247,24 @@ function QueryPage() {
   const [printKind, setPrintKind] = React.useState<"query" | "slips">("query");
   const [printRequest, setPrintRequest] = React.useState(0);
   React.useEffect(() => { if (printRequest) window.print(); }, [printRequest]);
-  const [fromY, setFromY] = React.useState(year);
-  const [fromM, setFromM] = React.useState(1);
-  const [fromD, setFromD] = React.useState(1);
-  const [toY, setToY] = React.useState(year);
-  const [toM, setToM] = React.useState(12);
-  const [toD, setToD] = React.useState(31);
+  const identity = React.useSyncExternalStore(subscribeLedgerContext, ledgerIdentitySnapshot, () => null);
+  const lastIdentity = React.useRef(identity);
+  if (identity !== null) lastIdentity.current = identity;
+  const identityKey = lastIdentity.current || "pending";
+  const [manualDates, setManualDates] = React.useState<(QueryDateBounds & { identity: string }) | null>(null);
+  const teams = groupBuckets(people.map((person) => person.team), "未分班组");
+  const activeTeam = teams.some((bucket) => bucket.value === team) ? team : teams[0]?.value ?? "";
+  const teamLabel = teams.find((bucket) => bucket.value === activeTeam)?.label || "未分班组";
+  const available = React.useMemo(() => queryAvailableDates({ people, attendance, payments, scope, content, name, personId: selectedId, team: activeTeam }), [people, attendance, payments, scope, content, name, selectedId, activeTeam]);
+  const manual = manualDates?.identity === identityKey ? manualDates : null;
+  const selectedDates: QueryDateBounds = manual || available || { from: { year, month: 1, day: 1 }, to: { year, month: 12, day: 31 } };
+  const { year: fromY, month: fromM, day: fromD } = selectedDates.from;
+  const { year: toY, month: toM, day: toD } = selectedDates.to;
+  const availableYears = available ? Array.from({ length: available.to.year - available.from.year + 1 }, (_, index) => available.from.year + index) : [];
+  const yearOpts = [...new Set([...years, year, ...availableYears])].sort((a, b) => a - b);
+  function changeDate(side: "from" | "to", field: "year" | "month" | "day", value: number) {
+    setManualDates({ ...selectedDates, [side]: { ...selectedDates[side], [field]: value }, identity: identityKey });
+  }
   const range = React.useMemo(() => queryRange(
     { year: fromY, month: fromM, day: fromD }, { year: toY, month: toM, day: toD },
   ), [fromY, fromM, fromD, toY, toM, toD]);
@@ -267,9 +276,6 @@ function QueryPage() {
   const result = (selectedId ? matches.find((row) => row.person.id === selectedId) : undefined) || (matches.length === 1 ? matches[0] : undefined);
   const p = result?.person;
   const pays = result?.pays || [];
-  const teams = groupBuckets(people.map((person) => person.team), "未分班组");
-  const activeTeam = teams.some((bucket) => bucket.value === team) ? team : teams[0]?.value ?? "";
-  const teamLabel = teams.find((bucket) => bucket.value === activeTeam)?.label || "未分班组";
   const teamSummary = React.useMemo(() => queryTeamResults(results, activeTeam, range.span), [results, activeTeam, range.span]);
   const printablePeople = scope === "team" ? teamSummary.members : results;
   const printableSelection = queryPrintResults(results, printIds, scope === "team" ? activeTeam : undefined);
@@ -329,9 +335,11 @@ function QueryPage() {
             </div>
           </header>
           <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-surface p-4">
-            <YmPick label="从" years={yearOpts} y={fromY} m={fromM} d={fromD} onY={setFromY} onM={setFromM} onD={content === "wage" ? setFromD : undefined} />
+            <YmPick label="从" years={yearOpts} y={fromY} m={fromM} d={fromD} onY={(n) => changeDate("from", "year", n)} onM={(n) => changeDate("from", "month", n)} onD={content === "wage" ? (n) => changeDate("from", "day", n) : undefined} />
             <span className="pb-2 text-sm text-muted">到</span>
-            <YmPick label="到" years={yearOpts} y={toY} m={toM} d={toD} onY={setToY} onM={setToM} onD={content === "wage" ? setToD : undefined} />
+            <YmPick label="到" years={yearOpts} y={toY} m={toM} d={toD} onY={(n) => changeDate("to", "year", n)} onM={(n) => changeDate("to", "month", n)} onD={content === "wage" ? (n) => changeDate("to", "day", n) : undefined} />
+            <Button variant="outline" size="sm" type="button" disabled={!available} onClick={() => setManualDates(null)}>按数据日期</Button>
+            <p className="w-full text-xs text-muted">{manual ? "当前为手动范围，切换个人/班组时保留；可按数据日期重新选择。" : available ? "已自动选择有数据的范围；考勤按月份月初、月末，工资同时考虑相关发放日期。" : "当前对象暂无可自动选择的记录，请手动选择日期。"}</p>
             <p className="w-full text-xs text-muted">考勤：{rangeLabelText}，按整月统计，共 {span.length} 个月{swapped ? "（起止已自动对调）" : ""}。{content === "wage" ? `发放：${paymentRangeLabel}，含起止当日。` : ""}</p>
           </div>
           {canPrint ? <div className="flex flex-wrap items-center gap-2">

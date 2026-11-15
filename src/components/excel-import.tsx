@@ -521,12 +521,14 @@ export function FullBookImport() {
     <FilePick
       accept=".xlsx,.xls"
       label="选择整本台账 / 备份文件"
-      hint="含人员、各年月考勤、发放、报销、合同+明细、保险+参保人"
+      hint="含班组、人员、各年月考勤、发放、报销、合同+明细、保险+参保人"
       onFile={async (file) => {
         if (!file) return;
         // 只读账号（缺 people.edit / attendance.edit / settings.* 任一）点得动、而服务端 PUT /api/ledger 必 403 ——
         // 先拦下，别让它弹「整本导入完成」（与 A17 是同一类「本机改了一下」的假成功）
         if (blockedImport()) return;
+        const context = ledgerContextSnapshot();
+        if (context === null) { toast.error("台账正在切换或加载，请稍后重试"); return; }
         const wbBuf = await file.arrayBuffer();
         const parsed = parseFullAttendanceWorkbook(wbBuf, store.year);
         // 合同 + 明细：备份工作簿把「合同管理表 / 月报量 / 开票 / 收款」拼在同一份文件里（1.8.14）。
@@ -535,6 +537,7 @@ export function FullBookImport() {
         const cparsed = parseContractWorkbook(wbBuf);
         if (
           !parsed.people.length &&
+          !parsed.teams.length &&
           !parsed.attendance.length &&
           !parsed.payments.length &&
           !(parsed.expenses || []).length &&
@@ -542,7 +545,7 @@ export function FullBookImport() {
           !(parsed.members || []).length &&
           !cparsed.contracts.length
         ) {
-          toast.error("没有读到人员、考勤、发放、报销、保险或合同");
+          toast.error("没有读到班组、人员、考勤、发放、报销、保险或合同");
           return;
         }
         // 发放/报销/合同按内容键去重：同一份整本重复导入不再翻倍
@@ -555,14 +558,18 @@ export function FullBookImport() {
         if (
           !confirm(
             `导入「${file.name}」？\n\n` +
+              `班组 ${parsed.teams.length} 个 · ` +
               `人员 ${parsed.people.length} 人 · 考勤 ${parsed.attendance.length} 条 · 发放 ${parsed.payments.length} 条（跳过 ${payMerge.skipped} 条重复）· ` +
               `报销 ${(parsed.expenses || []).length} 条（跳过 ${expMerge.skipped} 条重复）· 保单 ${(parsed.policies || []).length} 份 · 保险人员 ${(parsed.members || []).length} 人 · ` +
               `合同 ${cparsed.contracts.length} 份（含 ${cparsed.entries.length} 条明细，跳过 ${conMerge.skipped} 份重复）。\n\n` +
-              "同名人员、同保单号保单、重复发放/报销/合同（年份+项目号+项目名称）会被跳过；同一人同一月的考勤用文件里的行覆盖；其余数据追加保留。" +
+              "同名班组、同名人员、同保单号保单、重复发放/报销/合同（年份+项目号+项目名称）会被跳过；同一人同一月的考勤用文件里的行覆盖；其余数据追加保留。" +
               (legacyDup ? `\n\n${legacyDup}` : ""),
           )
         )
           return;
+        if (blockedImport()) return;
+        if (ledgerContextSnapshot() !== context) { toast.error("台账已切换或重新加载，请重新选择文件"); return; }
+        const teamsAdded = store.importTeams(parsed.teams);
         const byName = Object.fromEntries(store.people.map((p) => [p.name, p]));
         const merged = store.people.slice();
         let added = 0;
@@ -617,7 +624,7 @@ export function FullBookImport() {
           }
         }
         toast.success(
-          `整本导入完成：人员新增 ${added}，考勤 ${parsed.attendance.length} 条，发放新增 ${payMerge.added} 条（跳过 ${payMerge.skipped} 条重复），报销新增 ${expMerge.added} 条（跳过 ${expMerge.skipped} 条重复），合同新增 ${conMerge.added} 份（跳过 ${conMerge.skipped} 份重复），保单 ${polAdded} 份，保险人员 ${memAdded} 人`,
+          `整本导入完成：班组新增 ${teamsAdded}，人员新增 ${added}，考勤 ${parsed.attendance.length} 条，发放新增 ${payMerge.added} 条（跳过 ${payMerge.skipped} 条重复），报销新增 ${expMerge.added} 条（跳过 ${expMerge.skipped} 条重复），合同新增 ${conMerge.added} 份（跳过 ${conMerge.skipped} 份重复），保单 ${polAdded} 份，保险人员 ${memAdded} 人`,
         );
       }}
     />

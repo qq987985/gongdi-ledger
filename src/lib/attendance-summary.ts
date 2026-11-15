@@ -266,18 +266,19 @@ export function summarizeYear(args: {
  * 旧写法 `[...new Set(people.map(p => p.team).filter(Boolean))]` 把没填班组的人从面板里
  * 静默删掉：面板人数之和 < 「在册人员」KPI，分组口径和列表口径对不上。
  */
-export function teamRows(people: Pick<Person, "team">[]): { team: string; count: number }[] {
+export function teamRows(people: Pick<Person, "team">[], registeredNames: readonly string[] = []): { key: string; team: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const p of people) {
     const key = String(p.team ?? "").trim();
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return groupBuckets(
-    people.map((p) => p.team),
+    [...people.map((p) => p.team), ...registeredNames],
     "未分班组",
   )
     .map((b) => ({
-      team: b.label,
+      key: b.value,
+      team: !b.empty && b.label === "未分班组" ? `${b.label}（班组名）` : b.label,
       count: counts.get(bucketRaw(b.value)) ?? 0,
     }))
     .sort((a, b) => b.count - a.count || a.team.localeCompare(b.team, "zh"));

@@ -1,0 +1,212 @@
+/** 创建班组、自动日期及工资计算解释的真实浏览器回归。仅使用专用临时 DATA_DIR。
+ * 准备及环境同 query-attendance-check.mjs；顺序执行，不能与其它写入脚本共用目录并跑。
+ */
+import assert from "node:assert/strict";
+import { mkdir, copyFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pdfPageTexts } from "./print-pdf.mjs";
+
+assert.ok(process.env.DATA_DIR && resolve(process.env.DATA_DIR).startsWith("/tmp/gongdi-team-query."), "仅允许专用临时数据目录");
+assert.ok(process.env.PLAYWRIGHT_CORE && process.env.E2E_CHROME, "请指定已有浏览器工具路径");
+const driver = await import(process.env.PLAYWRIGHT_CORE);
+const browser = await (driver.chromium || driver.default?.chromium).launch({ executablePath: process.env.E2E_CHROME, headless: true });
+const ctx = await browser.newContext({ baseURL: `http://127.0.0.1:${process.env.PORT || 4700}`, viewport: { width: 1440, height: 1000 } });
+await ctx.addInitScript(() => { window.print = () => { window.__printed = (window.__printed || 0) + 1; }; });
+const page = await ctx.newPage();
+page.on("dialog", (dialog) => dialog.accept());
+const errors = [];
+page.on("pageerror", (error) => errors.push(error.message));
+const out = process.env.E2E_OUTPUT_DIR || "browser-screenshots/teams-query-wage-20261115";
+await mkdir(out, { recursive: true });
+const report = [];
+const clean = (text) => text.normalize("NFKC").replace(/⻓/g, "长").replace(/\s/g, "");
+async function authOp(op, args = {}) {
+  const response = await ctx.request.post("/api/auth", { data: { op, ...args } });
+  assert.equal(response.status(), 200, await response.text());
+  return response.json();
+}
+async function ledger() { return (await ctx.request.get("/api/ledger")).json(); }
+async function put(data) {
+  const old = await ctx.request.get("/api/ledger");
+  const response = await ctx.request.put("/api/ledger", { headers: { "if-match": old.headers()["x-ledger-revision"] || "" }, data });
+  assert.equal(response.status(), 200, await response.text());
+}
+async function dates(expected) {
+  for (const [label, value] of Object.entries(expected)) assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), String(value), label);
+}
+async function printPdf(button, file, expected, forbidden = []) {
+  const before = await page.evaluate(() => window.__printed || 0);
+  await page.getByRole("button", { name: button, exact: true }).click();
+  await page.waitForFunction((count) => window.__printed > count, before);
+  await page.setViewportSize({ width: 703, height: 1000 });
+  await page.emulateMedia({ media: "print" });
+  assert.deepEqual(await page.locator(".query-number").evaluateAll((cells) => cells.filter((cell) => cell.scrollWidth > cell.clientWidth + 1).map((cell) => cell.textContent)), []);
+  const bytes = await page.pdf({ path: `${out}/${file}.pdf`, preferCSSPageSize: true, displayHeaderFooter: false });
+  const pages = pdfPageTexts(bytes);
+  assert.ok(pages.length && pages.every((p) => !p.blank), "不得有空白页");
+  const text = clean(pages.flatMap((p) => p.lines.map((line) => line.text)).join(""));
+  for (const value of expected) assert.ok(text.includes(clean(value)), `${file} 缺少 ${value}`);
+  for (const value of forbidden) assert.ok(!text.includes(clean(value)), `${file} 包含 ${value}`);
+  report.push({ file, pages: pages.length, bytes: bytes.length });
+  await page.emulateMedia({ media: "screen" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  return text;
+}
+try {
+  const status = await (await ctx.request.get("/api/auth")).json();
+  await authOp(status.needSetup ? "setup" : "login", { username: "admin", password: "12345678", name: "合成班组工资核对" });
+  const seed = await ledger();
+  const person = (id, name, team, extra = {}) => ({ ...seed.people[0], id, name, team, dailyWage: 300, monthWage: 0, payType: "day", otRule: "折算:8", mealAllowance: 20, wageHistory: [], idCard: "", cardNo: "", ...extra });
+  const people = [person("calc-a", "工资核对甲", "一组"), person("calc-b", "历史核对乙", "一组", { dailyWage: 999, wageHistory: [
+    { id: "history-day", fromDate: "2025-01-01", payType: "day", dailyWage: 100, monthWage: 0, otRule: "折算:8", mealAllowance: 10, remark: "" },
+    { id: "history-month", fromDate: "2026-01-31", payType: "month", dailyWage: 0, monthWage: 3000, otRule: "折算:8", mealAllowance: 12, remark: "" },
+  ] }), person("calc-c", "仅发放丙", "二组"), person("calc-d", "未填写丁", "")];
+  const row = (id, name, year, month, extra = {}) => ({ id, name, team: "一组", year, month, days: 2, otHours: 8, allowance: 5, deduction: 10, remark: "合成核对备注", ...extra });
+  const sample = { ...seed, schemaVersion: 3, year: 2026, teams: [], people, attendance: [
+    row("calc-att-a", people[0].name, 2026, 7, { days: 20.5, otHours: 10, allowance: 100, deduction: 50 }),
+    row("calc-att-b", people[1].name, 2025, 12), row("calc-att-c", people[1].name, 2026, 1),
+  ], payments: [
+    { id: "calc-pay-a", owner: "外部人员", receiver: people[2].name, date: "2023-05-08", amount: 100, source: "", remark: "" },
+    { id: "calc-pay-b", owner: people[2].name, receiver: people[2].name, date: "2026-08-09", amount: 200, source: "", remark: "" },
+  ], attendanceDocs: [] };
+  await put(sample);
+  await page.goto("/query", { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "查询", exact: true }).waitFor();
+  await page.getByLabel("查询姓名", { exact: true }).fill(people[0].name);
+  await dates({ 从年: 2026, 从月: 7, 到年: 2026, 到月: 7 });
+  await page.getByLabel("查询姓名", { exact: true }).fill(people[1].name);
+  await dates({ 从年: 2025, 从月: 12, 到年: 2026, 到月: 1 });
+  await page.getByLabel("查询姓名", { exact: true }).fill(people[3].name);
+  assert.ok((await page.locator("main").innerText()).includes("当前对象暂无可自动选择的记录"));
+  assert.ok(await page.getByRole("button", { name: "按数据日期", exact: true }).isDisabled());
+  await page.getByLabel("查询姓名", { exact: true }).fill(people[1].name);
+  await page.getByLabel("从月", { exact: true }).selectOption("11");
+  await page.getByLabel("查询姓名", { exact: true }).fill(people[0].name);
+  await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
+  await dates({ 从年: 2025, 从月: 11, 到年: 2026, 到月: 1 });
+  await page.getByRole("button", { name: "按数据日期", exact: true }).click();
+  await dates({ 从年: 2026, 从月: 7, 从日: 1, 到年: 2026, 到月: 7, 到日: 31 });
+  const calc = page.locator(".no-print .wage-calculation").first();
+  const formula = clean(await calc.innerText());
+  for (const value of ["日工资¥300.00/天", "20.5天×¥300.00/天=¥6,150.00", "10小时÷8小时/天×¥300.00/天=¥375.00", "餐补", "¥410.00", "其他补助¥100.00", "罚款/扣款¥50.00", "=¥6,985.00"]) assert.ok(formula.includes(value), value);
+  await printPdf("打印查询结果", "person-calculation", [people[0].name, "日工资", "出勤工资", "6,150.00", "375.00", "410.00", "罚款/扣款", "6,985.00"]);
+  await mkdir("output/pdf", { recursive: true });
+  await copyFile(`${out}/person-calculation.pdf`, "output/pdf/工资计算核对样例-20261115.pdf");
+  for (const width of [1440, 375, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width} 查询页面溢出`);
+    await calc.scrollIntoViewIfNeeded();
+    assert.equal(await calc.evaluate((element) => element.scrollWidth > element.clientWidth + 1), false, `${width} 工资计算说明须直接换行`);
+    const bounds = await calc.boundingBox();
+    assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width + 1);
+    await page.screenshot({ path: `${out}/wage-${width}.png` });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByLabel("查询姓名", { exact: true }).fill(people[1].name);
+  await dates({ 从年: 2025, 从月: 12, 到年: 2026, 到月: 1 });
+  await printPdf("打印查询结果", "history-calculation", ["日工资", "100.00", "月工资", "3,000.00", "315.00", "3,119.00"], ["999.00"]);
+  await page.getByRole("button", { name: "选择人员", exact: true }).click();
+  await page.getByRole("button", { name: "清空", exact: true }).click();
+  await page.getByRole("checkbox", { name: people[1].name, exact: true }).check();
+  await printPdf("打印工资条 1 张", "history-slip", ["工资条", "出勤工资", "加班工资", "3,119.00", "餐补", "罚款/扣款"], ["999.00"]);
+  await page.getByLabel("查询姓名", { exact: true }).fill(people[2].name);
+  await dates({ 从年: 2023, 从月: 5, 从日: 8, 到年: 2026, 到月: 8, 到日: 9 });
+  await page.getByLabel("查询方式", { exact: true }).selectOption("team");
+  await page.getByLabel("查询班组", { exact: true }).selectOption("一组");
+  await dates({ 从年: 2025, 从月: 12, 到年: 2026, 到月: 7 });
+  await page.getByLabel("从月", { exact: true }).selectOption("10");
+  // 普通同册刷新必须保留手动范围。
+  await put({ ...sample, people: people.map((person, index) => index ? person : { ...person, dailyWage: 301 }) });
+  await page.evaluate(async () => {
+    const src = [...document.scripts].find((script) => /\/assets\/index-[^/]+\.js/.test(script.src))?.src;
+    if (!src) throw Error("找不到构建入口");
+    const mod = await import(src);
+    const candidates = Object.values(mod).filter((fn) => typeof fn === "function" && /\.seed/.test(fn.toString()) && /\.then/.test(fn.toString()) && /\.catch/.test(fn.toString()));
+    if (candidates.length !== 1) throw Error(`同步入口识别失败 ${candidates.length}`);
+    await candidates[0]({ discardLocal: true });
+  });
+  await dates({ 从年: 2025, 从月: 10 });
+  report.push({ scenario: "auto-person-team-content-payment-dates-and-manual-preservation", passed: true });
+
+  await page.goto("/people", { waitUntil: "networkidle" });
+  for (const width of [1440, 375, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByRole("button", { name: "创建班组", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "创建班组", exact: true });
+    await dialog.getByRole("button", { name: "创建班组", exact: true }).click();
+    assert.ok((await dialog.innerText()).includes("请填写班组名称"));
+    await page.getByLabel("班组名称", { exact: false }).fill(`待进场${width}`);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+    const submit = dialog.getByRole("button", { name: "创建班组", exact: true });
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    await submit.scrollIntoViewIfNeeded();
+    assert.ok(await submit.evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return rect.top >= 0 && rect.bottom <= innerHeight && (button === hit || button.contains(hit));
+    }), "创建班组按钮滚动后必须可见且可点击");
+    await page.screenshot({ path: `${out}/team-editor-${width}.png` });
+    await dialog.getByRole("button", { name: "创建班组", exact: true }).click();
+    await dialog.waitFor({ state: "detached" });
+    await page.waitForFunction(() => document.body.textContent.includes("已创建班组"));
+    await page.waitForResponse((response) => response.url().endsWith("/api/ledger") && response.request().method() === "PUT" && response.status() === 200);
+    assert.ok((await ledger()).teams.some((team) => team.name === `待进场${width}`));
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.reload({ waitUntil: "networkidle" });
+  assert.ok((await page.getByRole("region", { name: "班组列表", exact: true }).innerText()).includes("待进场390 · 0 人"));
+  await page.getByRole("button", { name: "创建班组", exact: true }).click();
+  await page.getByLabel("班组名称", { exact: false }).fill(" 待进场390 ");
+  await page.getByRole("dialog").getByRole("button", { name: "创建班组", exact: true }).click();
+  assert.ok((await page.getByRole("dialog").innerText()).includes("已有同名班组"));
+  await page.getByRole("dialog").getByRole("button", { name: "取消", exact: true }).click();
+  for (const width of [375, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.getByRole("button", { name: "新增人员", exact: true }).click();
+    await page.getByLabel("人员班组", { exact: true }).selectOption("待进场390");
+    const save = page.getByRole("button", { name: "保存", exact: true });
+    await save.scrollIntoViewIfNeeded();
+    const box = await save.boundingBox();
+    assert.ok(box && box.y >= 0 && box.y + box.height <= 901, "手机新增人员保存按钮必须可达");
+    await page.screenshot({ path: `${out}/person-editor-${width}.png` });
+    await page.getByRole("button", { name: "取消", exact: true }).click();
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("button", { name: "新增人员", exact: true }).click();
+  const editor = page.locator("div.fixed").filter({ has: page.getByRole("heading", { name: "新增人员", exact: true }) });
+  await editor.locator("label").filter({ hasText: /^姓名/ }).locator("..").locator("input").fill("新进核对人员");
+  await page.getByLabel("人员班组", { exact: true }).selectOption("待进场390");
+  await editor.getByRole("button", { name: "保存", exact: true }).click();
+  await page.waitForResponse((response) => response.url().endsWith("/api/ledger") && response.request().method() === "PUT" && response.status() === 200);
+  assert.equal((await ledger()).people.find((person) => person.name === "新进核对人员")?.team, "待进场390");
+  const username = `teams-readonly-${Date.now()}`;
+  await authOp("createUser", { username, password: "12345678", perms: "people.view query.view query.print" });
+  const readonly = await browser.newContext({ baseURL: `http://127.0.0.1:${process.env.PORT || 4700}`, viewport: { width: 375, height: 900 } });
+  const readonlyLogin = await readonly.request.post("/api/auth", { data: { op: "login", username, password: "12345678" } });
+  assert.equal(readonlyLogin.status(), 200);
+  const readPage = await readonly.newPage();
+  await readPage.goto("/people", { waitUntil: "networkidle" });
+  assert.equal(await readPage.getByRole("button", { name: "创建班组", exact: true }).count(), 0);
+  assert.equal((await readonly.request.put("/api/ledger", { data: sample })).status(), 403);
+  await readonly.close();
+  report.push({ scenario: "create-empty-team-blank-duplicate-reload-and-new-person-selection", passed: true });
+  report.push({ scenario: "readonly-team-creation-hidden-and-ledger-write-denied", passed: true });
+
+  // 切册通过真实下拉完成：旧手动日期、班组/人员草稿不能串到新册。
+  const oldBook = (await (await ctx.request.get("/api/auth")).json()).bookId;
+  await authOp("createBook", { name: "自动日期隔离合成台账" });
+  const nextBook = (await (await ctx.request.get("/api/auth")).json()).bookId;
+  await put({ ...sample, people: [people[0]], attendance: [row("isolated-row", people[0].name, 2024, 2)], payments: [], teams: [{ id: "isolated-team", name: "独立班组" }] });
+  await authOp("useBook", { id: oldBook });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.goto("/query", { waitUntil: "networkidle" });
+  await page.getByLabel("查询姓名", { exact: true }).fill(people[0].name);
+  await page.getByLabel("从月", { exact: true }).selectOption("6");
+  await page.getByLabel("当前台账", { exact: true }).filter({ visible: true }).selectOption(nextBook);
+  await page.waitForFunction(() => document.body.textContent.includes("已自动选择有数据的范围"));
+  await dates({ 从年: 2024, 从月: 2, 到年: 2024, 到月: 2 });
+  report.push({ scenario: "book-switch-resets-manual-date-range", passed: true });
+  assert.deepEqual(errors, []);
+  await writeFile(`${out}/result.json`, JSON.stringify({ checks: report, screenWidths: [1440, 375, 390], runtimeErrors: errors.length }, null, 2));
+  console.log(JSON.stringify({ checks: report, screenWidths: [1440, 375, 390], runtimeErrors: errors.length }, null, 2));
+} finally { await browser.close(); }

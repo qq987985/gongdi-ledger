@@ -65,6 +65,12 @@ export interface WageHistory {
   remark: string;
 }
 
+/** 可先创建空班组；Person.team 继续保存名称以兼容历史数据。 */
+export interface Team {
+  id: string;
+  name: string;
+}
+
 export interface Person {
   id: string;
   name: string;
@@ -156,13 +162,14 @@ export interface Expense {
  * 用途：服务端能判断「这份数据是什么年代的格式」，客户端 migrate 也有个锚点。
  * 改动 LedgerState 的结构（加/删/改字段语义）时要 +1。
  */
-export const LEDGER_SCHEMA_VERSION = 2;
+export const LEDGER_SCHEMA_VERSION = 3;
 
 export interface LedgerState {
   /** 数据格式版本，见 LEDGER_SCHEMA_VERSION；旧数据可能没有这个字段 */
   schemaVersion?: number;
   year: number;
   years: number[];
+  teams: Team[];
   people: Person[];
   attendance: AttendanceRow[];
   attendanceDocs: AttendanceDoc[];

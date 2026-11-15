@@ -9,6 +9,7 @@ export function runFullBook() {
     const pol = policy();
     const wb = buildFullWorkbook({
       year: 2026,
+      teams: [{ id: "empty-team", name: "待进场班组" }],
       people: [p1, p2],
       attendance: [att({ name: "张三", month: 4 }), att({ name: "李四", month: 4, days: 18 })],
       payments: [payment(), payment({ id: "p2", owner: "李四", amount: 8000 })],
@@ -18,6 +19,7 @@ export function runFullBook() {
       months: [{ year: 2026, month: 4 }],
     });
     const parsed = parseFullAttendanceWorkbook(buf(wb), 2026);
+    eq(parsed.teams, [{ id: "empty-team", name: "待进场班组" }], "无人班组");
     eq(
       [parsed.people.length, parsed.attendance.length, parsed.payments.length, parsed.expenses.length, parsed.policies.length, parsed.members.length],
       [2, 2, 2, 2, 1, 2],

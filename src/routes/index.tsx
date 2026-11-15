@@ -7,6 +7,7 @@ import { overAgeLabel } from "~/lib/idcard";
 import { contractPayable } from "~/lib/contracts-totals";
 import { money, cn } from "~/lib/utils";
 import { can, subscribePerms } from "~/lib/perms";
+import { availableTeamNames } from "~/lib/teams";
 import { Can, useCan } from "~/components/can";
 import type { Person } from "~/lib/types";
 
@@ -23,8 +24,8 @@ function Home() {
     [people, attendance, payments, year, fallbackYear],
   );
   const { should, paid, proxyAmt, pendingAmt, proxyCount: proxy, filledMonths: monthsFilled } = summary;
-  const teams = [...new Set(people.map((p) => p.team).filter(Boolean))];
-  const rows = React.useMemo(() => teamRows(people), [people]);
+  const teams = React.useMemo(() => availableTeamNames(store.teams, people), [store.teams, people]);
+  const rows = React.useMemo(() => teamRows(people, teams), [people, teams]);
   const overPeople = people.filter((p) => overAgeLabel(p.age, p.gender) === "超龄");
   const over = overPeople.length;
   const noWage = people.filter((p) => p.payType === "month" && !p.monthWage).length;
@@ -91,7 +92,7 @@ type HomeProps = {
   contractPay: number;
   over: number;
   overPeople: Person[];
-  teamRows: { team: string; count: number }[];
+  teamRows: ReturnType<typeof teamRows>;
   maxTeam?: number;
   onYear: (y: number) => void;
 };
@@ -174,7 +175,7 @@ function NewHome(p: HomeProps) {  const unavailable = p.monthsFilled < 12 ? `${1
           <h2 className="text-sm font-semibold">班组</h2>
           <ul className="mt-4 space-y-3">
             {p.teamRows.map((r) => (
-              <li key={r.team}>
+              <li key={r.key}>
                 <div className="flex items-center justify-between text-sm">
                   <span>{r.team}</span>
                   <span className="tabular-nums text-muted">{r.count} 人</span>
@@ -184,7 +185,7 @@ function NewHome(p: HomeProps) {  const unavailable = p.monthsFilled < 12 ? `${1
                 </div>
               </li>
             ))}
-            {!p.teamRows.length ? <li className="text-sm text-muted">还没有班组。到「人员」给人员填班组。</li> : null}
+            {!p.teamRows.length ? <li className="text-sm text-muted">还没有班组。到「人员」创建班组，再新增人员。</li> : null}
           </ul>
         </div>
         <div className="rounded-xl border border-line bg-surface p-5 shadow-panel lg:col-span-2">
@@ -254,7 +255,7 @@ function ClassicHome(p: HomeProps) {
           <h2 className="text-sm font-semibold">班组</h2>
           <ul className="mt-4 space-y-2">
             {p.teamRows.map((r) => (
-              <li key={r.team} className="flex items-center justify-between text-sm">
+              <li key={r.key} className="flex items-center justify-between text-sm">
                 <span>{r.team}</span>
                 <span className="tabular-nums text-muted">{r.count} 人</span>
               </li>

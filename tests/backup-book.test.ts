@@ -212,6 +212,7 @@ test("备份工作簿落回 Excel 导入解析：人员/考勤/发放/报销/保
 test("备份条数（纯函数）与工作簿内容一致，界面文案含四项关键条数", () => {
   const c = backupCounts(fixture());
   assert.deepEqual(c, {
+    teams: 0,
     people: 2,
     attendance: 3,
     payments: 2,
