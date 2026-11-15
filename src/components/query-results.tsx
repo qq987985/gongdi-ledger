@@ -21,7 +21,7 @@ export function PersonQueryResults({ result, label, content }: {
           <thead className="text-xs text-muted">
             <tr>
               <th className="py-2">年月</th><th>出勤天数</th><th>加班小时</th>
-              {wage ? <><th>出勤工资</th><th>其他补助</th><th>罚款/扣款</th><th>加班工资</th><th>应发</th></> : null}
+              {wage ? <><th>出勤工资</th><th>加班工资</th><th>其他补助</th><th>罚款/扣款</th><th>应发</th></> : null}
               <th>备注</th>
             </tr>
           </thead>
@@ -32,9 +32,9 @@ export function PersonQueryResults({ result, label, content }: {
                 <td className="tabular-nums">{row.days || "—"}</td><td className="tabular-nums">{row.otHours || "—"}</td>
                 {wage ? <>
                   <td className="tabular-nums">¥{money(row.base)}</td>
+                  <td className="tabular-nums">{row.ot ? `¥${money(row.ot)}` : "—"}</td>
                   <td className="tabular-nums">{row.allowance ? `¥${money(row.allowance)}` : "—"}</td>
                   <td className="tabular-nums">{row.deduction ? `¥${money(row.deduction)}` : "—"}</td>
-                  <td className="tabular-nums">{row.ot ? `¥${money(row.ot)}` : "—"}</td>
                   <td className="tabular-nums">{row.pay ? `¥${money(row.pay)}` : "—"}</td>
                 </> : null}
                 <td className="text-muted">{row.remark}</td>
@@ -43,8 +43,8 @@ export function PersonQueryResults({ result, label, content }: {
             <tr className="border-t border-line font-medium">
               <td className="py-2">合计</td><td className="tabular-nums">{totals.days}</td><td className="tabular-nums">{totals.otHours}</td>
               {wage ? <>
-                <td className="tabular-nums">¥{money(totals.base)}</td><td className="tabular-nums">¥{money(totals.allowance)}</td><td className="tabular-nums">¥{money(totals.deduction)}</td>
-                <td className="tabular-nums">¥{money(totals.ot)}</td><td className="tabular-nums">¥{money(totals.pay)}</td>
+                <td className="tabular-nums">¥{money(totals.base)}</td><td className="tabular-nums">¥{money(totals.ot)}</td><td className="tabular-nums">¥{money(totals.allowance)}</td><td className="tabular-nums">¥{money(totals.deduction)}</td>
+                <td className="tabular-nums">¥{money(totals.pay)}</td>
               </> : null}
               <td />
             </tr>

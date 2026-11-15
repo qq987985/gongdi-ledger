@@ -16,9 +16,7 @@ export function WagePrintTable({ title, standardTitle, subjectLabel, subject, ro
   footer?: { label: string; totals: QueryTotals };
 }) {
   const cell = "border border-black px-1 py-1";
-  const fields = layout === "slip"
-    ? ["subject", "days", "base", "otHours", "ot", "additions", "deduction", "pay", "remark"] as const
-    : ["subject", "days", "otHours", "base", "additions", "deduction", "ot", "pay", "remark"] as const;
+  const fields = ["subject", "days", "otHours", "base", "ot", "additions", "deduction", "pay", "remark"] as const;
   const labels = {
     subject: subjectLabel, days: "出勤天数", otHours: "加班小时", base: "出勤工资",
     additions: <WageAdjustmentHeader kind="additions" />, deduction: <WageAdjustmentHeader kind="deduction" />,

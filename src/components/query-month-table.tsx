@@ -35,7 +35,7 @@ export function QueryMonthTable({ month, content, teamLabel, print = false, onPe
       </th></tr>
       <tr className={print ? "" : "text-xs text-muted"}>
         <th className={cell}>姓名</th><th className={cell}>出勤天数</th><th className={cell}>加班小时</th>
-        {wage ? <><th className={cell}>出勤工资</th><th className={cell}>{print ? <WageAdjustmentHeader kind="additions" /> : "其他补助"}</th><th className={cell}>{print ? <WageAdjustmentHeader kind="deduction" /> : "罚款/扣款"}</th><th className={cell}>加班工资</th><th className={cell}>应发</th></> : null}
+        {wage ? <><th className={cell}>出勤工资</th><th className={cell}>加班工资</th><th className={cell}>{print ? <WageAdjustmentHeader kind="additions" /> : "其他补助"}</th><th className={cell}>{print ? <WageAdjustmentHeader kind="deduction" /> : "罚款/扣款"}</th><th className={cell}>应发</th></> : null}
         <th className={cell}>备注</th>
       </tr>
     </thead>
@@ -43,12 +43,12 @@ export function QueryMonthTable({ month, content, teamLabel, print = false, onPe
       <tr className={print ? "" : "border-t border-line"}>
       <td className={cell}>{onPerson ? <Button variant="ghost" size="sm" type="button" onClick={() => onPerson(person.id)}>{person.name}</Button> : person.name}</td>
       <td className={number}>{ambiguous ? "—" : row.days}</td><td className={number}>{ambiguous ? "—" : row.otHours}</td>
-      {wage ? <><td className={number}>{ambiguous ? "—" : money(row.base)}</td><td className={number}>{ambiguous ? "—" : money(print ? queryWageAdditions(row) : row.allowance)}</td><td className={number}>{ambiguous ? "—" : money(row.deduction)}</td><td className={number}>{ambiguous ? "—" : money(row.ot)}</td><td className={number}>{ambiguous ? "—" : money(row.pay)}</td></> : null}
+      {wage ? <><td className={number}>{ambiguous ? "—" : money(row.base)}</td><td className={number}>{ambiguous ? "—" : money(row.ot)}</td><td className={number}>{ambiguous ? "—" : money(print ? queryWageAdditions(row) : row.allowance)}</td><td className={number}>{ambiguous ? "—" : money(row.deduction)}</td><td className={number}>{ambiguous ? "—" : money(row.pay)}</td></> : null}
       <td className={cell}>{ambiguous ? "姓名重复，历史记录待核对" : print && wage ? <WagePrintRemark remark={row.remark} totals={row} /> : row.remark}</td>
     </tr></Fragment>)}</tbody>
     <tfoot><tr className={print ? "font-medium" : "border-t border-line font-medium"}>
       <td className={cell}>本月小计</td><td className={number}>{totals.days}</td><td className={number}>{totals.otHours}</td>
-      {wage ? <><td className={number}>{money(totals.base)}</td><td className={number}>{money(print ? queryWageAdditions(totals) : totals.allowance)}</td><td className={number}>{money(totals.deduction)}</td><td className={number}>{money(totals.ot)}</td><td className={number}>{money(totals.pay)}</td></> : null}
+      {wage ? <><td className={number}>{money(totals.base)}</td><td className={number}>{money(totals.ot)}</td><td className={number}>{money(print ? queryWageAdditions(totals) : totals.allowance)}</td><td className={number}>{money(totals.deduction)}</td><td className={number}>{money(totals.pay)}</td></> : null}
       <td className={cell}>{wage && print ? <WagePrintRemark totals={totals} /> : null}</td>
     </tr></tfoot>
   </table>{wage && !print ? <div className="space-y-4 p-3">{month.rows.filter(({ ambiguous, month: row }) => !ambiguous && row.calculation).map(({ person, month: row }) => <WageCalculation key={person.id} title={`${person.name} · ${month.year}年${month.month}月`} calculation={row.calculation} />)}<WageTotalCalculation totals={totals} /></div> : null}</>;

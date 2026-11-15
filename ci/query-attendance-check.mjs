@@ -337,7 +337,8 @@ try {
   assert.equal(await december.locator("tfoot td").nth(7).textContent(), "200.00");
   assert.equal(await january.locator("tfoot td").nth(7).textContent(), "760.00");
   assert.equal(await january.locator("tfoot td").nth(3).textContent(), "700.00", "出勤工资独立列示");
-  assert.equal(await january.locator("tfoot td").nth(6).textContent(), "60.00", "加班工资独立列示");
+  assert.equal(await january.locator("tfoot td").nth(4).textContent(), "60.00", "加班工资紧跟出勤工资");
+  assert.deepEqual((await january.locator("thead tr").last().locator("th").allTextContents()).slice(3, 7), ["出勤工资", "加班工资", "其他补助", "罚款/扣款"], "班组逐月表按工资、加班、补助、扣款排列");
   await print();
   await pdf("team-months-wage", ["2025年12月", "2026年1月", "出勤工资", "加班工资", "700.00", "60.00", "200.00", "760.00", "960.00", "本月小计", "区间合计"], ["身份证", "银行卡"]);
   await range(2025, 12, 2026, 2);

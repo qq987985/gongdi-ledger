@@ -42,6 +42,11 @@ async function printPdf(button, file, expected, forbidden = []) {
   await page.emulateMedia({ media: "print" });
   assert.ok(await page.locator(".print-only .query-wage-standard").evaluateAll((notes) => notes.every((note) => note.tagName === "CAPTION" && note.getBoundingClientRect().bottom <= note.parentElement.querySelector("thead").getBoundingClientRect().top + 1)), "工资备注必须在表头上方");
   assert.ok(await page.locator(".print-only .query-wage-table .query-wage-amount").evaluateAll((rows) => rows.every((row) => row.parentElement.tagName === "TBODY" && row.parentElement.previousElementSibling?.tagName === "THEAD" && row.parentElement.previousElementSibling.lastElementChild?.classList.contains("query-wage-columns"))), "列标题和金额之间不得插入备注");
+  for (const headers of await page.locator(".print-only .query-wage-table thead tr:last-child").evaluateAll((rows) => rows.map((row) => [...row.cells].map((cell) => cell.textContent.replace(/\s/g, ""))))) {
+    const base = headers.indexOf("出勤工资");
+    assert.equal(headers[base + 1], "加班工资", "打印加班工资必须紧跟出勤工资");
+    if (headers.some((header) => header.startsWith("补助"))) assert.ok(headers[base + 2].startsWith("补助"), "补助必须在加班工资之后");
+  }
   assert.ok(await page.locator(".print-only .query-wage-person + .query-wage-person").evaluateAll((people) => people.every((person) => person.getBoundingClientRect().top - person.previousElementSibling.getBoundingClientRect().bottom >= 10)), "独立人员表之间必须留白");
   assert.ok(await page.locator(".print-only .query-person-gap td").evaluateAll((cells) => cells.every((cell) => cell.getBoundingClientRect().height >= 10)), "人员之间必须有实际打印留白");
   assert.deepEqual(await page.locator(".query-number").evaluateAll((cells) => cells.filter((cell) => cell.scrollWidth > cell.clientWidth + 1).map((cell) => cell.textContent)), []);
@@ -99,9 +104,12 @@ try {
   assert.ok((await page.locator("main").innerText()).includes("2026-07-01 至 2026-07-31"));
   const calc = page.locator(".no-print .wage-calculation").first();
   const formula = clean(await calc.innerText());
+  assert.deepEqual(await page.getByRole("region", { name: "个人查询汇总", exact: true }).locator("thead th").allTextContents(), ["年月", "出勤天数", "加班小时", "出勤工资", "加班工资", "其他补助", "罚款/扣款", "应发", "备注"]);
+  assert.deepEqual((await page.getByRole("region", { name: "个人查询汇总", exact: true }).locator("tbody tr").first().locator("td").allTextContents()).slice(3, 8), ["¥6,150.00", "¥375.00", "¥100.00", "¥50.00", "¥6,985.00"], "个人金额跟随各自表头");
   for (const value of ["日工资¥300.00/天", "20.5天×¥300.00/天=¥6,150.00", "10小时÷8小时/天×¥300.00/天=¥375.00", "餐补", "¥410.00", "其他补助¥100.00", "罚款/扣款¥50.00", "=¥6,985.00"]) assert.ok(formula.includes(value), value);
   assert.ok((await page.locator(".print-only").textContent()).includes("罚款/扣款"), "完整表头由DOM核验，PDF另核对换行后的片段");
   await printPdf("打印查询结果", "person-wage-table", [people[0].name, "日工资", "加班折算", "8 小时/天", "出勤工资", "6,150.00", "375.00", "510.00", "罚款", "扣款", "6,985.00"], ["工资计算", "逐笔取分", "金额按现行规则", "= ¥", "折算工资", "折算日工资"]);
+  assert.deepEqual((await page.locator(".print-only .query-wage-amount").first().locator("td").allTextContents()).slice(3, 8), ["6,150.00", "375.00", "510.00", "50.00", "6,985.00"], "打印金额跟随各自表头，补助仍含餐补");
   assert.equal(await page.locator(".print-only .wage-calculation").count(), 0);
   assert.equal(await page.locator(".print-only .query-wage-standard").count(), 1);
   assert.equal(await page.locator(".print-only tbody .query-wage-standard").count(), 0);
@@ -257,7 +265,7 @@ try {
   await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
   await printPdf("打印查询结果", "late-team-wage", [latePeople[0].name, latePeople[1].name, "日工资", "加班折算"], ["工资计算", "折算日工资"]);
   assert.ok(!(await page.locator('.print-only [data-query-month="2026-03"]').textContent()).includes(latePeople[1].name));
-  await copyFile(`${out}/late-team-wage.pdf`, "output/pdf/工资考勤实际月份样例-1.9.9.pdf");
+  await copyFile(`${out}/late-team-wage.pdf`, "output/pdf/工资打印列序样例-1.9.10.pdf");
   await page.getByLabel("查询方式", { exact: true }).selectOption("person");
   await page.getByLabel("查询姓名", { exact: true }).fill(latePeople[1].name);
   const actualRows = await page.getByRole("region", { name: "个人查询汇总", exact: true }).locator("tbody tr").allTextContents();
