@@ -2,7 +2,8 @@ import { QUERY_TEAM_ATTENDANCE_COLS, QUERY_PERSON_ATTENDANCE_COLS, QUERY_TEAM_WA
 import { money } from "~/lib/utils";
 import { QueryMonthTable } from "~/components/query-month-table";
 import { Fragment } from "react";
-import { WageCalculation, WageTotalCalculation } from "~/components/wage-calculation";
+import { WageStandardRow, WagePrintRemark, WageAdjustmentHeader } from "~/components/wage-calculation";
+import { queryWageAdditions } from "~/lib/query-wage";
 import type { QueryContent, QueryPersonResult, queryTeamResults } from "~/lib/query-data";
 
 const TD = "border border-black px-1 py-1";
@@ -38,7 +39,7 @@ export function QuerySheet({ content, label, paymentLabel, person, team, teamLab
             </th></tr>
             <tr>
               <th className={TD}>{team ? "姓名" : "年月"}</th><th className={TD}>出勤天数</th><th className={TD}>加班小时</th>
-              {wage ? team ? <><th className={TD}>出勤工资</th><th className={TD}>加班工资</th><th className={TD}>应发</th><th className={TD}>已记入实际收款人（含代发）</th><th className={TD}>差额</th></> : <><th className={TD}>出勤工资</th><th className={TD}>其他补助</th><th className={TD}>罚款/扣款</th><th className={TD}>加班工资</th><th className={TD}>应发</th></> : null}
+              {wage ? team ? <><th className={TD}>出勤工资</th><th className={TD}>加班工资</th><th className={TD}>应发</th><th className={TD}>已记入实际收款人（含代发）</th><th className={TD}>差额</th></> : <><th className={TD}>出勤工资</th><th className={TD}><WageAdjustmentHeader kind="additions" /></th><th className={TD}><WageAdjustmentHeader kind="deduction" /></th><th className={TD}>加班工资</th><th className={TD}>应发</th></> : null}
               <th className={TD}>备注</th>
             </tr>
           </thead>
@@ -46,21 +47,20 @@ export function QuerySheet({ content, label, paymentLabel, person, team, teamLab
             {team ? team.members.map((row) => <Fragment key={row.person.id}><tr>
               <td className={TD}>{row.person.name}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : row.totals.days}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : row.totals.otHours}</td>
               {wage ? <><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.totals.base)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.totals.ot)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.totals.pay)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.paidAsOwner)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.difference)}</td></> : null}
-              <td className={TD}>{row.ambiguous ? "姓名重复，历史记录待核对" : row.remark}</td>
-            </tr>{wage && !row.ambiguous ? <tr><td className={TD} colSpan={columns}><div>{row.person.name}</div><WageTotalCalculation totals={row.totals} /></td></tr> : null}</Fragment>) : person!.months.map((row) => <Fragment key={`${row.year}-${row.month}`}><tr>
+              <td className={TD}>{row.ambiguous ? "姓名重复，历史记录待核对" : wage ? <WagePrintRemark remark={row.remark} totals={row.totals} /> : row.remark}</td>
+            </tr></Fragment>) : person!.months.map((row) => <Fragment key={`${row.year}-${row.month}`}><tr>
               <td className={TD}>{row.year}年{row.month}月</td><td className={`${TD} query-number`}>{row.days}</td><td className={`${TD} query-number`}>{row.otHours}</td>
-              {wage ? <><td className={`${TD} query-number`}>{money(row.base)}</td><td className={`${TD} query-number`}>{money(row.allowance)}</td><td className={`${TD} query-number`}>{money(row.deduction)}</td><td className={`${TD} query-number`}>{money(row.ot)}</td><td className={`${TD} query-number`}>{money(row.pay)}</td></> : null}
-              <td className={TD}>{row.remark}</td>
-            </tr>{wage && row.calculation ? <tr><td className={TD} colSpan={columns}><WageCalculation title={`${person!.person.name} · ${row.year}年${row.month}月`} calculation={row.calculation} /></td></tr> : null}</Fragment>)}
+              {wage ? <><td className={`${TD} query-number`}>{money(row.base)}</td><td className={`${TD} query-number`}>{money(queryWageAdditions(row))}</td><td className={`${TD} query-number`}>{money(row.deduction)}</td><td className={`${TD} query-number`}>{money(row.ot)}</td><td className={`${TD} query-number`}>{money(row.pay)}</td></> : null}
+              <td className={TD}>{wage ? <WagePrintRemark remark={row.remark} totals={row} /> : row.remark}</td>
+            </tr>{wage ? <WageStandardRow title={`${row.year}年${row.month}月`} calculation={row.calculation} cellClass={TD} /> : null}</Fragment>)}
           </tbody>
           <tfoot>
             <tr className="font-medium">
               <td className={TD}>区间合计</td><td className={`${TD} query-number`}>{totals.days}</td><td className={`${TD} query-number`}>{totals.otHours}</td>
-              {wage ? team ? <><td className={`${TD} query-number`}>{money(totals.base)}</td><td className={`${TD} query-number`}>{money(totals.ot)}</td><td className={`${TD} query-number`}>{money(totals.pay)}</td><td className={`${TD} query-number`}>{money(team.paidAsOwner)}</td><td className={`${TD} query-number`}>{money(team.difference)}</td></> : <><td className={`${TD} query-number`}>{money(totals.base)}</td><td className={`${TD} query-number`}>{money(totals.allowance)}</td><td className={`${TD} query-number`}>{money(totals.deduction)}</td><td className={`${TD} query-number`}>{money(totals.ot)}</td><td className={`${TD} query-number`}>{money(totals.pay)}</td></> : null}
-              <td className={TD} />
+              {wage ? team ? <><td className={`${TD} query-number`}>{money(totals.base)}</td><td className={`${TD} query-number`}>{money(totals.ot)}</td><td className={`${TD} query-number`}>{money(totals.pay)}</td><td className={`${TD} query-number`}>{money(team.paidAsOwner)}</td><td className={`${TD} query-number`}>{money(team.difference)}</td></> : <><td className={`${TD} query-number`}>{money(totals.base)}</td><td className={`${TD} query-number`}>{money(queryWageAdditions(totals))}</td><td className={`${TD} query-number`}>{money(totals.deduction)}</td><td className={`${TD} query-number`}>{money(totals.ot)}</td><td className={`${TD} query-number`}>{money(totals.pay)}</td></> : null}
+              <td className={TD}>{wage ? <WagePrintRemark totals={totals} /> : null}</td>
             </tr>
             {wage ? <tr><td className={TD} colSpan={columns}>已记入实际收款人 ¥{money(team?.paidAsOwner ?? person!.paidAsOwner)}（含代发）；差额 ¥{money(team?.difference ?? person!.difference)}。应发按整月考勤计算，发放按所选日期区间计算。</td></tr> : null}
-            {wage ? <tr><td className={TD} colSpan={columns}><WageTotalCalculation totals={totals} /></td></tr> : null}
           </tfoot>
         </table>
       </article>

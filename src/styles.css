@@ -639,7 +639,7 @@
     padding-left: 0.6mm;
     padding-right: 0.6mm;
   }
-  .print-only .query-result-sheet .query-number {
+  .print-only .query-number {
     white-space: nowrap;
     overflow-wrap: normal;
     font-variant-numeric: tabular-nums;
@@ -647,6 +647,15 @@
   .print-only .wage-calculation {
     font-size: 10.5pt;
     line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .print-only .query-wage-standard {
+    font-size: 10pt;
+    line-height: 1.35;
+    text-align: left;
+  }
+  .print-only .query-wage-standard td {
     white-space: normal;
     overflow-wrap: anywhere;
   }

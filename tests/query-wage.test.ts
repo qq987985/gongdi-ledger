@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildQueryResults, queryAvailableDates, queryRange } from "../src/lib/query-data";
+import { buildQueryResults, buildQuerySlips, queryAvailableDates, queryMonthRange, queryRange, queryTeamResults } from "../src/lib/query-data";
+import { queryWageAdditions, queryWageRoundingNote } from "../src/lib/query-wage";
 import type { AttendanceRow, Payment, Person } from "../src/lib/types";
 
 const person = (over: Partial<Person> = {}): Person => ({ id: "a", name: "甲", team: "一组", personNo: "", idCard: "", gender: "男", age: 30, birthday: "", phone: "", dailyWage: 300, monthWage: 0, payType: "day", otRule: "折算:8", mealAllowance: 20, bank: "", cardNo: "", address: "", idIssuer: "", idValidFrom: "", idValidTo: "", remark: "", ...over });
@@ -18,6 +19,8 @@ test("工资解释逐项展示日工资、出勤、加班折算、餐补补助�
   assert.match(calc.meal, /20.5 天 × ¥20.00\/天 = ¥410.00/);
   assert.match(calc.adjustment, /其他补助 ¥100.00；罚款\/扣款 ¥50.00/);
   assert.match(calc.total, /= ¥6,985.00$/);
+  assert.deepEqual(calc.table, { wage: "日工资 ¥300.00/天", overtimeRate: "折算日工资 ¥300.00/天", overtimeRule: "加班折算 8 小时/天" });
+  assert.equal(queryWageAdditions(month), 510, "打印补助包含100其他补助+410餐补，应发不变");
 });
 
 test("工资解释采用历史月标准，日薪改月薪时不套当前日薪/规则", () => {
@@ -33,6 +36,8 @@ test("工资解释采用历史月标准，日薪改月薪时不套当前日薪/�
   assert.match(months[1].calculation!.standard, /月工资 ¥3,000.00.*日工资 ¥100.00/);
   assert.match(months[1].calculation!.attendance, /月工资.*1 笔计薪考勤/);
   assert.ok(!JSON.stringify(months.map((m) => m.calculation)).includes("999"));
+  assert.equal(months[1].calculation!.table.wage, "月工资 ¥3,000.00/月");
+  assert.equal(months[1].calculation!.table.overtimeRate, "折算日工资 ¥100.00/天");
 });
 
 test("多笔考勤逐笔取分，不打印按月汇总重算的错误等式，保留小于分的单价", () => {
@@ -50,6 +55,14 @@ test("展示分项存在取分差额时显式调节，不改既有应发", () =>
   const month = buildQueryResults({ people: [person()], attendance: [attendance({ days: 0, otHours: 0, allowance: 0.005, deduction: 0.001 })], payments: [], range })[0].months[0];
   assert.equal(month.pay, 0);
   assert.match(month.calculation!.total, /− ¥0.01（逐笔取分差额） = ¥0.00$/);
+  assert.equal(queryWageRoundingNote(month), "取分差额 −¥0.01");
+});
+
+test("打印表格区分按小时、未设与明确不计加班，不引入长计算式", () => {
+  const result = (otRule: string) => buildQueryResults({ people: [person({ otRule })], attendance: [attendance()], payments: [], range })[0].months[0];
+  assert.deepEqual(result("按小时:20").calculation!.table, { wage: "日工资 ¥300.00/天", overtimeRate: "加班单价 ¥20.00/小时", overtimeRule: "加班按小时" });
+  assert.equal(result("").calculation!.table.overtimeRule, "加班未设");
+  assert.equal(result("不计加班").calculation!.table.overtimeRule, "不计加班");
 });
 
 test("考勤自动日期只取本对象有内容月份，含纯备注，保留跨年与闰年月末", () => {
@@ -59,11 +72,33 @@ test("考勤自动日期只取本对象有内容月份，含纯备注，保留�
   assert.deepEqual(queryAvailableDates({ people, attendance: rows, payments: [], scope: "team", content: "attendance", team: "一组" })?.to, { year: 2025, month: 1, day: 31 });
 });
 
-test("工资自动日期合并owner/receiver的有效发放日，无日期待发及其他人不扩范围", () => {
+test("工资自动日期按owner/receiver有效发放所在月份取月初/月末，待发及其他人不扩范围", () => {
   const people = [person()];
   const payments = [payment({ date: "2023/5/8", owner: "外部乙", receiver: "甲" }), payment({ id: "latest", date: "2026-08-09" }), payment({ id: "pending", date: "" }), payment({ id: "invalid", date: "2027-02-31" }), payment({ id: "other", owner: "丙", receiver: "丙", date: "2030-01-01" })];
-  assert.deepEqual(queryAvailableDates({ people, attendance: [attendance()], payments, scope: "person", content: "wage", name: "甲" }), { from: { year: 2023, month: 5, day: 8 }, to: { year: 2026, month: 8, day: 9 } });
-  assert.deepEqual(queryAvailableDates({ people, attendance: [], payments: [payments[0]], scope: "person", content: "wage", name: "甲" }), { from: { year: 2023, month: 5, day: 8 }, to: { year: 2023, month: 5, day: 8 } });
+  assert.deepEqual(queryAvailableDates({ people, attendance: [attendance()], payments, scope: "person", content: "wage", name: "甲" }), { from: { year: 2023, month: 5, day: 1 }, to: { year: 2026, month: 8, day: 31 } });
+  assert.deepEqual(queryAvailableDates({ people, attendance: [], payments: [payments[0]], scope: "person", content: "wage", name: "甲" }), { from: { year: 2023, month: 5, day: 1 }, to: { year: 2023, month: 5, day: 31 } });
+});
+
+test("查询整月范围含首月1日和末月最后一天，反选跨年与闰年正确", () => {
+  const start = { year: 2025, month: 12 }, end = { year: 2026, month: 2 };
+  const range = queryMonthRange(start, end);
+  assert.equal(range.startDate, "2025-12-01");
+  assert.equal(range.endDate, "2026-02-28");
+  assert.deepEqual(range.span, [{ year: 2025, month: 12 }, { year: 2026, month: 1 }, { year: 2026, month: 2 }]);
+  assert.deepEqual(queryMonthRange(end, start), { ...range, swapped: true });
+  assert.deepEqual(queryMonthRange({ year: 2024, month: 2 }, { year: 2024, month: 2 }), { span: [{ year: 2024, month: 2 }], startDate: "2024-02-01", endDate: "2024-02-29", swapped: false });
+  assert.equal(queryMonthRange({ year: 2026, month: 4 }, { year: 2026, month: 4 }).endDate, "2026-04-30");
+  assert.deepEqual(queryMonthRange({ year: 2026, month: 13 }, end).span, []);
+});
+
+test("整月工资查询纳入首末当日的发放，排除区间外和待发，个人/班组/工资条一致", () => {
+  const payments = [payment({ id: "first", date: "2024-02-01", amount: 100 }), payment({ id: "last", date: "2024-02-29", amount: 200 }), payment({ id: "early", date: "2024-01-31", amount: 400 }), payment({ id: "late", date: "2024-03-01", amount: 800 }), payment({ id: "pending", date: "", amount: 1600 })];
+  const range = queryMonthRange({ year: 2024, month: 2 }, { year: 2024, month: 2 });
+  const result = buildQueryResults({ people: [person()], attendance: [], payments, range })[0];
+  assert.deepEqual(result.pays.map((row) => row.id), ["first", "last"]);
+  assert.equal(result.paidAsOwner, 300);
+  assert.equal(queryTeamResults([result], "一组").paidAsOwner, 300);
+  assert.deepEqual(buildQuerySlips([result])[0].pays, result.pays);
 });
 
 test("无记录、未知人员及同名关联歧义不给伪造的自动日期", () => {

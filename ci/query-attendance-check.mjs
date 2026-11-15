@@ -223,6 +223,12 @@ try {
   await page.getByLabel("查询姓名", { exact: true }).fill(longName);
   await print();
   await pdf("person-wage-long", [longName, "9,364,219.50", "现场核对备注"], ["ID-SYNTHETIC", "BANK-SYNTHETIC"]);
+  await page.getByRole("button", { name: "选择人员", exact: true }).click();
+  await page.getByRole("checkbox", { name: longName, exact: true }).check();
+  await print("打印工资条 1 张");
+  assert.ok((await page.locator(".payslip").textContent()).includes(`姓名：${longName}`));
+  // 工资条抬头分栏后末字正常续行：完整DOM与PDF各段、渲染页一起核对。
+  await pdf("payslip-wage-long", ["长姓名测试工友", "甲", "9,364,219.50", "日工资", "现场核对备注"], ["ID-SYNTHETIC", "BANK-SYNTHETIC", "工资计算"]);
   const manyPeople = Array.from({ length: 60 }, (_, i) => ({ ...people[0], id: `many-p${i}`, name: `测试工友${String(i + 1).padStart(2, "0")}`, team: "长表班组" }));
   const manyRows = manyPeople.map((p, i) => ({ ...attendance[0], id: `many-a${i}`, name: p.name, team: p.team, days: 1, otHours: 0.5 }));
   await load({ ...sample, people: manyPeople, attendance: manyRows, payments: [] }, "/attendance");

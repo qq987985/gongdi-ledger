@@ -4,6 +4,7 @@ import { money } from "./utils";
 type WageTotals = Pick<MonthPayResult, "days" | "otHours" | "base" | "ot" | "meal" | "allowance" | "deduction" | "pay">;
 const rate = (value: number) => round2(value) === value ? money(value) : String(value);
 export interface QueryWageCalculation {
+  table: { wage: string; overtimeRate: string; overtimeRule: string };
   standard: string;
   attendance: string;
   overtime: string;
@@ -13,10 +14,24 @@ export interface QueryWageCalculation {
   note: string;
 }
 
+/** 打印将餐补并入补助列，保留原分项计价和应发。 */
+export function queryWageAdditions(totals: Pick<WageTotals, "allowance" | "meal">): number {
+  return round2(totals.allowance + totals.meal);
+}
+
+function roundingDifference(totals: WageTotals): number {
+  return round2(totals.pay - round2(totals.base + totals.ot + totals.meal + totals.allowance - totals.deduction));
+}
+
+/** 仅在分项取分与逐笔应发存在差额时，给打印备注一个短注。 */
+export function queryWageRoundingNote(totals: WageTotals): string {
+  const delta = roundingDifference(totals);
+  return delta ? `取分差额 ${delta > 0 ? "+" : "−"}¥${money(Math.abs(delta))}` : "";
+}
+
 /** 金额复用既有逐笔结果；分项累计的取分差额显式列出，不改应发计算。 */
 export function queryWageTotal(totals: WageTotals): string {
-  const visibleSum = round2(totals.base + totals.ot + totals.meal + totals.allowance - totals.deduction);
-  const adjustment = round2(totals.pay - visibleSum);
+  const adjustment = roundingDifference(totals);
   const rounding = adjustment ? ` ${adjustment > 0 ? "+" : "−"} ¥${money(Math.abs(adjustment))}（逐笔取分差额）` : "";
   return `¥${money(totals.base)}（出勤） + ¥${money(totals.ot)}（加班） + ¥${money(totals.meal)}（餐补） + ¥${money(totals.allowance)}（其他补助） − ¥${money(totals.deduction)}（罚款/扣款）${rounding} = ¥${money(totals.pay)}`;
 }
@@ -44,6 +59,11 @@ export function buildQueryWageCalculation(wage: WageSource, entries: MonthPayRes
   const meal = many ? `${entries.length} 笔餐补分别按 ¥${rate(wage.mealAllowance || 0)}/天计算后合计 ¥${money(totals.meal)}`
     : `${totals.days} 天 × ¥${rate(wage.mealAllowance || 0)}/天 = ¥${money(totals.meal)}`;
   return {
+    table: {
+      wage: monthly ? `月工资 ¥${rate(wage.monthWage || 0)}/月${daily ? `；日工资 ¥${rate(daily)}/天` : ""}` : `日工资 ¥${rate(daily)}/天`,
+      overtimeRate: ot.kind === "fold" ? `折算日工资 ¥${rate(fold)}/天` : ot.kind === "hour" ? `加班单价 ¥${rate(ot.param)}/小时` : "不计加班工资",
+      overtimeRule: ot.kind === "fold" ? `加班折算 ${ot.param} 小时/天` : ot.kind === "hour" ? "加班按小时" : wage.otRule?.trim() ? ot.label : "加班未设",
+    },
     standard, attendance, overtime, meal,
     adjustment: `其他补助 ¥${money(totals.allowance)}；罚款/扣款 ¥${money(totals.deduction)}`,
     total: queryWageTotal(totals),

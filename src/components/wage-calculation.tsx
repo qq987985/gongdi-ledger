@@ -1,5 +1,5 @@
 import type { QueryWageCalculation } from "~/lib/query-wage";
-import { queryWageTotal } from "~/lib/query-wage";
+import { queryWageTotal, queryWageRoundingNote } from "~/lib/query-wage";
 import type { QueryTotals } from "~/lib/query-data";
 
 export function WageCalculation({ title, calculation }: { title: string; calculation?: QueryWageCalculation }) {
@@ -17,4 +17,25 @@ export function WageCalculation({ title, calculation }: { title: string; calcula
 
 export function WageTotalCalculation({ totals }: { totals: QueryTotals }) {
   return <div className="wage-calculation whitespace-normal break-words text-left text-sm">应发合计：{queryWageTotal(totals)}</div>;
+}
+
+/** 标准直接放在金额行下方的表格内，不打印计算过程和长公式。 */
+export function WageStandardRow({ title, calculation, cellClass }: { title: string; calculation?: QueryWageCalculation; cellClass: string }) {
+  if (!calculation) return null;
+  const { table } = calculation;
+  return <tr className="query-wage-standard">
+    <td className={cellClass} colSpan={3}>{title} · {table.wage}</td>
+    <td className={cellClass} colSpan={3}>{table.overtimeRate}</td>
+    <td className={cellClass} colSpan={3}>{table.overtimeRule}</td>
+  </tr>;
+}
+
+export function WagePrintRemark({ remark, totals }: { remark?: string; totals: QueryTotals }) {
+  const note = queryWageRoundingNote(totals);
+  return <>{remark}{note ? <span className="block">{note}</span> : null}</>;
+}
+
+/** 窄列按完整词换行，避免把“餐补”“扣款”拆成单字。 */
+export function WageAdjustmentHeader({ kind }: { kind: "additions" | "deduction" }) {
+  return kind === "additions" ? <>补助<br/><span className="whitespace-nowrap">含餐补</span></> : <>罚款/<br/><span className="whitespace-nowrap">扣款</span></>;
 }

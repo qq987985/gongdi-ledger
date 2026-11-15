@@ -19,7 +19,7 @@ export interface QueryRange {
 
 export interface QueryDateBounds { from: QueryDate; to: QueryDate }
 
-/** 自动日期仅来自当前可关联的记录；考勤只有月份，发放才有实际日期。 */
+/** 由当前可关联记录确定起止月份，再覆盖首月1日至末月最后一天。 */
 export function queryAvailableDates(args: {
   people: Person[]; attendance: AttendanceRow[]; payments: Payment[];
   scope: "person" | "team"; content: QueryContent;
@@ -51,7 +51,8 @@ export function queryAvailableDates(args: {
     const [year, month, day] = date.split("-").map(Number);
     return { year, month, day };
   };
-  return { from: parts(first), to: parts(last) };
+  const from = parts(first), to = parts(last);
+  return { from: { ...from, day: 1 }, to: { ...to, day: daysInMonth(to.year, to.month) } };
 }
 
 /** 考勤取整月；发放取规范化后的闭区间，连同日一起对调反向范围。 */
@@ -70,6 +71,15 @@ export function queryRange(from: QueryDate, to: QueryDate): QueryRange {
     span.push({ year: Math.floor((key - 1) / 12), month: ((key - 1) % 12) + 1 });
   }
   return { span, startDate, endDate, swapped };
+}
+
+/** 查询页面按整月核对，反选月份时也完整包含较早月与较晚月。 */
+export function queryMonthRange(from: QueryMonthRef, to: QueryMonthRef): QueryRange {
+  const reversed = ymKey(from.year, from.month) > ymKey(to.year, to.month);
+  return queryRange(
+    { ...from, day: reversed ? daysInMonth(from.year, from.month) : 1 },
+    { ...to, day: reversed ? 1 : daysInMonth(to.year, to.month) },
+  );
 }
 
 export type QueryTotals = Pick<MonthPayResult, "days" | "otHours" | "base" | "ot" | "meal" | "allowance" | "deduction" | "pay">;

@@ -68,6 +68,10 @@ try {
   ], payments: [
     { id: "calc-pay-a", owner: "外部人员", receiver: people[2].name, date: "2023-05-08", amount: 100, source: "", remark: "" },
     { id: "calc-pay-b", owner: people[2].name, receiver: people[2].name, date: "2026-08-09", amount: 200, source: "", remark: "" },
+    ...[
+      ["2024-01-31", 400, "二月范围前"], ["2024-02-01", 31, "二月首日"],
+      ["2024-02-29", 29, "二月末日"], ["2024-03-01", 800, "二月范围后"], ["", 1600, "无日期待发"],
+    ].map(([date, amount, remark], index) => ({ id: `boundary-${index}`, owner: people[2].name, receiver: people[2].name, date, amount, source: remark, remark })),
   ], attendanceDocs: [] };
   await put(sample);
   await page.goto("/query", { waitUntil: "networkidle" });
@@ -85,13 +89,19 @@ try {
   await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
   await dates({ 从年: 2025, 从月: 11, 到年: 2026, 到月: 1 });
   await page.getByRole("button", { name: "按数据日期", exact: true }).click();
-  await dates({ 从年: 2026, 从月: 7, 从日: 1, 到年: 2026, 到月: 7, 到日: 31 });
+  await dates({ 从年: 2026, 从月: 7, 到年: 2026, 到月: 7 });
+  assert.equal(await page.getByLabel("从日", { exact: true }).count(), 0);
+  assert.equal(await page.getByLabel("到日", { exact: true }).count(), 0);
+  assert.ok((await page.locator("main").innerText()).includes("2026-07-01 至 2026-07-31"));
   const calc = page.locator(".no-print .wage-calculation").first();
   const formula = clean(await calc.innerText());
   for (const value of ["日工资¥300.00/天", "20.5天×¥300.00/天=¥6,150.00", "10小时÷8小时/天×¥300.00/天=¥375.00", "餐补", "¥410.00", "其他补助¥100.00", "罚款/扣款¥50.00", "=¥6,985.00"]) assert.ok(formula.includes(value), value);
-  await printPdf("打印查询结果", "person-calculation", [people[0].name, "日工资", "出勤工资", "6,150.00", "375.00", "410.00", "罚款/扣款", "6,985.00"]);
+  assert.ok((await page.locator(".print-only").textContent()).includes("罚款/扣款"), "完整表头由DOM核验，PDF另核对换行后的片段");
+  await printPdf("打印查询结果", "person-wage-table", [people[0].name, "日工资", "折算日工资", "加班折算", "8 小时/天", "出勤工资", "6,150.00", "375.00", "510.00", "罚款", "扣款", "6,985.00"], ["工资计算", "逐笔取分", "金额按现行规则", "= ¥"]);
+  assert.equal(await page.locator(".print-only .wage-calculation").count(), 0);
+  assert.equal(await page.locator(".print-only .query-wage-standard").count(), 1);
   await mkdir("output/pdf", { recursive: true });
-  await copyFile(`${out}/person-calculation.pdf`, "output/pdf/工资计算核对样例-20261115.pdf");
+  await copyFile(`${out}/person-wage-table.pdf`, "output/pdf/工资表格核对样例-1.9.6.pdf");
   for (const width of [1440, 375, 390]) {
     await page.setViewportSize({ width, height: 900 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width} 查询页面溢出`);
@@ -104,13 +114,27 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByLabel("查询姓名", { exact: true }).fill(people[1].name);
   await dates({ 从年: 2025, 从月: 12, 到年: 2026, 到月: 1 });
-  await printPdf("打印查询结果", "history-calculation", ["日工资", "100.00", "月工资", "3,000.00", "315.00", "3,119.00"], ["999.00"]);
+  await printPdf("打印查询结果", "history-wage-table", ["日工资", "100.00", "折算日工资", "月工资", "3,000.00", "315.00", "3,119.00", "29.00"], ["999.00", "工资计算", "= ¥"]);
   await page.getByRole("button", { name: "选择人员", exact: true }).click();
   await page.getByRole("button", { name: "清空", exact: true }).click();
   await page.getByRole("checkbox", { name: people[1].name, exact: true }).check();
-  await printPdf("打印工资条 1 张", "history-slip", ["工资条", "出勤工资", "加班工资", "3,119.00", "餐补", "罚款/扣款"], ["999.00"]);
+  await printPdf("打印工资条 1 张", "history-slip", ["工资条", "日工资", "折算日工资", "出勤工资", "加班工资", "3,119.00", "餐补", "罚款", "扣款"], ["999.00", "工资计算", "= ¥"]);
   await page.getByLabel("查询姓名", { exact: true }).fill(people[2].name);
-  await dates({ 从年: 2023, 从月: 5, 从日: 8, 到年: 2026, 到月: 8, 到日: 9 });
+  await dates({ 从年: 2023, 从月: 5, 到年: 2026, 到月: 8 });
+  assert.ok((await page.locator("main").innerText()).includes("2023-05-01 至 2026-08-31"));
+  await page.getByLabel("从年", { exact: true }).selectOption("2024");
+  await page.getByLabel("从月", { exact: true }).selectOption("2");
+  await page.getByLabel("到年", { exact: true }).selectOption("2024");
+  await page.getByLabel("到月", { exact: true }).selectOption("2");
+  const februaryText = await page.locator("main").innerText();
+  assert.ok(februaryText.includes("2024-02-01 至 2024-02-29"));
+  assert.ok(februaryText.includes("二月首日") && februaryText.includes("二月末日"));
+  for (const excluded of ["二月范围前", "二月范围后", "无日期待发"]) assert.ok(!februaryText.includes(excluded));
+  await printPdf("打印查询结果", "leap-month-boundaries", ["2024-02-01 至 2024-02-29", "60.00"], ["工资计算"]);
+  await page.getByLabel("从年", { exact: true }).selectOption("2025");
+  await page.getByLabel("到年", { exact: true }).selectOption("2025");
+  assert.ok((await page.locator("main").innerText()).includes("2025-02-01 至 2025-02-28"));
+  await page.getByRole("button", { name: "按数据日期", exact: true }).click();
   await page.getByLabel("查询方式", { exact: true }).selectOption("team");
   await page.getByLabel("查询班组", { exact: true }).selectOption("一组");
   await dates({ 从年: 2025, 从月: 12, 到年: 2026, 到月: 7 });
@@ -126,7 +150,7 @@ try {
     await candidates[0]({ discardLocal: true });
   });
   await dates({ 从年: 2025, 从月: 10 });
-  report.push({ scenario: "auto-person-team-content-payment-dates-and-manual-preservation", passed: true });
+  report.push({ scenario: "whole-month-auto-manual-leap-boundaries-and-preservation", passed: true });
 
   await page.goto("/people", { waitUntil: "networkidle" });
   for (const width of [1440, 375, 390]) {
@@ -203,7 +227,7 @@ try {
   await page.getByLabel("查询姓名", { exact: true }).fill(people[0].name);
   await page.getByLabel("从月", { exact: true }).selectOption("6");
   await page.getByLabel("当前台账", { exact: true }).filter({ visible: true }).selectOption(nextBook);
-  await page.waitForFunction(() => document.body.textContent.includes("已自动选择有数据的范围"));
+  await page.waitForFunction(() => document.body.textContent.includes("已自动选择有数据的月份"));
   await dates({ 从年: 2024, 从月: 2, 到年: 2024, 到月: 2 });
   report.push({ scenario: "book-switch-resets-manual-date-range", passed: true });
   assert.deepEqual(errors, []);
