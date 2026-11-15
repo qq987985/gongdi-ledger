@@ -639,6 +639,11 @@
     padding-left: 0.6mm;
     padding-right: 0.6mm;
   }
+  /* 工资条与查询的数字保持同样留白，数量合计不能被 px-1 挤出列线。 */
+  .print-only .query-wage-table .query-number {
+    padding-left: 0.6mm;
+    padding-right: 0.6mm;
+  }
   .print-only .query-number {
     white-space: nowrap;
     overflow-wrap: normal;

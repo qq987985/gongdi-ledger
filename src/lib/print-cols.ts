@@ -24,9 +24,10 @@ export const MONTH_SHEET_COLS = [4, 6, 8, 5, 5, 8, 8, 8, 8, 8, 11, 21];
 export const MONTH_TEAM_COLS = [10, 40, 25, 25];
 export const QUERY_TEAM_ATTENDANCE_COLS = [24, 18, 18, 40];
 export const QUERY_PERSON_ATTENDANCE_COLS = [24, 18, 18, 40];
-export const QUERY_TEAM_WAGE_COLS = [13, 6, 6, 14, 12, 14, 15, 13, 7];
+/** 数量列各10%，容纳上千/上万及小数；班组区间合计不能按个人短数值分配宽度。 */
+export const QUERY_TEAM_WAGE_COLS = [10, 10, 10, 13, 12, 13, 13, 12, 7];
 /** 个人/班组逐月：姓名或年月/出勤/加班小时/出勤工资/加班工资/补助/扣款/应发/备注。 */
-export const QUERY_PERSON_WAGE_COLS = [14, 6, 7, 14, 13, 9, 9, 14, 14];
+export const QUERY_PERSON_WAGE_COLS = [12, 10, 10, 13, 13, 9, 9, 13, 11];
 /** 工资条沿用查询的列序和列宽。 */
 export const QUERY_PAYSLIP_WAGE_COLS = QUERY_PERSON_WAGE_COLS;
 

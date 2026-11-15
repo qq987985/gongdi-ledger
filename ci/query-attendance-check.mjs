@@ -73,6 +73,13 @@ try {
     await page.emulateMedia({ media: "print" });
     const clipped = await page.locator(".query-number").evaluateAll((cells) => cells.filter((cell) => cell.scrollWidth > cell.clientWidth + 1).map((cell) => cell.textContent));
     assert.deepEqual(clipped, [], `${file} 数值超出列宽`);
+    const crowded = await page.locator(".print-only .query-number").evaluateAll((cells) => cells.filter((cell) => {
+      const box = cell.getBoundingClientRect(); if (!box.width) return false;
+      const range = document.createRange(); range.selectNodeContents(cell);
+      const style = getComputedStyle(cell);
+      return range.getBoundingClientRect().right > box.right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth) + 0.5;
+    }).map((cell) => cell.textContent));
+    assert.deepEqual(crowded, [], `${file} 数值侵入单元格内边距`);
     const bytes = await page.pdf({ path: `${out}/${file}.pdf`, preferCSSPageSize: true, displayHeaderFooter: false });
     const pages = pdfPageTexts(bytes);
     const text = clean(pages.flatMap((p) => p.lines.map((l) => l.text)).join(""));
@@ -94,6 +101,56 @@ try {
   attendanceOnly(await page.getByRole("region", { name: "个人查询汇总", exact: true }).innerText());
   assert.ok(!(await page.locator("main").innerText()).includes("SYNTHETIC-SECRET"));
   await pdf("person-attendance", [names[0], "20.5", "2.25"], [names[1], "应发", "银行卡"]);
+  // 用户复现：班组跨月数量合计上千，不能越过列线或挤进下一列。
+  const quantities = [[159.2, 237], [132.4, 294], [175.6, 403.5], [60, 129], [204.1, 405.5], [183.7, 176.5], [21, 47], [70.6, 119], [0, 0], [2, 1]];
+  const quantityPeople = quantities.map((_, index) => ({ ...people[0], id: `quantity-p${index}`, name: `合成${String(index + 1).padStart(2, "0")}`, team: "合成数量班组", dailyWage: 300 }));
+  const quantityRows = quantityPeople.flatMap((person, index) => Array.from({ length: 8 }, (_, month) => ({ ...attendance[0], id: `quantity-a${index}-${month}`, name: person.name, team: person.team, month: month + 3, days: quantities[index][0] / 8, otHours: quantities[index][1] / 8, remark: "" })));
+  await load({ ...sample, people: quantityPeople, attendance: quantityRows, payments: [{ ...payments[0], owner: quantityPeople[8].name, receiver: quantityPeople[8].name, date: "2026-07-01", amount: 45000 }] });
+  await range(2026, 3, 2026, 10);
+  await page.getByLabel("查询方式", { exact: true }).selectOption("team");
+  await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
+  await print();
+  const quantityTotals = page.locator(".print-only .query-result-sheet").last().locator("tfoot tr").first().locator("td");
+  assert.equal(await quantityTotals.nth(1).textContent(), "1008.6");
+  assert.equal(await quantityTotals.nth(2).textContent(), "1812.5");
+  await page.setViewportSize({ width: 703, height: 1000 });
+  await page.emulateMedia({ media: "print" });
+  const quantityBounds = await quantityTotals.evaluateAll((cells) => cells.slice(1, 3).map((cell) => {
+    const range = document.createRange(); range.selectNodeContents(cell);
+    const text = range.getBoundingClientRect(); const box = cell.getBoundingClientRect(); const style = getComputedStyle(cell);
+    return { value: cell.textContent, rightGap: box.right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth) - text.right };
+  }));
+  assert.ok(quantityBounds.every((cell) => cell.rightGap >= -0.5), JSON.stringify(quantityBounds));
+  await page.emulateMedia({ media: "screen" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await pdf("team-thousand-quantities", ["1008.6", "1812.5", "区间合计", "合成数量班组"], ["身份证", "银行卡"]);
+  await page.setViewportSize({ width: 703, height: 1000 });
+  await page.emulateMedia({ media: "print" });
+  await mkdir("output/pdf", { recursive: true });
+  const summaryOnly = await page.addStyleTag({ content: "@media print { .query-result-sheet:not(:last-child) { display: none !important; } }" });
+  await page.pdf({ path: "output/pdf/工资汇总千位数量修复样例-1.9.11.pdf", preferCSSPageSize: true, displayHeaderFooter: false });
+  await summaryOnly.evaluate((element) => element.remove());
+  await page.emulateMedia({ media: "screen" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  // 合法历史数值压力样本：个人查询及工资条的明细/合计也必须容纳五位整数与两位小数。
+  const quantityStress = { ...sample, people: [quantityPeople[0]], attendance: [
+    { ...attendance[0], id: "quantity-positive", name: quantityPeople[0].name, days: 12345.67, otHours: 23456.78, remark: "合成数量压力样本" },
+    { ...attendance[0], id: "quantity-negative", name: quantityPeople[0].name, month: 10, days: -1234.56, otHours: -2345.67, remark: "合成历史调整" },
+  ], payments: [] };
+  await load(quantityStress);
+  await range(2026, 10, 2026, 11);
+  await page.getByLabel("查询姓名", { exact: true }).fill(quantityPeople[0].name);
+  await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
+  await print();
+  await pdf("person-large-quantities", ["12345.67", "23456.78", "-1234.56", "-2345.67", "11111.11", "21111.11"], ["身份证", "银行卡"]);
+  await page.getByRole("button", { name: "选择人员", exact: true }).click();
+  await page.getByRole("checkbox", { name: quantityPeople[0].name, exact: true }).check();
+  await print("打印工资条 1 张");
+  await pdf("payslip-large-quantities", ["12345.67", "23456.78", "11111.11", "21111.11"], ["身份证", "银行卡"]);
+  report.push({ scenario: "thousand-quantity-totals-and-large-person-slip", quantityBounds, passed: true });
+  await load();
+  await range();
+  await page.getByLabel("查询姓名", { exact: true }).fill(names[0]);
   await page.getByLabel("查询方式", { exact: true }).selectOption("team");
   await page.getByLabel("查询班组", { exact: true }).selectOption("乙组");
   text = await print();
@@ -255,8 +312,19 @@ try {
   assert.equal((queryText.match(/本月小计/g) || []).length, 1);
   assert.equal((queryText.match(/区间合计/g) || []).length, 1);
   assert.ok(queryPages.every((p) => clean(p.lines.map((line) => line.text).join("")).includes("长表班组")), "班组查询续页也须有抬头");
-  const monthPages = queryPages.map((p) => clean(p.lines.map((line) => line.text).join(""))).filter((text) => !text.includes("按当前人员档案班组"));
-  for (const person of manyPeople) assert.equal(monthPages.filter((text) => text.includes(person.name)).length, 1, `${person.name} 的标准与金额不得分在两页`);
+  const monthPages = queryPages.filter((p) => !clean(p.lines.map((line) => line.text).join("")).includes("按当前人员档案班组"));
+  for (const person of manyPeople) {
+    // 姓名换行后直接拼整页会把“测试工友”+工天1+加班0.5误认成“测试工友10”。
+    // 按独立标准行定位人员，再在同页该人的标题与下一人标准之间核对金额。
+    const personPages = monthPages.filter((p) => p.lines.some((line) => clean(line.text).startsWith(`${person.name}·日工资`)));
+    assert.equal(personPages.length, 1, `${person.name} 的工资标准应只出现一次`);
+    const lines = personPages[0].lines;
+    const standard = lines.find((line) => clean(line.text).startsWith(`${person.name}·日工资`));
+    const title = lines.find((line) => line.y < standard.y && clean(line.text).endsWith(`工资汇总·${person.name}`));
+    assert.ok(title, `${person.name} 的标准与标题必须同页`);
+    const next = Math.max(0, ...lines.filter((line) => line.y < standard.y && clean(line.text).includes("·日工资")).map((line) => line.y));
+    assert.ok(lines.some((line) => line.y < title.y && line.y > next && clean(line.text).includes("100.0010.000.000.00110.00")), `${person.name} 的金额必须在同页对应标准之后`);
+  }
   await page.goto("about:blank");
   const created = await ctx.request.post("/api/auth", { data: { op: "createBook", name: "合成空册验证" } });
   assert.equal(created.status(), 200);
