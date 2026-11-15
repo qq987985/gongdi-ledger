@@ -97,11 +97,12 @@ try {
   const formula = clean(await calc.innerText());
   for (const value of ["日工资¥300.00/天", "20.5天×¥300.00/天=¥6,150.00", "10小时÷8小时/天×¥300.00/天=¥375.00", "餐补", "¥410.00", "其他补助¥100.00", "罚款/扣款¥50.00", "=¥6,985.00"]) assert.ok(formula.includes(value), value);
   assert.ok((await page.locator(".print-only").textContent()).includes("罚款/扣款"), "完整表头由DOM核验，PDF另核对换行后的片段");
-  await printPdf("打印查询结果", "person-wage-table", [people[0].name, "日工资", "折算日工资", "加班折算", "8 小时/天", "出勤工资", "6,150.00", "375.00", "510.00", "罚款", "扣款", "6,985.00"], ["工资计算", "逐笔取分", "金额按现行规则", "= ¥"]);
+  await printPdf("打印查询结果", "person-wage-table", [people[0].name, "日工资", "加班折算", "8 小时/天", "出勤工资", "6,150.00", "375.00", "510.00", "罚款", "扣款", "6,985.00"], ["工资计算", "逐笔取分", "金额按现行规则", "= ¥", "折算工资", "折算日工资"]);
   assert.equal(await page.locator(".print-only .wage-calculation").count(), 0);
   assert.equal(await page.locator(".print-only .query-wage-standard").count(), 1);
+  assert.deepEqual(await page.locator(".print-only .query-wage-standard td").evaluateAll((cells) => cells.map((cell) => cell.colSpan)), [3, 6]);
   await mkdir("output/pdf", { recursive: true });
-  await copyFile(`${out}/person-wage-table.pdf`, "output/pdf/工资表格核对样例-1.9.6.pdf");
+  await copyFile(`${out}/person-wage-table.pdf`, "output/pdf/工资表格核对样例-1.9.7.pdf");
   for (const width of [1440, 375, 390]) {
     await page.setViewportSize({ width, height: 900 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width} 查询页面溢出`);
@@ -114,11 +115,11 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByLabel("查询姓名", { exact: true }).fill(people[1].name);
   await dates({ 从年: 2025, 从月: 12, 到年: 2026, 到月: 1 });
-  await printPdf("打印查询结果", "history-wage-table", ["日工资", "100.00", "折算日工资", "月工资", "3,000.00", "315.00", "3,119.00", "29.00"], ["999.00", "工资计算", "= ¥"]);
+  await printPdf("打印查询结果", "history-wage-table", ["日工资", "100.00", "加班折算", "月工资", "3,000.00", "315.00", "3,119.00", "29.00"], ["999.00", "工资计算", "= ¥", "折算工资", "折算日工资"]);
   await page.getByRole("button", { name: "选择人员", exact: true }).click();
   await page.getByRole("button", { name: "清空", exact: true }).click();
   await page.getByRole("checkbox", { name: people[1].name, exact: true }).check();
-  await printPdf("打印工资条 1 张", "history-slip", ["工资条", "日工资", "折算日工资", "出勤工资", "加班工资", "3,119.00", "餐补", "罚款", "扣款"], ["999.00", "工资计算", "= ¥"]);
+  await printPdf("打印工资条 1 张", "history-slip", ["工资条", "日工资", "加班折算", "出勤工资", "加班工资", "3,119.00", "餐补", "罚款", "扣款"], ["999.00", "工资计算", "= ¥", "折算工资", "折算日工资"]);
   await page.getByLabel("查询姓名", { exact: true }).fill(people[2].name);
   await dates({ 从年: 2023, 从月: 5, 到年: 2026, 到月: 8 });
   assert.ok((await page.locator("main").innerText()).includes("2023-05-01 至 2026-08-31"));
@@ -138,6 +139,10 @@ try {
   await page.getByLabel("查询方式", { exact: true }).selectOption("team");
   await page.getByLabel("查询班组", { exact: true }).selectOption("一组");
   await dates({ 从年: 2025, 从月: 12, 到年: 2026, 到月: 7 });
+  await page.getByLabel("从年", { exact: true }).selectOption("2026");
+  await page.getByLabel("从月", { exact: true }).selectOption("7");
+  await printPdf("打印查询结果", "team-wage-table", ["一组", "日工资", "加班折算", "8 小时/天", "6,985.00"], ["工资计算", "折算工资", "折算日工资"]);
+  await page.getByRole("button", { name: "按数据日期", exact: true }).click();
   await page.getByLabel("从月", { exact: true }).selectOption("10");
   // 普通同册刷新必须保留手动范围。
   await put({ ...sample, people: people.map((person, index) => index ? person : { ...person, dailyWage: 301 }) });

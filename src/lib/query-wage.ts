@@ -4,7 +4,7 @@ import { money } from "./utils";
 type WageTotals = Pick<MonthPayResult, "days" | "otHours" | "base" | "ot" | "meal" | "allowance" | "deduction" | "pay">;
 const rate = (value: number) => round2(value) === value ? money(value) : String(value);
 export interface QueryWageCalculation {
-  table: { wage: string; overtimeRate: string; overtimeRule: string };
+  table: { wage: string; overtime: string };
   standard: string;
   attendance: string;
   overtime: string;
@@ -45,7 +45,7 @@ export function buildQueryWageCalculation(wage: WageSource, entries: MonthPayRes
   const many = entries.length > 1;
   const count = entries.filter((row) => row.base !== 0).length;
   const standard = monthly
-    ? `月工资 ¥${rate(wage.monthWage || 0)}/月；加班折算日工资 ¥${rate(fold)}/天${daily ? "（采用填写的日工资）" : "（月工资÷30，取到分）"}`
+    ? `月工资 ¥${rate(wage.monthWage || 0)}/月；加班折算按 ¥${rate(fold)}/天${daily ? "（采用填写的日工资）" : "（月工资÷30，取到分）"}`
     : `日工资 ¥${rate(daily)}/天${daily ? "" : "（未设置日工资）"}`;
   const attendance = !entries.length ? "无考勤记录，出勤工资 ¥0.00"
     : monthly ? (count ? `月工资 ¥${rate(wage.monthWage || 0)} × ${count} 笔计薪考勤 = ¥${money(totals.base)}` : `本月未产生月薪基数，出勤工资 ¥${money(totals.base)}`)
@@ -61,8 +61,7 @@ export function buildQueryWageCalculation(wage: WageSource, entries: MonthPayRes
   return {
     table: {
       wage: monthly ? `月工资 ¥${rate(wage.monthWage || 0)}/月${daily ? `；日工资 ¥${rate(daily)}/天` : ""}` : `日工资 ¥${rate(daily)}/天`,
-      overtimeRate: ot.kind === "fold" ? `折算日工资 ¥${rate(fold)}/天` : ot.kind === "hour" ? `加班单价 ¥${rate(ot.param)}/小时` : "不计加班工资",
-      overtimeRule: ot.kind === "fold" ? `加班折算 ${ot.param} 小时/天` : ot.kind === "hour" ? "加班按小时" : wage.otRule?.trim() ? ot.label : "加班未设",
+      overtime: ot.kind === "fold" ? `加班折算 ${ot.param} 小时/天` : ot.kind === "hour" ? `加班按小时 ¥${rate(ot.param)}/小时` : wage.otRule?.trim() ? ot.label : "加班未设",
     },
     standard, attendance, overtime, meal,
     adjustment: `其他补助 ¥${money(totals.allowance)}；罚款/扣款 ¥${money(totals.deduction)}`,

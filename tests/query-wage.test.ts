@@ -19,7 +19,7 @@ test("工资解释逐项展示日工资、出勤、加班折算、餐补补助�
   assert.match(calc.meal, /20.5 天 × ¥20.00\/天 = ¥410.00/);
   assert.match(calc.adjustment, /其他补助 ¥100.00；罚款\/扣款 ¥50.00/);
   assert.match(calc.total, /= ¥6,985.00$/);
-  assert.deepEqual(calc.table, { wage: "日工资 ¥300.00/天", overtimeRate: "折算日工资 ¥300.00/天", overtimeRule: "加班折算 8 小时/天" });
+  assert.deepEqual(calc.table, { wage: "日工资 ¥300.00/天", overtime: "加班折算 8 小时/天" });
   assert.equal(queryWageAdditions(month), 510, "打印补助包含100其他补助+410餐补，应发不变");
 });
 
@@ -33,11 +33,11 @@ test("工资解释采用历史月标准，日薪改月薪时不套当前日薪/�
   assert.equal(months[0].pay, 315);
   assert.equal(months[1].pay, 3119);
   assert.match(months[0].calculation!.standard, /日工资 ¥100.00/);
-  assert.match(months[1].calculation!.standard, /月工资 ¥3,000.00.*日工资 ¥100.00/);
+  assert.match(months[1].calculation!.standard, /月工资 ¥3,000.00.*加班折算按 ¥100.00/);
   assert.match(months[1].calculation!.attendance, /月工资.*1 笔计薪考勤/);
   assert.ok(!JSON.stringify(months.map((m) => m.calculation)).includes("999"));
   assert.equal(months[1].calculation!.table.wage, "月工资 ¥3,000.00/月");
-  assert.equal(months[1].calculation!.table.overtimeRate, "折算日工资 ¥100.00/天");
+  assert.equal(months[1].calculation!.table.overtime, "加班折算 8 小时/天");
 });
 
 test("多笔考勤逐笔取分，不打印按月汇总重算的错误等式，保留小于分的单价", () => {
@@ -60,9 +60,9 @@ test("展示分项存在取分差额时显式调节，不改既有应发", () =>
 
 test("打印表格区分按小时、未设与明确不计加班，不引入长计算式", () => {
   const result = (otRule: string) => buildQueryResults({ people: [person({ otRule })], attendance: [attendance()], payments: [], range })[0].months[0];
-  assert.deepEqual(result("按小时:20").calculation!.table, { wage: "日工资 ¥300.00/天", overtimeRate: "加班单价 ¥20.00/小时", overtimeRule: "加班按小时" });
-  assert.equal(result("").calculation!.table.overtimeRule, "加班未设");
-  assert.equal(result("不计加班").calculation!.table.overtimeRule, "不计加班");
+  assert.deepEqual(result("按小时:20").calculation!.table, { wage: "日工资 ¥300.00/天", overtime: "加班按小时 ¥20.00/小时" });
+  assert.equal(result("").calculation!.table.overtime, "加班未设");
+  assert.equal(result("不计加班").calculation!.table.overtime, "不计加班");
 });
 
 test("考勤自动日期只取本对象有内容月份，含纯备注，保留跨年与闰年月末", () => {

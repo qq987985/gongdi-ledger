@@ -25,8 +25,7 @@ export function WageStandardRow({ title, calculation, cellClass }: { title: stri
   const { table } = calculation;
   return <tr className="query-wage-standard">
     <td className={cellClass} colSpan={3}>{title} · {table.wage}</td>
-    <td className={cellClass} colSpan={3}>{table.overtimeRate}</td>
-    <td className={cellClass} colSpan={3}>{table.overtimeRule}</td>
+    <td className={cellClass} colSpan={6}>{table.overtime}</td>
   </tr>;
 }
 
