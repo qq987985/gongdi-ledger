@@ -40,6 +40,8 @@ async function printPdf(button, file, expected, forbidden = []) {
   await page.waitForFunction((count) => window.__printed > count, before);
   await page.setViewportSize({ width: 703, height: 1000 });
   await page.emulateMedia({ media: "print" });
+  assert.ok(await page.locator(".print-only .query-wage-standard").evaluateAll((rows) => rows.every((row) => row.nextElementSibling?.classList.contains("query-wage-amount"))), "工资标准必须在对应金额上方");
+  assert.ok(await page.locator(".print-only .query-person-gap td").evaluateAll((cells) => cells.every((cell) => cell.getBoundingClientRect().height >= 10)), "人员之间必须有实际打印留白");
   assert.deepEqual(await page.locator(".query-number").evaluateAll((cells) => cells.filter((cell) => cell.scrollWidth > cell.clientWidth + 1).map((cell) => cell.textContent)), []);
   const bytes = await page.pdf({ path: `${out}/${file}.pdf`, preferCSSPageSize: true, displayHeaderFooter: false });
   const pages = pdfPageTexts(bytes);
@@ -102,7 +104,6 @@ try {
   assert.equal(await page.locator(".print-only .query-wage-standard").count(), 1);
   assert.deepEqual(await page.locator(".print-only .query-wage-standard td").evaluateAll((cells) => cells.map((cell) => cell.colSpan)), [3, 6]);
   await mkdir("output/pdf", { recursive: true });
-  await copyFile(`${out}/person-wage-table.pdf`, "output/pdf/工资表格核对样例-1.9.7.pdf");
   for (const width of [1440, 375, 390]) {
     await page.setViewportSize({ width, height: 900 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${width} 查询页面溢出`);
@@ -220,6 +221,17 @@ try {
   await readonly.close();
   report.push({ scenario: "create-empty-team-blank-duplicate-reload-and-new-person-selection", passed: true });
   report.push({ scenario: "readonly-team-creation-hidden-and-ledger-write-denied", passed: true });
+
+  // 两人均有工资的真实打印样例：上方工资/折算、下方金额，人员之间有留白。
+  await page.goto("about:blank");
+  await put({ ...sample, people: people.slice(0, 2), attendance: [sample.attendance[0], row("layout-person-b", people[1].name, 2026, 7)], payments: [] });
+  await page.goto("/query", { waitUntil: "networkidle" });
+  await page.getByLabel("查询方式", { exact: true }).selectOption("team");
+  await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
+  assert.equal(await page.locator(".print-only [data-query-month] .query-person-gap").count(), 1);
+  await printPdf("打印查询结果", "two-person-wage-gaps", [people[0].name, people[1].name, "日工资", "月工资", "加班折算", "6,985.00", "3,119.00"], ["工资计算", "折算日工资"]);
+  await copyFile(`${out}/two-person-wage-gaps.pdf`, "output/pdf/工资打印分人样例-1.9.8.pdf");
+  report.push({ scenario: "wage-standards-above-amounts-and-person-gaps", passed: true });
 
   // 切册通过真实下拉完成：旧手动日期、班组/人员草稿不能串到新册。
   const oldBook = (await (await ctx.request.get("/api/auth")).json()).bookId;

@@ -111,6 +111,11 @@ try {
   assert.ok(text.includes("工资条") && !text.includes("工资汇总"));
   assert.equal(await page.locator(".payslip").count(), 2);
   assert.ok(!text.includes(`姓名:${names[1]}`), "代领人可出现在打款明细，但不能多印其工资条");
+  const twoSlips = await pdf("two-person-slips", ["工资条", names[0], names[2]], ["工资计算"]);
+  assert.equal(twoSlips.length, 1, "少量两人的工资条保持同页，并留出间隔");
+  await page.emulateMedia({ media: "print" });
+  assert.ok(await page.locator(".payslip + .payslip").evaluateAll((slips) => slips.every((slip) => parseFloat(getComputedStyle(slip).marginTop) >= 14)), "工资条之间需有实际间隔");
+  await page.emulateMedia({ media: "screen" });
   text = await print(); assert.ok(text.includes("工资汇总") && !text.includes("台账·工资条"));
   await page.getByLabel("查询班组", { exact: true }).selectOption("甲组");
   assert.ok(await page.getByRole("button", { name: "打印工资条 0 张", exact: true }).count());
@@ -216,7 +221,7 @@ try {
   await page.getByLabel("查询方式", { exact: true }).selectOption("team");
   await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
   await print();
-  assert.equal(await page.locator(".query-result-sheet tbody td").first().textContent(), longName);
+  assert.equal(await page.locator(".query-result-sheet .query-wage-amount td").first().textContent(), longName);
   // 名字正常折成两行，PDF按纵坐标抽取时会被相邻金额行隔开；分别核对两段及完整DOM姓名。
   await pdf("team-wage-long", ["长姓名测试工", "友甲", "9,364,219.50", "现场核对备注"], ["ID-SYNTHETIC", "BANK-SYNTHETIC"]);
   await page.getByLabel("查询方式", { exact: true }).selectOption("person");
@@ -249,6 +254,8 @@ try {
   assert.equal((queryText.match(/本月小计/g) || []).length, 1);
   assert.equal((queryText.match(/区间合计/g) || []).length, 1);
   assert.ok(queryPages.every((p) => clean(p.lines.map((line) => line.text).join("")).includes("长表班组")), "班组查询续页也须有抬头");
+  const monthPages = queryPages.map((p) => clean(p.lines.map((line) => line.text).join(""))).filter((text) => !text.includes("按当前人员档案班组"));
+  for (const person of manyPeople) assert.equal(monthPages.filter((text) => text.includes(person.name)).length, 1, `${person.name} 的标准与金额不得分在两页`);
   await page.goto("about:blank");
   const created = await ctx.request.post("/api/auth", { data: { op: "createBook", name: "合成空册验证" } });
   assert.equal(created.status(), 200);

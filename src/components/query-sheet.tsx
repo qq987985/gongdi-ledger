@@ -2,7 +2,7 @@ import { QUERY_TEAM_ATTENDANCE_COLS, QUERY_PERSON_ATTENDANCE_COLS, QUERY_TEAM_WA
 import { money } from "~/lib/utils";
 import { QueryMonthTable } from "~/components/query-month-table";
 import { Fragment } from "react";
-import { WageStandardRow, WagePrintRemark, WageAdjustmentHeader } from "~/components/wage-calculation";
+import { WageStandardRow, WagePrintRemark, WageAdjustmentHeader, WagePersonGap } from "~/components/wage-calculation";
 import { queryWageAdditions } from "~/lib/query-wage";
 import type { QueryContent, QueryPersonResult, queryTeamResults } from "~/lib/query-data";
 
@@ -44,15 +44,17 @@ export function QuerySheet({ content, label, paymentLabel, person, team, teamLab
             </tr>
           </thead>
           <tbody>
-            {team ? team.members.map((row) => <Fragment key={row.person.id}><tr>
+            {team ? team.members.map((row, index) => <Fragment key={row.person.id}>{wage && index > 0 ? <WagePersonGap /> : null}<tr>
               <td className={TD}>{row.person.name}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : row.totals.days}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : row.totals.otHours}</td>
               {wage ? <><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.totals.base)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.totals.ot)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.totals.pay)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.paidAsOwner)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.difference)}</td></> : null}
               <td className={TD}>{row.ambiguous ? "姓名重复，历史记录待核对" : wage ? <WagePrintRemark remark={row.remark} totals={row.totals} /> : row.remark}</td>
-            </tr></Fragment>) : person!.months.map((row) => <Fragment key={`${row.year}-${row.month}`}><tr>
+            </tr></Fragment>) : person!.months.map((row) => <Fragment key={`${row.year}-${row.month}`}>
+              {wage ? <WageStandardRow title={`${row.year}年${row.month}月`} calculation={row.calculation} cellClass={TD} /> : null}
+              <tr className={wage ? "query-wage-amount" : undefined}>
               <td className={TD}>{row.year}年{row.month}月</td><td className={`${TD} query-number`}>{row.days}</td><td className={`${TD} query-number`}>{row.otHours}</td>
               {wage ? <><td className={`${TD} query-number`}>{money(row.base)}</td><td className={`${TD} query-number`}>{money(queryWageAdditions(row))}</td><td className={`${TD} query-number`}>{money(row.deduction)}</td><td className={`${TD} query-number`}>{money(row.ot)}</td><td className={`${TD} query-number`}>{money(row.pay)}</td></> : null}
               <td className={TD}>{wage ? <WagePrintRemark remark={row.remark} totals={row} /> : row.remark}</td>
-            </tr>{wage ? <WageStandardRow title={`${row.year}年${row.month}月`} calculation={row.calculation} cellClass={TD} /> : null}</Fragment>)}
+            </tr></Fragment>)}
           </tbody>
           <tfoot>
             <tr className="font-medium">

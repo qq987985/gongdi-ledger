@@ -128,7 +128,9 @@ function PayslipSheets({
               </thead>
               <tbody>
                 {s.months.map((m) => (
-                  <React.Fragment key={`${m.year}-${m.month}`}><tr>
+                  <React.Fragment key={`${m.year}-${m.month}`}>
+                    <WageStandardRow title={`${m.year}年${m.month}月`} calculation={m.calculation} cellClass="border border-black px-1 py-1" />
+                    <tr className="query-wage-amount">
                     <td className="border border-black px-1 py-1">
                       {m.year}年{m.month}月
                     </td>
@@ -140,7 +142,7 @@ function PayslipSheets({
                     <td className="query-number border border-black px-1 py-1">{m.deduction ? money(m.deduction) : ""}</td>
                     <td className="query-number border border-black px-1 py-1 font-medium">{money(m.pay)}</td>
                     <td className="border border-black px-1 py-1 text-left"><WagePrintRemark remark={m.remark} totals={m} /></td>
-                  </tr><WageStandardRow title={`${m.year}年${m.month}月`} calculation={m.calculation} cellClass="border border-black px-1 py-1" /></React.Fragment>
+                  </tr></React.Fragment>
                 ))}
                 <tr>
                   <td className="border border-black px-1 py-1 font-medium">合计</td>

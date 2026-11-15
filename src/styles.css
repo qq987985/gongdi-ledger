@@ -449,7 +449,7 @@
     }
     .payslip + .payslip {
       border-top: 1px dashed #888;
-      margin-top: 0;
+      margin-top: 4mm;
     }
   }
 }
@@ -654,10 +654,24 @@
     font-size: 10pt;
     line-height: 1.35;
     text-align: left;
+    break-after: avoid;
+    page-break-after: avoid;
   }
   .print-only .query-wage-standard td {
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+  /* 班组工资每人之间留白；空行跟随下一人的标准/金额，避免页尾孤立间隔。 */
+  .print-only .query-person-gap {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .print-only .query-person-gap td {
+    height: 3mm;
+    padding: 0 !important;
+    border: 0 !important;
+    font-size: 0;
+    line-height: 0;
   }
 
   /* ②e 纸面上的**外框留白**也压掉：`@page` 已经有 12mm 页边距，单据自己再 `p-4`（每边 4.2mm）

@@ -1,6 +1,6 @@
 import { Button } from "~/components/ui/button";
 import { Fragment } from "react";
-import { WageCalculation, WageTotalCalculation, WageStandardRow, WagePrintRemark, WageAdjustmentHeader } from "~/components/wage-calculation";
+import { WageCalculation, WageTotalCalculation, WageStandardRow, WagePrintRemark, WageAdjustmentHeader, WagePersonGap } from "~/components/wage-calculation";
 import { queryWageAdditions } from "~/lib/query-wage";
 import type { QueryContent, QueryTeamMonth } from "~/lib/query-data";
 import { QUERY_PERSON_WAGE_COLS, QUERY_TEAM_ATTENDANCE_COLS } from "~/lib/print-cols";
@@ -31,12 +31,15 @@ export function QueryMonthTable({ month, content, teamLabel, print = false, onPe
         <th className={cell}>备注</th>
       </tr>
     </thead>
-    <tbody>{month.rows.map(({ person, ambiguous, month: row }) => <Fragment key={person.id}><tr className={print ? "" : "border-t border-line"}>
+    <tbody>{month.rows.map(({ person, ambiguous, month: row }, index) => <Fragment key={person.id}>
+      {wage && print && index > 0 ? <WagePersonGap /> : null}
+      {wage && print && !ambiguous ? <WageStandardRow title={person.name} calculation={row.calculation} cellClass={cell} /> : null}
+      <tr className={print ? wage ? "query-wage-amount" : "" : "border-t border-line"}>
       <td className={cell}>{onPerson ? <Button variant="ghost" size="sm" type="button" onClick={() => onPerson(person.id)}>{person.name}</Button> : person.name}</td>
       <td className={number}>{ambiguous ? "—" : row.days}</td><td className={number}>{ambiguous ? "—" : row.otHours}</td>
       {wage ? <><td className={number}>{ambiguous ? "—" : money(row.base)}</td><td className={number}>{ambiguous ? "—" : money(print ? queryWageAdditions(row) : row.allowance)}</td><td className={number}>{ambiguous ? "—" : money(row.deduction)}</td><td className={number}>{ambiguous ? "—" : money(row.ot)}</td><td className={number}>{ambiguous ? "—" : money(row.pay)}</td></> : null}
       <td className={cell}>{ambiguous ? "姓名重复，历史记录待核对" : print && wage ? <WagePrintRemark remark={row.remark} totals={row} /> : row.remark}</td>
-    </tr>{wage && print && !ambiguous ? <WageStandardRow title={person.name} calculation={row.calculation} cellClass={cell} /> : null}</Fragment>)}</tbody>
+    </tr></Fragment>)}</tbody>
     <tfoot><tr className={print ? "font-medium" : "border-t border-line font-medium"}>
       <td className={cell}>本月小计</td><td className={number}>{totals.days}</td><td className={number}>{totals.otHours}</td>
       {wage ? <><td className={number}>{money(totals.base)}</td><td className={number}>{money(print ? queryWageAdditions(totals) : totals.allowance)}</td><td className={number}>{money(totals.deduction)}</td><td className={number}>{money(totals.ot)}</td><td className={number}>{money(totals.pay)}</td></> : null}
