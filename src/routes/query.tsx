@@ -8,9 +8,7 @@ import { Need, useCan, useCanSave } from "~/components/can";
 import { YmPick, rangeLabel } from "~/components/ym-pick";
 import { PersonQueryResults, TeamQueryResults } from "~/components/query-results";
 import { QuerySheet } from "~/components/query-sheet";
-import { WageStandardRow, WagePrintRemark, WageAdjustmentHeader } from "~/components/wage-calculation";
-import { queryWageAdditions } from "~/lib/query-wage";
-import { QUERY_PAYSLIP_WAGE_COLS } from "~/lib/print-cols";
+import { WagePrintTable } from "~/components/wage-print-table";
 import { PhotoSlot } from "~/components/photo-slot";
 import { DocActions } from "~/components/doc-actions";
 import { useApp } from "~/lib/store";
@@ -115,48 +113,13 @@ function PayslipSheets({
                 <div>班组：{s.person.team || "—"}</div>
               </div>
           {showMonths ? (s.months.length ? (
-            <table className="query-wage-table mt-3 w-full table-fixed border-collapse text-center text-xs">
-              <colgroup>{QUERY_PAYSLIP_WAGE_COLS.map((width, index) => <col key={index} style={{ width: `${width}%` }} />)}</colgroup>
-              <thead>
-                <tr>
-                  {["年月", "出勤", "出勤工资", "加班小时", "加班工资", "补助（含餐补）", "罚款/扣款", "应发", "备注"].map((h) => (
-                    <th key={h} className="border border-black px-1 py-1 font-medium">
-                      {h === "补助（含餐补）" ? <WageAdjustmentHeader kind="additions" /> : h === "罚款/扣款" ? <WageAdjustmentHeader kind="deduction" /> : h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {s.months.map((m) => (
-                  <React.Fragment key={`${m.year}-${m.month}`}>
-                    <WageStandardRow title={`${m.year}年${m.month}月`} calculation={m.calculation} cellClass="border border-black px-1 py-1" />
-                    <tr className="query-wage-amount">
-                    <td className="border border-black px-1 py-1">
-                      {m.year}年{m.month}月
-                    </td>
-                    <td className="border border-black px-1 py-1">{m.days}</td>
-                    <td className="query-number border border-black px-1 py-1">{money(m.base)}</td>
-                    <td className="border border-black px-1 py-1">{m.otHours || ""}</td>
-                    <td className="query-number border border-black px-1 py-1">{m.ot ? money(m.ot) : ""}</td>
-                    <td className="query-number border border-black px-1 py-1">{money(queryWageAdditions(m))}</td>
-                    <td className="query-number border border-black px-1 py-1">{m.deduction ? money(m.deduction) : ""}</td>
-                    <td className="query-number border border-black px-1 py-1 font-medium">{money(m.pay)}</td>
-                    <td className="border border-black px-1 py-1 text-left"><WagePrintRemark remark={m.remark} totals={m} /></td>
-                  </tr></React.Fragment>
-                ))}
-                <tr>
-                  <td className="border border-black px-1 py-1 font-medium">合计</td>
-                  <td className="border border-black px-1 py-1">{s.totals.days}</td>
-                  <td className="query-number border border-black px-1 py-1">{money(s.totals.base)}</td>
-                  <td className="border border-black px-1 py-1">{s.totals.otHours || ""}</td>
-                  <td className="query-number border border-black px-1 py-1">{money(s.totals.ot)}</td>
-                  <td className="query-number border border-black px-1 py-1">{money(queryWageAdditions(s.totals))}</td>
-                  <td className="query-number border border-black px-1 py-1">{money(s.totals.deduction)}</td>
-                  <td className="query-number border border-black px-1 py-1 font-semibold">{money(s.total)}</td>
-                  <td className="border border-black px-1 py-1"><WagePrintRemark totals={s.totals} /></td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="mt-3">
+              {s.months.map((month, index) => <section className="query-slip-month print-keep" key={`${month.year}-${month.month}`}>
+                <WagePrintTable title={`${s.person.name} · ${month.year}年${month.month}月工资汇总`} standardTitle={`${month.year}年${month.month}月`}
+                  subjectLabel="年月" subject={`${month.year}年${month.month}月`} row={month} layout="slip"
+                  footer={index === s.months.length - 1 ? { label: "合计", totals: s.totals } : undefined} />
+              </section>)}
+            </div>
           ) : (
             <p className="mt-3 text-xs">本区间无出勤记录。</p>
           )) : null}
@@ -273,9 +236,9 @@ function QueryPage() {
   const result = (selectedId ? matches.find((row) => row.person.id === selectedId) : undefined) || (matches.length === 1 ? matches[0] : undefined);
   const p = result?.person;
   const pays = result?.pays || [];
-  const teamSummary = React.useMemo(() => queryTeamResults(results, activeTeam, range.span), [results, activeTeam, range.span]);
-  const printablePeople = scope === "team" ? teamSummary.members : results;
-  const printableSelection = queryPrintResults(results, printIds, scope === "team" ? activeTeam : undefined);
+  const teamSummary = React.useMemo(() => queryTeamResults(results, activeTeam, range.span, content), [results, activeTeam, range.span, content]);
+  const printablePeople = scope === "team" ? teamSummary.members : results.filter((row) => row.recordMonths.length || row.pays.length);
+  const printableSelection = queryPrintResults(results, printIds, scope === "team" ? activeTeam : undefined).filter((row) => row.recordMonths.length || row.pays.length);
   const slips = React.useMemo(() => buildQuerySlips(printableSelection), [printableSelection]);
   const effectiveSlips = slips.filter((slip) => printMode === "pays" ? slip.pays.length > 0 : printMode === "wage" ? slip.months.length > 0 : true);
   const selectedCount = printableSelection.length;
@@ -340,7 +303,7 @@ function QueryPage() {
             <p className="w-full text-xs text-muted">考勤：{rangeLabelText}，按整月统计，共 {span.length} 个月{swapped ? "（起止已自动对调）" : ""}。{content === "wage" ? `发放：${paymentRangeLabel}，含起止当日。` : ""}</p>
           </div>
           {canPrint ? <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" type="button" disabled={scope === "team" ? !teamSummary.members.length : !result || result.ambiguous} onClick={() => { setPrintKind("query"); setPrintRequest((value) => value + 1); }}>打印查询结果</Button>
+            <Button variant="outline" type="button" disabled={scope === "team" ? !teamSummary.members.length : !result || result.ambiguous || !(result.recordMonths.length || content === "wage" && result.pays.length)} onClick={() => { setPrintKind("query"); setPrintRequest((value) => value + 1); }}>打印查询结果</Button>
             <span className="text-xs text-muted">仅打印当前{scope === "team" ? `班组「${teamLabel}」` : "个人"}的{content === "wage" ? "工资" : "考勤"}核对清单。</span>
           </div> : null}
           {content === "wage" && canPrint ? (

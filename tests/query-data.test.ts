@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { personMonths, summarizeYear } from "../src/lib/attendance-summary";
 import { groupBuckets } from "../src/lib/buckets";
 import { round2 } from "../src/lib/wage";
-import { buildQueryResults, buildQuerySlips, queryPrintResults, queryRange, queryTeamResults } from "../src/lib/query-data";
+import { buildQueryResults, buildQuerySlips, queryMonthRange, queryPrintResults, queryRange, queryTeamResults } from "../src/lib/query-data";
 import type { AttendanceRow, Payment, Person } from "../src/lib/types";
 
 function person(over: Partial<Person> & { id: string; name: string }): Person {
@@ -58,6 +58,96 @@ test("查询区间：日夹到真实月末，闰年与非法年月不溢出", ()
   assert.deepEqual(queryRange({ year: 2026, month: 13, day: 1 }, { year: 2026, month: 3, day: 1 }).span, []);
 });
 
+test("3至10月查询只列实际考勤：10月新进人员不补到3至9月，中断/离开月份也不补零", () => {
+  const r = queryMonthRange({ year: 2026, month: 3 }, { year: 2026, month: 10 });
+  const roster = [person({ id: "early", name: "早进" }), person({ id: "late", name: "晚进" }), person({ id: "none", name: "未进场" })];
+  const rows = [
+    att({ id: "early-mar", name: "早进", year: 2026, month: 3, days: 2 }),
+    att({ id: "early-jun", name: "早进", year: 2026, month: 6, days: 3 }),
+    att({ id: "late-oct", name: "晚进", year: 2026, month: 10, days: 4 }),
+    att({ id: "late-empty", name: "晚进", year: 2026, month: 9 }),
+    att({ id: "none-empty", name: "未进场", year: 2026, month: 10 }),
+  ];
+  const results = buildQueryResults({ people: roster, attendance: rows, payments: [], range: r });
+  const summary = queryTeamResults(results, "一组", r.span, "attendance");
+  assert.deepEqual(summary.months.map((month) => [month.month, month.rows.map((row) => row.person.name)]), [[3, ["早进"]], [6, ["早进"]], [10, ["晚进"]]]);
+  assert.deepEqual(summary.members.map((row) => row.person.name), ["早进", "晚进"]);
+  assert.equal(summary.totals.days, 9);
+  assert.equal(summary.totals.pay, 990);
+  assert.deepEqual(results[1].recordMonths, [{ year: 2026, month: 10 }]);
+  assert.deepEqual(results[1].months.filter((month) => month.hasRecord).map((month) => month.month), [10]);
+});
+
+test("实际考勤包含纯备注、补助、扣款及历史负工时，空白零行和姓名班组不触发记录", () => {
+  const r = queryMonthRange({ year: 2026, month: 1 }, { year: 2026, month: 8 });
+  const p = person({ id: "content", name: "工友" });
+  const rows = [
+    att({ id: "blank", name: "工友", year: 2026, month: 1, remark: " \n " }),
+    att({ id: "remark", name: "工友", year: 2026, month: 2, remark: "停工待料" }),
+    att({ id: "allowance", name: "工友", year: 2026, month: 3, allowance: 30 }),
+    att({ id: "deduction", name: "工友", year: 2026, month: 4, deduction: 20 }),
+    att({ id: "days", name: "工友", year: 2026, month: 5, days: -1 }),
+    att({ id: "ot", name: "工友", year: 2026, month: 6, otHours: -2 }),
+    att({ id: "cancel-positive", name: "工友", year: 2026, month: 7, days: 1 }),
+    att({ id: "cancel-negative", name: "工友", year: 2026, month: 7, days: -1 }),
+  ];
+  const before = JSON.stringify({ p, rows });
+  const result = buildQueryResults({ people: [p], attendance: rows, payments: [], range: r })[0];
+  assert.deepEqual(result.recordMonths.map(({ month }) => month), [2, 3, 4, 5, 6, 7]);
+  const team = queryTeamResults([result], "一组", r.span, "attendance");
+  assert.deepEqual(team.months.map(({ month }) => month), [2, 3, 4, 5, 6, 7]);
+  assert.equal(team.months[5].totals.days, 0, "实际正负记录相抵后仍有记录");
+  assert.equal(team.totals.days, result.totals.days);
+  assert.equal(team.totals.pay, result.totals.pay);
+  assert.equal(round2(team.months.reduce((sum, month) => sum + month.totals.pay, 0)), result.totals.pay);
+  assert.equal(JSON.stringify({ p, rows }), before);
+});
+
+test("跨年查询保留真实月份顺序，跨年中的空月不生成考勤表", () => {
+  const r = queryMonthRange({ year: 2025, month: 12 }, { year: 2026, month: 2 });
+  const p = person({ id: "cross-year", name: "跨年工友" });
+  const rows = [
+    att({ id: "feb", name: p.name, year: 2026, month: 2, days: 3 }),
+    att({ id: "jan-empty", name: p.name, year: 2026, month: 1 }),
+    att({ id: "dec", name: p.name, year: 2025, month: 12, days: 2 }),
+  ];
+  const result = buildQueryResults({ people: [p], attendance: rows, payments: [], range: r })[0];
+  assert.equal(result.months.length, 3, "金额内部仍覆盖完整查询区间");
+  assert.deepEqual(result.recordMonths, [{ year: 2025, month: 12 }, { year: 2026, month: 2 }]);
+  const summary = queryTeamResults([result], "一组", r.span, "attendance");
+  assert.deepEqual(summary.months.map(({ year, month }) => [year, month]), [[2025, 12], [2026, 2]]);
+  assert.equal(summary.totals.days, 5);
+  assert.equal(summary.totals.pay, result.totals.pay);
+});
+
+test("工资班组保留仅发放和代收者，考勤班组不补入他们，待发或区间外发放不触发成员", () => {
+  const r = queryMonthRange({ year: 2026, month: 10 }, { year: 2026, month: 10 });
+  const roster = [
+    person({ id: "owner", name: "本人" }), person({ id: "receiver", name: "代收人" }),
+    person({ id: "pending", name: "待发人" }), person({ id: "outside", name: "区间外" }),
+  ];
+  const paid = [
+    pay({ id: "proxy-only", owner: "本人", receiver: "代收人", date: "2026-10-05", amount: 50 }),
+    pay({ id: "pending-only", owner: "待发人", amount: 20 }),
+    pay({ id: "outside-only", owner: "区间外", date: "2026-09-30", amount: 30 }),
+  ];
+  const results = buildQueryResults({ people: roster, attendance: [], payments: paid, range: r });
+  const attendanceOnly = queryTeamResults(results, "一组", r.span, "attendance");
+  assert.deepEqual(attendanceOnly.members, []);
+  assert.deepEqual(attendanceOnly.months, []);
+  const wages = queryTeamResults(results, "一组", r.span, "wage");
+  assert.deepEqual(wages.members.map((row) => row.person.name), ["本人", "代收人"]);
+  assert.deepEqual(wages.months, [], "仅发放不能伪造考勤月");
+  assert.equal(wages.paidAsOwner, 50);
+  assert.equal(wages.difference, -50);
+  assert.deepEqual(queryTeamResults(results, "一组", r.span).members, wages.members, "默认工资口径兼容原调用");
+  const slips = buildQuerySlips(wages.members);
+  assert.equal(slips.length, 2);
+  assert.ok(slips.every((slip) => !slip.months.length && slip.pays.length === 1));
+  assert.equal(results[0].proxyOut, 50);
+  assert.equal(results[1].collected, 50);
+});
+
 test("查询按整月累加重复考勤，工资历史按月末生效，与年度 personMonths 同口径", () => {
   const result = buildQueryResults({ people, attendance, payments, range })[0];
   assert.equal(result.totals.days, 5, "月末到月初的日期范围仍查询两个完整考勤月份");
@@ -98,7 +188,7 @@ test("发放按规范化起止日筛选：owner 已发含代发，工资条本�
   assert.equal(results[1].paidAsOwner, 75.3, "代领张三的钱不能再计入李四 owner 金额");
 });
 
-test("班组按当前人员档案 trim 分桶，含未分组和无记录成员，合计舍入到分", () => {
+test("班组按当前人员档案 trim 分桶，保留未分组选项但不补入无记录成员，合计舍入到分", () => {
   const currentPeople = [...people, person({ id: "empty1", name: "赵六", team: " " }), person({ id: "empty2", name: "钱七", team: "" })];
   const results = buildQueryResults({ people: currentPeople, attendance, payments, range });
   const teams = groupBuckets(currentPeople.map((item) => item.team), "未分班组");
@@ -110,7 +200,8 @@ test("班组按当前人员档案 trim 分桶，含未分组和无记录成员�
   assert.equal(current.paidAsOwner, 150.3);
   assert.equal(current.difference, 749.9);
   const empty = queryTeamResults(results, "");
-  assert.deepEqual(empty.members.map((row) => row.person.id), ["empty1", "empty2"]);
+  assert.deepEqual(empty.members, []);
+  assert.deepEqual(empty.months, []);
   assert.equal(empty.totals.pay, 0);
   assert.equal(empty.totals.days, 0);
   assert.deepEqual(queryTeamResults(results, "不存在").members, []);
@@ -122,6 +213,7 @@ test("同名歧义保留不同人员行，但不猜测历史归属或重复计�
   assert.equal(results[0].ambiguous, true);
   assert.equal(results[2].ambiguous, true);
   assert.deepEqual(results[0].months, []);
+  assert.deepEqual(results[0].recordMonths, range.span);
   assert.deepEqual(results[0].pays, []);
   assert.equal(results[0].paidAsOwner, 0);
   assert.equal(queryTeamResults(results, "新组").ambiguousCount, 1);
@@ -143,12 +235,16 @@ test("只有备注仍显示、打印，无内容与空人员不会生成工资�
   const before = JSON.stringify({ people: [p], attendance: rows, payments });
   const result = buildQueryResults({ people: [p], attendance: rows, payments, range })[0];
   assert.equal(result.months[1].hasContent, true);
+  assert.equal(result.months[1].hasRecord, true);
+  assert.equal(result.months[0].hasRecord, false);
   assert.equal(result.totals.days, 0);
   assert.equal(result.totals.pay, 0);
   assert.equal(buildQuerySlips([result])[0].months[0].remark, "工伤休息");
   assert.equal(JSON.stringify({ people: [p], attendance: rows, payments }), before);
   const noData = buildQueryResults({ people: [p], attendance: [], payments: [], range });
   assert.equal(noData[0].months.length, 2);
+  assert.deepEqual(noData[0].recordMonths, []);
+  assert.ok(noData[0].months.every((month) => !month.hasRecord));
   assert.equal(noData[0].totals.pay, 0);
   assert.deepEqual(buildQuerySlips(noData), []);
   assert.deepEqual(buildQueryResults({ people: [], attendance: rows, payments, range }), []);
@@ -162,7 +258,7 @@ test("班组逐月列出每个人、当月小计和区间汇总，跨年与重�
   const summary = queryTeamResults(results, "新组", range.span);
   assert.deepEqual(summary.months.map(({ year, month }) => [year, month]), [[2025, 12], [2026, 1]]);
   assert.deepEqual(summary.months[0].rows.map((row) => [row.person.id, row.month.days]), [["p1", 2], ["p3", 3]]);
-  assert.deepEqual(summary.months[1].rows.map((row) => [row.person.id, row.month.days]), [["p1", 3], ["p3", 0]]);
+  assert.deepEqual(summary.months[1].rows.map((row) => [row.person.id, row.month.days]), [["p1", 3]]);
   assert.equal(summary.months[0].totals.days, 5);
   assert.equal(summary.months[0].totals.pay, 570.1);
   assert.equal(summary.months[1].totals.otHours, 1.5);
@@ -173,7 +269,7 @@ test("班组逐月列出每个人、当月小计和区间汇总，跨年与重�
   assert.equal(JSON.stringify(results), before);
 });
 
-test("逐月班组保留零记录月份与同名提示，空册按显式范围返回空月份而不猜测归属", () => {
+test("逐月班组只在实际来源月份提示同名，不为无记录人员和空册生成月份", () => {
   const duplicate = person({ id: "duplicate", name: "张三", team: "新组" });
   const results = buildQueryResults({ people: [...people, duplicate], attendance, payments, range });
   const summary = queryTeamResults(results, "新组", range.span);
@@ -186,8 +282,28 @@ test("逐月班组保留零记录月份与同名提示，空册按显式范围�
     assert.equal(month.totals.pay, 0);
   }
   const noRows = buildQueryResults({ people, attendance: [], payments: [], range });
-  assert.ok(queryTeamResults(noRows, "新组", range.span).months.every((month) => month.rows.length === 1 && month.totals.days === 0));
-  assert.ok(queryTeamResults([], "新组", range.span).months.every((month) => !month.rows.length && month.totals.pay === 0));
+  assert.deepEqual(queryTeamResults(noRows, "新组", range.span).months, []);
+  assert.deepEqual(queryTeamResults([], "新组", range.span).months, []);
+});
+
+test("全员同名时也只在实际有记录的10月提示，不猜分配且默认范围不丢失或重复月份", () => {
+  const r = queryMonthRange({ year: 2026, month: 3 }, { year: 2026, month: 10 });
+  const roster = [person({ id: "same-a", name: "同名" }), person({ id: "same-b", name: " 同名 " })];
+  const rows = [att({ id: "blank-sep", name: "同名", year: 2026, month: 9 }), att({ id: "oct", name: "同名", year: 2026, month: 10, days: 10 })];
+  const results = buildQueryResults({ people: roster, attendance: rows, payments: [], range: r });
+  for (const result of results) {
+    assert.deepEqual(result.recordMonths, [{ year: 2026, month: 10 }]);
+    assert.deepEqual(result.months, []);
+    assert.equal(result.totals.days, 0);
+    assert.equal(result.totals.pay, 0);
+  }
+  for (const summary of [queryTeamResults(results, "一组", r.span, "attendance"), queryTeamResults(results, "一组")]) {
+    assert.deepEqual(summary.months.map(({ month }) => month), [10]);
+    assert.deepEqual(summary.months[0].rows.map(({ person: p }) => p.id), ["same-a", "same-b"]);
+    assert.ok(summary.months[0].rows.every((row) => row.ambiguous && row.month.hasRecord));
+    assert.equal(summary.totals.days, 0);
+    assert.equal(summary.totals.pay, 0);
+  }
 });
 
 test("特殊名称班组不混入其他人员或代发金额，小数工时各层合计与年度一致", () => {
@@ -203,7 +319,8 @@ test("特殊名称班组不混入其他人员或代发金额，小数工时各�
   assert.deepEqual(summary.members.map((row) => row.person.name), ["甲"]);
   assert.equal(summary.paidAsOwner, 100);
   assert.equal(summary.totals.days, 0.3);
-  assert.equal(summary.months[1].totals.otHours, 0.3);
+  assert.deepEqual(summary.months.map(({ year, month }) => [year, month]), [[2026, 1]]);
+  assert.equal(summary.months[0].totals.otHours, 0.3);
   assert.equal(values[0].months[1].days, 0.3);
   assert.equal(personMonths(members[0], rows, 2026)[0].days, 0.3);
   const crossMonth = rows.slice(0, 2).map((row, index) => ({ ...row, month: index + 1 }));

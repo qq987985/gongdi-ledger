@@ -11,7 +11,8 @@ export function PersonQueryResults({ result, label, content }: {
 }) {
   const wage = content === "wage";
   if (result.ambiguous) return <p className="rounded-xl border border-line bg-surface p-4 text-sm text-muted">人员档案存在同名，历史记录按姓名关联，无法可靠区分。请先核对人员档案及历史记录。</p>;
-  const { months, totals } = result;
+  const { totals } = result;
+  const months = result.months.filter((month) => month.hasRecord);
   return (
     <section className="rounded-xl border border-line bg-surface p-4">
       <h3 className="text-sm font-semibold">{label}{wage ? "工资" : "考勤"}汇总</h3>
@@ -51,7 +52,7 @@ export function PersonQueryResults({ result, label, content }: {
         </table>
       </div>
       {wage ? <div className="mt-4 space-y-4">{months.filter((row) => row.calculation).map((row) => <WageCalculation key={`${row.year}-${row.month}`} title={`${result.person.name} · ${row.year}年${row.month}月`} calculation={row.calculation} />)}</div> : null}
-      {!months.some((month) => month.hasContent) ? <p className="mt-3 text-sm text-muted">该区间没有考勤记录。</p> : null}
+      {!months.length ? <p className="mt-3 text-sm text-muted">该区间没有考勤记录。</p> : null}
       {wage ? <p className="mt-3 text-sm">应发合计 ¥{money(totals.pay)} · 已记入实际收款人 ¥{money(result.paidAsOwner)}（含代发） · 差额 ¥{money(result.difference)}</p> : null}
       {wage ? <WageTotalCalculation totals={totals} /> : null}
     </section>
@@ -69,7 +70,7 @@ export function TeamQueryResults({ summary, label, teamLabel, content, onPerson 
   return (
     <section className="rounded-xl border border-line bg-surface p-4">
       <h2 className="font-display text-xl font-semibold">{teamLabel} · {wage ? "工资" : "考勤"}</h2>
-      <p className="mt-1 text-xs text-muted">{label} · 当前人员档案中的 {summary.members.length} 人。先看各月汇总和本月小计，最后看所选月份合计；点击姓名查看个人汇总。</p>
+      <p className="mt-1 text-xs text-muted">{label} · 所选区间有{wage ? "考勤或相关发放" : "考勤"}的 {summary.members.length} 人。各月只列当月有实际考勤记录的人，再看区间合计；点击姓名查看个人汇总。</p>
       {summary.ambiguousCount ? <p className="mt-3 text-sm text-warn">其中 {summary.ambiguousCount} 人存在同名，历史记录无法可靠区分，未计入合计；请先核对人员档案及历史记录。</p> : null}
       {summary.members.length ? <div className="mt-4 space-y-4">
         <h3 className="font-semibold">各月汇总</h3>
@@ -102,7 +103,7 @@ export function TeamQueryResults({ summary, label, teamLabel, content, onPerson 
             {summary.members.length ? <tr className="border-t border-line font-medium">
               <td className="py-2">区间合计</td><td className="tabular-nums">{summary.totals.days}</td><td className="tabular-nums">{summary.totals.otHours}</td>
               {wage ? <><td className="tabular-nums">¥{money(summary.totals.base)}</td><td className="tabular-nums">¥{money(summary.totals.ot)}</td><td className="tabular-nums">¥{money(summary.totals.pay)}</td><td className="tabular-nums">¥{money(summary.paidAsOwner)}</td><td className="tabular-nums">¥{money(summary.difference)}</td></> : null}<td />
-            </tr> : <tr><td colSpan={wage ? 9 : 4} className="py-6 text-muted">该班组暂无人员。</td></tr>}
+            </tr> : <tr><td colSpan={wage ? 9 : 4} className="py-6 text-muted">该区间暂无{wage ? "考勤或相关发放" : "考勤"}记录。</td></tr>}
           </tbody>
         </table>
       </div>

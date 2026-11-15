@@ -107,28 +107,56 @@ test("无记录、未知人员及同名关联歧义不给伪造的自动日期",
   assert.equal(queryAvailableDates({ people: [person(), person({ id: "duplicate" })], attendance: [attendance()], payments: [payment()], scope: "team", content: "wage", team: "一组" }), null);
 });
 
-test("空月份保留零值行，但不重复输出无记录的工资计算块", () => {
+test("内部空月份保留计算零值但标为无记录，展示不能据此补出考勤", () => {
   const r = queryRange({ year: 2026, month: 6, day: 1 }, { year: 2026, month: 7, day: 31 });
   const months = buildQueryResults({ people: [person()], attendance: [attendance()], payments: [], range: r })[0].months;
   assert.equal(months.length, 2);
   assert.equal(months[0].pay, 0);
   assert.equal(months[0].calculation, undefined);
+  assert.equal(months[0].hasRecord, false);
+  assert.equal(months[1].hasRecord, true);
   assert.ok(months[1].calculation);
   const blank = attendance({ days: 0, otHours: 0, allowance: 0, deduction: 0 });
   for (const payType of ["day", "month"] as const) {
     const month = buildQueryResults({ people: [person({ payType })], attendance: [blank], payments: [], range })[0].months[0];
     assert.equal(month.pay, 0);
     assert.equal(month.calculation, undefined, "空白行或月薪标记不能触发说明");
+    assert.equal(month.hasRecord, false);
   }
 });
 
 test("历史负出勤或负加班的金额仍有解释，不改变有内容/自动范围口径", () => {
   for (const values of [{ days: -1, otHours: 0 }, { days: 0, otHours: -8 }]) {
     const a = attendance({ ...values, allowance: 0, deduction: 0 });
-    const month = buildQueryResults({ people: [person()], attendance: [a], payments: [], range })[0].months[0];
+    const result = buildQueryResults({ people: [person()], attendance: [a], payments: [], range })[0];
+    const month = result.months[0];
     assert.equal(month.hasContent, false);
+    assert.equal(month.hasRecord, true);
     assert.ok(month.calculation);
     assert.ok(month.pay < 0);
+    const slips = buildQuerySlips([result]);
+    assert.equal(slips.length, 1, "真实负数考勤也必须生成工资条");
+    assert.deepEqual(slips[0].months, [month]);
+    assert.equal(slips[0].total, month.pay);
     assert.equal(queryAvailableDates({ people: [person()], attendance: [a], payments: [], scope: "person", content: "wage", name: "甲" }), null);
   }
+});
+
+test("工资条跨月正负抵消仍列完整真实明细，与个人及班组金额合计一致", () => {
+  const r = queryMonthRange({ year: 2026, month: 3 }, { year: 2026, month: 10 });
+  const p = person();
+  const rows = [
+    attendance({ id: "negative-mar", month: 3, days: -1, otHours: 0, allowance: 0, deduction: 0 }),
+    attendance({ id: "blank-sep", month: 9, days: 0, otHours: 0, allowance: 0, deduction: 0 }),
+    attendance({ id: "positive-oct", month: 10, days: 1, otHours: 0, allowance: 0, deduction: 0 }),
+  ];
+  const results = buildQueryResults({ people: [p], attendance: rows, payments: [], range: r });
+  const slip = buildQuerySlips(results)[0];
+  assert.deepEqual(slip.months.map(({ month, pay }) => [month, pay]), [[3, -320], [10, 320]]);
+  assert.equal(slip.total, 0);
+  assert.equal(slip.months.reduce((sum, month) => sum + month.pay, 0), slip.total);
+  assert.equal(slip.total, results[0].totals.pay);
+  const team = queryTeamResults(results, "一组", r.span, "wage");
+  assert.equal(team.totals.pay, slip.total);
+  assert.deepEqual(team.months.map(({ month, totals }) => [month, totals.pay]), [[3, -320], [10, 320]]);
 });

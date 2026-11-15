@@ -3,7 +3,7 @@ import { inBucket } from "./buckets";
 import { isPaid, isPaidSelf, nameKey, ownerKey, receiverOf } from "./payments-stats";
 import { getWageAt, monthPay, round2, type MonthPayResult } from "./wage";
 import { hasContent } from "./work";
-import { sumQuantity } from "./num";
+import { numOr, sumQuantity } from "./num";
 import { buildQueryWageCalculation, type QueryWageCalculation } from "./query-wage";
 import type { AttendanceRow, Payment, Person } from "./types";
 
@@ -86,6 +86,8 @@ export type QueryTotals = Pick<MonthPayResult, "days" | "otHours" | "base" | "ot
 export interface QueryMonth extends QueryTotals, QueryMonthRef {
   remark: string;
   hasContent: boolean;
+  /** 该月确有考勤内容；空白占位行不算，历史负工时仍保留。仅用于查询展示。 */
+  hasRecord: boolean;
   calculation?: QueryWageCalculation;
 }
 export interface QueryPersonResult {
@@ -93,6 +95,8 @@ export interface QueryPersonResult {
   /** 同名人员的历史姓名关联不能可靠区分，保留人员行但不猜测分摊。 */
   ambiguous: boolean;
   months: QueryMonth[];
+  /** 真实来源有内容的月份；同名时只用于提示歧义，不分配其工时或工资。 */
+  recordMonths: QueryMonthRef[];
   totals: QueryTotals;
   pays: Payment[];
   paidAsOwner: number;
@@ -117,6 +121,15 @@ function sumTotals(rows: QueryTotals[]): QueryTotals {
 }
 
 const sumPayments = (rows: Payment[]) => round2(rows.reduce((sum, row) => sum + (row.amount || 0), 0));
+
+/** 不把无记录月份补成考勤；负工时仅保留既有查询可见性，不改年度 hasContent 口径。 */
+function hasAttendanceRecord(row: AttendanceRow): boolean {
+  const normalized = {
+    days: numOr(row.days), otHours: numOr(row.otHours),
+    allowance: numOr(row.allowance), deduction: numOr(row.deduction), remark: row.remark,
+  };
+  return hasContent(normalized) || normalized.days < 0 || normalized.otHours < 0;
+}
 
 /** 屏幕与工资条共用结果；同月重复行逐行 monthPay 后累加，与 personMonths 一致。 */
 export function buildQueryResults(args: {
@@ -153,7 +166,10 @@ export function buildQueryResults(args: {
   return people.map((person) => {
     const key = nameKey(person.name);
     const ambiguous = !key || (counts.get(key) || 0) > 1;
-    const mine = ambiguous ? [] : attendanceByName.get(key) || [];
+    const source = key ? attendanceByName.get(key) || [] : [];
+    const recordKeys = new Set(source.filter(hasAttendanceRecord).map((row) => ymKey(row.year, row.month)));
+    const recordMonths = range.span.filter(({ year, month }) => recordKeys.has(ymKey(year, month)));
+    const mine = ambiguous ? [] : source;
     const months = ambiguous ? [] : range.span.map(({ year, month }): QueryMonth => {
       const rows = mine.filter((row) => row.year === year && row.month === month);
       const wage = getWageAt(person, year, month);
@@ -168,6 +184,7 @@ export function buildQueryResults(args: {
         calculation: explain ? buildQueryWageCalculation(wage, entries, totals) : undefined,
         remark: rows.map((row) => row.remark || "").filter((remark) => remark.trim()).join("；"),
         hasContent: content,
+        hasRecord: recordKeys.has(ymKey(year, month)),
       };
     });
     const pays = ambiguous ? [] : paymentsByName.get(key) || [];
@@ -175,7 +192,7 @@ export function buildQueryResults(args: {
     const ownerPays = pays.filter((row) => ownerKey(row) === key);
     const paidAsOwner = sumPayments(ownerPays);
     return {
-      person, ambiguous, months, totals, pays, paidAsOwner,
+      person, ambiguous, months, recordMonths, totals, pays, paidAsOwner,
       difference: round2(totals.pay - paidAsOwner),
       paidSelf: sumPayments(ownerPays.filter(isPaidSelf)),
       collected: sumPayments(pays.filter((row) => ownerKey(row) !== key)),
@@ -185,19 +202,23 @@ export function buildQueryResults(args: {
   });
 }
 
-export function queryTeamResults(results: QueryPersonResult[], team: string, span: QueryMonthRef[] = results.find((row) => row.months.length)?.months || []) {
-  const members = results.filter((row) => inBucket(row.person.team, team));
+export function queryTeamResults(results: QueryPersonResult[], team: string, span?: QueryMonthRef[], content: QueryContent = "wage") {
+  const members = results.filter((row) => inBucket(row.person.team, team) && (row.recordMonths.length > 0 || (content === "wage" && row.pays.length > 0)));
   const totals = sumTotals(members.map((row) => row.totals));
   const paidAsOwner = round2(members.reduce((sum, row) => sum + row.paidAsOwner, 0));
-  const months = span.map(({ year, month }) => {
-    const rows = members.map((row) => ({
-      person: row.person,
-      ambiguous: row.ambiguous,
-      month: row.months.find((item) => item.year === year && item.month === month)
-        || { year, month, ...emptyTotals(), remark: "", hasContent: false, calculation: undefined },
-    }));
+  const refs = span || results.find((row) => row.months.length)?.months
+    || Array.from(new Map(results.flatMap((row) => row.recordMonths).map((ref) => [ymKey(ref.year, ref.month), ref])).values())
+      .sort((a, b) => a.year - b.year || a.month - b.month);
+  const months = refs.map(({ year, month }) => {
+    const rows = members.flatMap((row) => {
+      const actual = row.months.find((item) => item.year === year && item.month === month && item.hasRecord);
+      if (actual) return [{ person: row.person, ambiguous: row.ambiguous, month: actual }];
+      // 同名仅在存在真实来源记录的月份给出待核对行，不能把它补到整个区间。
+      if (!row.ambiguous || !row.recordMonths.some((item) => item.year === year && item.month === month)) return [];
+      return [{ person: row.person, ambiguous: true, month: { year, month, ...emptyTotals(), remark: "", hasContent: false, hasRecord: true, calculation: undefined } }];
+    });
     return { year, month, rows, totals: sumTotals(rows.map((row) => row.month)) };
-  });
+  }).filter((month) => month.rows.length > 0);
   return {
     members, months, totals, paidAsOwner,
     difference: round2(totals.pay - paidAsOwner),
@@ -214,7 +235,7 @@ export function queryPrintResults(results: QueryPersonResult[], ids: string[], t
 
 export function buildQuerySlips(results: QueryPersonResult[]) {
   return results.flatMap((row) => {
-    const months = row.months.filter((month) => month.hasContent);
+    const months = row.months.filter((month) => month.hasRecord);
     if (row.ambiguous || (!months.length && !row.pays.length)) return [];
     return [{
       person: row.person,

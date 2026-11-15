@@ -651,15 +651,21 @@
     overflow-wrap: anywhere;
   }
   .print-only .query-wage-standard {
+    caption-side: top;
     font-size: 10pt;
     line-height: 1.35;
     text-align: left;
     break-after: avoid;
     page-break-after: avoid;
-  }
-  .print-only .query-wage-standard td {
+    padding: 1mm 0;
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+  .print-only .query-wage-person + .query-wage-person {
+    margin-top: 3mm;
+  }
+  .print-only .query-slip-month + .query-slip-month {
+    margin-top: 2mm;
   }
   /* 班组工资每人之间留白；空行跟随下一人的标准/金额，避免页尾孤立间隔。 */
   .print-only .query-person-gap {

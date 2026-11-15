@@ -19,14 +19,13 @@ export function WageTotalCalculation({ totals }: { totals: QueryTotals }) {
   return <div className="wage-calculation whitespace-normal break-words text-left text-sm">应发合计：{queryWageTotal(totals)}</div>;
 }
 
-/** 标准置于金额行上方，与下一行金额一起阅读，不打印计算长段。 */
-export function WageStandardRow({ title, calculation, cellClass }: { title: string; calculation?: QueryWageCalculation; cellClass: string }) {
+/** 工资备注在表格上方；不能插在列标题和数据之间。 */
+export function WageStandardCaption({ title, calculation }: { title: string; calculation?: QueryWageCalculation }) {
   if (!calculation) return null;
   const { table } = calculation;
-  return <tr className="query-wage-standard">
-    <td className={cellClass} colSpan={3}>{title} · {table.wage}</td>
-    <td className={cellClass} colSpan={6}>{table.overtime}</td>
-  </tr>;
+  return <caption className="query-wage-standard"><div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
+    <span>{title} · {table.wage}</span><span>{table.overtime}</span>
+  </div></caption>;
 }
 
 export function WagePersonGap() {

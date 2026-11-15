@@ -40,7 +40,9 @@ async function printPdf(button, file, expected, forbidden = []) {
   await page.waitForFunction((count) => window.__printed > count, before);
   await page.setViewportSize({ width: 703, height: 1000 });
   await page.emulateMedia({ media: "print" });
-  assert.ok(await page.locator(".print-only .query-wage-standard").evaluateAll((rows) => rows.every((row) => row.nextElementSibling?.classList.contains("query-wage-amount"))), "工资标准必须在对应金额上方");
+  assert.ok(await page.locator(".print-only .query-wage-standard").evaluateAll((notes) => notes.every((note) => note.tagName === "CAPTION" && note.getBoundingClientRect().bottom <= note.parentElement.querySelector("thead").getBoundingClientRect().top + 1)), "工资备注必须在表头上方");
+  assert.ok(await page.locator(".print-only .query-wage-table .query-wage-amount").evaluateAll((rows) => rows.every((row) => row.parentElement.tagName === "TBODY" && row.parentElement.previousElementSibling?.tagName === "THEAD" && row.parentElement.previousElementSibling.lastElementChild?.classList.contains("query-wage-columns"))), "列标题和金额之间不得插入备注");
+  assert.ok(await page.locator(".print-only .query-wage-person + .query-wage-person").evaluateAll((people) => people.every((person) => person.getBoundingClientRect().top - person.previousElementSibling.getBoundingClientRect().bottom >= 10)), "独立人员表之间必须留白");
   assert.ok(await page.locator(".print-only .query-person-gap td").evaluateAll((cells) => cells.every((cell) => cell.getBoundingClientRect().height >= 10)), "人员之间必须有实际打印留白");
   assert.deepEqual(await page.locator(".query-number").evaluateAll((cells) => cells.filter((cell) => cell.scrollWidth > cell.clientWidth + 1).map((cell) => cell.textContent)), []);
   const bytes = await page.pdf({ path: `${out}/${file}.pdf`, preferCSSPageSize: true, displayHeaderFooter: false });
@@ -102,7 +104,7 @@ try {
   await printPdf("打印查询结果", "person-wage-table", [people[0].name, "日工资", "加班折算", "8 小时/天", "出勤工资", "6,150.00", "375.00", "510.00", "罚款", "扣款", "6,985.00"], ["工资计算", "逐笔取分", "金额按现行规则", "= ¥", "折算工资", "折算日工资"]);
   assert.equal(await page.locator(".print-only .wage-calculation").count(), 0);
   assert.equal(await page.locator(".print-only .query-wage-standard").count(), 1);
-  assert.deepEqual(await page.locator(".print-only .query-wage-standard td").evaluateAll((cells) => cells.map((cell) => cell.colSpan)), [3, 6]);
+  assert.equal(await page.locator(".print-only tbody .query-wage-standard").count(), 0);
   await mkdir("output/pdf", { recursive: true });
   for (const width of [1440, 375, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -228,20 +230,52 @@ try {
   await page.goto("/query", { waitUntil: "networkidle" });
   await page.getByLabel("查询方式", { exact: true }).selectOption("team");
   await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
-  assert.equal(await page.locator(".print-only [data-query-month] .query-person-gap").count(), 1);
+  assert.equal(await page.locator(".print-only [data-query-month] .query-wage-person").count(), 2);
   await printPdf("打印查询结果", "two-person-wage-gaps", [people[0].name, people[1].name, "日工资", "月工资", "加班折算", "6,985.00", "3,119.00"], ["工资计算", "折算日工资"]);
-  await copyFile(`${out}/two-person-wage-gaps.pdf`, "output/pdf/工资打印分人样例-1.9.8.pdf");
+  assert.equal(await page.locator(".print-only [data-query-month] .query-wage-columns").count(), 2, "每人的表头必须紧贴自己的数据");
   report.push({ scenario: "wage-standards-above-amounts-and-person-gaps", passed: true });
+
+  // 用户场景：打印3–10月，10月新进人员不可出现在3–9月；空白占位不算考勤。
+  const latePeople = [person("early", "三月在场甲", "一组"), person("late", "十月新进乙", "一组")];
+  const lateRows = [row("early-march", latePeople[0].name, 2026, 3), row("late-october", latePeople[1].name, 2026, 10),
+    ...Array.from({ length: 7 }, (_, index) => row(`blank-${index}`, latePeople[1].name, 2026, index + 3, { days: 0, otHours: 0, allowance: 0, deduction: 0, remark: "" }))];
+  await page.goto("about:blank");
+  await put({ ...sample, people: latePeople, attendance: lateRows, payments: [] });
+  await page.goto("/query", { waitUntil: "networkidle" });
+  await page.getByLabel("从月", { exact: true }).selectOption("2");
+  await page.getByLabel("从月", { exact: true }).selectOption("3");
+  await page.getByLabel("到月", { exact: true }).selectOption("10");
+  await page.getByLabel("查询方式", { exact: true }).selectOption("team");
+  const march = page.getByRole("region", { name: "2026年3月班组汇总", exact: true });
+  const october = page.getByRole("region", { name: "2026年10月班组汇总", exact: true });
+  assert.ok((await march.innerText()).includes(latePeople[0].name) && !(await march.innerText()).includes(latePeople[1].name));
+  assert.ok((await october.innerText()).includes(latePeople[1].name) && !(await october.innerText()).includes(latePeople[0].name));
+  assert.equal(await page.getByRole("region", { name: "2026年9月班组汇总", exact: true }).count(), 0);
+  await printPdf("打印查询结果", "late-team-attendance", [latePeople[0].name, latePeople[1].name, "2026年10月"], ["工资"]);
+  assert.deepEqual(await page.locator(".print-only [data-query-month]").evaluateAll((months) => months.map((month) => month.dataset.queryMonth)), ["2026-03", "2026-10"]);
+  assert.ok(!(await page.locator('.print-only [data-query-month="2026-03"]').textContent()).includes(latePeople[1].name));
+  await page.getByLabel("查询内容", { exact: true }).selectOption("wage");
+  await printPdf("打印查询结果", "late-team-wage", [latePeople[0].name, latePeople[1].name, "日工资", "加班折算"], ["工资计算", "折算日工资"]);
+  assert.ok(!(await page.locator('.print-only [data-query-month="2026-03"]').textContent()).includes(latePeople[1].name));
+  await copyFile(`${out}/late-team-wage.pdf`, "output/pdf/工资考勤实际月份样例-1.9.9.pdf");
+  await page.getByLabel("查询方式", { exact: true }).selectOption("person");
+  await page.getByLabel("查询姓名", { exact: true }).fill(latePeople[1].name);
+  const actualRows = await page.getByRole("region", { name: "个人查询汇总", exact: true }).locator("tbody tr").allTextContents();
+  assert.equal(actualRows.length, 2, "只列10月及合计，不补3–9月零值行");
+  assert.ok(actualRows[0].includes("2026年10月"));
+  await printPdf("打印查询结果", "late-person-wage", [latePeople[1].name, "2026年10月"], [latePeople[0].name]);
+  assert.equal(await page.locator(".print-only .query-wage-standard").count(), 1);
+  report.push({ scenario: "late-arrival-only-actual-months-on-screen-and-print", passed: true });
 
   // 切册通过真实下拉完成：旧手动日期、班组/人员草稿不能串到新册。
   const oldBook = (await (await ctx.request.get("/api/auth")).json()).bookId;
   await authOp("createBook", { name: "自动日期隔离合成台账" });
   const nextBook = (await (await ctx.request.get("/api/auth")).json()).bookId;
-  await put({ ...sample, people: [people[0]], attendance: [row("isolated-row", people[0].name, 2024, 2)], payments: [], teams: [{ id: "isolated-team", name: "独立班组" }] });
+  await put({ ...sample, people: [latePeople[0]], attendance: [row("isolated-row", latePeople[0].name, 2024, 2)], payments: [], teams: [{ id: "isolated-team", name: "独立班组" }] });
   await authOp("useBook", { id: oldBook });
   await page.reload({ waitUntil: "networkidle" });
   await page.goto("/query", { waitUntil: "networkidle" });
-  await page.getByLabel("查询姓名", { exact: true }).fill(people[0].name);
+  await page.getByLabel("查询姓名", { exact: true }).fill(latePeople[0].name);
   await page.getByLabel("从月", { exact: true }).selectOption("6");
   await page.getByLabel("当前台账", { exact: true }).filter({ visible: true }).selectOption(nextBook);
   await page.waitForFunction(() => document.body.textContent.includes("已自动选择有数据的月份"));

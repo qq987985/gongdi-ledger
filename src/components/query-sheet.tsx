@@ -2,7 +2,8 @@ import { QUERY_TEAM_ATTENDANCE_COLS, QUERY_PERSON_ATTENDANCE_COLS, QUERY_TEAM_WA
 import { money } from "~/lib/utils";
 import { QueryMonthTable } from "~/components/query-month-table";
 import { Fragment } from "react";
-import { WageStandardRow, WagePrintRemark, WageAdjustmentHeader, WagePersonGap } from "~/components/wage-calculation";
+import { WagePrintRemark, WageAdjustmentHeader, WagePersonGap } from "~/components/wage-calculation";
+import { WagePrintTable } from "~/components/wage-print-table";
 import { queryWageAdditions } from "~/lib/query-wage";
 import type { QueryContent, QueryPersonResult, queryTeamResults } from "~/lib/query-data";
 
@@ -20,13 +21,19 @@ export function QuerySheet({ content, label, paymentLabel, person, team, teamLab
   const wage = content === "wage";
   if ((!person || person.ambiguous) && !team) return null;
   if (team && !team.members.length) return null;
+  if (person && !person.recordMonths.length && (!wage || !person.pays.length)) return null;
   const widths = team ? (wage ? QUERY_TEAM_WAGE_COLS : QUERY_TEAM_ATTENDANCE_COLS) : (wage ? QUERY_PERSON_WAGE_COLS : QUERY_PERSON_ATTENDANCE_COLS);
   const columns = widths.length;
   const totals = team?.totals || person!.totals;
+  const personMonths = person?.months.filter((month) => month.hasRecord) || [];
   return (
     <div className="print-only text-black">
       {team ? team.months.map((month) => <article key={`${month.year}-${month.month}`} className="query-result-sheet print-doc mb-4">
         <QueryMonthTable month={month} content={content} teamLabel={teamLabel} print />
+      </article>) : null}
+      {!team && wage ? personMonths.map((month) => <article key={`${month.year}-${month.month}`} className="query-result-sheet print-doc mb-4">
+        <WagePrintTable title={`${person!.person.name} · ${month.year}年${month.month}月工资汇总`} standardTitle={`${month.year}年${month.month}月`}
+          subjectLabel="年月" subject={`${month.year}年${month.month}月`} row={month} />
       </article>) : null}
       <article className="query-result-sheet print-doc">
         <table className={`${wage ? "query-wage-table " : ""}w-full table-fixed border-collapse text-sm`}>
@@ -48,8 +55,7 @@ export function QuerySheet({ content, label, paymentLabel, person, team, teamLab
               <td className={TD}>{row.person.name}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : row.totals.days}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : row.totals.otHours}</td>
               {wage ? <><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.totals.base)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.totals.ot)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.totals.pay)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.paidAsOwner)}</td><td className={`${TD} query-number`}>{row.ambiguous ? "—" : money(row.difference)}</td></> : null}
               <td className={TD}>{row.ambiguous ? "姓名重复，历史记录待核对" : wage ? <WagePrintRemark remark={row.remark} totals={row.totals} /> : row.remark}</td>
-            </tr></Fragment>) : person!.months.map((row) => <Fragment key={`${row.year}-${row.month}`}>
-              {wage ? <WageStandardRow title={`${row.year}年${row.month}月`} calculation={row.calculation} cellClass={TD} /> : null}
+            </tr></Fragment>) : wage ? null : personMonths.map((row) => <Fragment key={`${row.year}-${row.month}`}>
               <tr className={wage ? "query-wage-amount" : undefined}>
               <td className={TD}>{row.year}年{row.month}月</td><td className={`${TD} query-number`}>{row.days}</td><td className={`${TD} query-number`}>{row.otHours}</td>
               {wage ? <><td className={`${TD} query-number`}>{money(row.base)}</td><td className={`${TD} query-number`}>{money(queryWageAdditions(row))}</td><td className={`${TD} query-number`}>{money(row.deduction)}</td><td className={`${TD} query-number`}>{money(row.ot)}</td><td className={`${TD} query-number`}>{money(row.pay)}</td></> : null}

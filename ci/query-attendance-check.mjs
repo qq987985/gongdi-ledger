@@ -108,7 +108,8 @@ try {
   await page.getByRole("button", { name: "选择人员", exact: true }).click();
   await page.getByRole("button", { name: "全选本班组", exact: true }).click();
   text = await print("打印工资条 2 张");
-  assert.ok(text.includes("工资条") && !text.includes("工资汇总"));
+  assert.ok(text.includes("工资条"));
+  assert.equal(await page.locator(".print-only .query-result-sheet").count(), 0, "打印工资条时不得同时输出查询汇总单");
   assert.equal(await page.locator(".payslip").count(), 2);
   assert.ok(!text.includes(`姓名:${names[1]}`), "代领人可出现在打款明细，但不能多印其工资条");
   const twoSlips = await pdf("two-person-slips", ["工资条", names[0], names[2]], ["工资计算"]);
@@ -341,7 +342,7 @@ try {
   await pdf("team-months-wage", ["2025年12月", "2026年1月", "出勤工资", "加班工资", "700.00", "60.00", "200.00", "760.00", "960.00", "本月小计", "区间合计"], ["身份证", "银行卡"]);
   await range(2025, 12, 2026, 2);
   const february = page.getByRole("region", { name: "2026年2月班组汇总", exact: true });
-  assert.equal(await february.locator("tfoot td").nth(1).textContent(), "0", "无考勤月份也必须有明确零值");
+  assert.equal(await february.count(), 0, "没有考勤的月份不补零或生成名单");
   for (const width of [1440, 375, 390]) {
     await page.setViewportSize({ width, height: 900 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `逐月 ${width}px 页面溢出`);
