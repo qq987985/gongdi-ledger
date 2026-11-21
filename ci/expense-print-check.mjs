@@ -14,7 +14,7 @@ const chromium = driver.chromium || driver.default?.chromium;
 const browser = await chromium.launch({ executablePath: process.env.E2E_CHROME, headless: true });
 const ctx = await browser.newContext({ baseURL: `http://127.0.0.1:${process.env.PORT || 4699}`, viewport: { width: 1440, height: 1000 } });
 const page = await ctx.newPage();
-const out = "browser-screenshots/expense-print-medium-20261110";
+const out = process.env.E2E_OUTPUT_DIR || "browser-screenshots/expense-print-medium-20261110";
 await mkdir(out, { recursive: true });
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
@@ -68,7 +68,7 @@ try {
   }
   assert.deepEqual(errors, []);
   await mkdir("output/pdf", { recursive: true });
-  await copyFile(`${out}/sample.pdf`, "output/pdf/报销单打印样例-适中版.pdf");
+  if (process.env.E2E_SAMPLE_PDF !== "skip") await copyFile(`${out}/sample.pdf`, process.env.E2E_SAMPLE_PDF || "output/pdf/报销单打印样例-适中版.pdf");
   await writeFile(`${out}/result.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ cases: report, screenWidths: [1440, 375, 390], runtimeErrors: errors.length }, null, 2));
 } finally { await browser.close(); }

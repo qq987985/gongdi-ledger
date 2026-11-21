@@ -4,33 +4,24 @@ import { toast } from "sonner";
 import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import { WideTable, usePager } from "~/components/wide-table";
 import { Need, ReadonlyNotice, useCanSave } from "~/components/can";
 import { ExpenseImport, TplLink } from "~/components/excel-import";
-import { DocActions, prepareNamedFile, setDoc } from "~/components/doc-actions";
+import { DocActions } from "~/components/doc-actions";
+import { ExpensePayoutEditor } from "~/components/expense-payout-editor";
+import { ExpensePayoutList } from "~/components/expense-payout-list";
+import { useExpensePayout } from "~/components/use-expense-payout";
+import { expensePayoutBatches } from "~/lib/expense-payout";
+import { ledgerContextSnapshot } from "~/lib/nas-sync";
 import { ExpenseEditor } from "~/components/expense-editor";
-import {
-  applyPayee,
-  Field,
-  formatPayAccount,
-  NameInput,
-  needsVoucher,
-  PAY_METHODS,
-  payoutBase,
-  VoucherSlot,
-  voucherBase,
-} from "~/components/expense-bits";
 import { useApp } from "~/lib/store";
 import { money, formatCardNo, confirmBatchDelete, toggleSel, uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
-import { round2 } from "~/lib/wage";
 import { permLabel } from "~/lib/perms";
 import { blockedWrite } from "~/lib/readonly";
 import { ALL_BUCKETS } from "~/lib/buckets";
 import { claimantBuckets, expensePrintRows, expenseTotals, filterExpenses } from "~/lib/expenses-stats";
-import { useGuardedClose } from "~/lib/confirm-close";
 
 function emptyExpense(year: number): any {
   const today = localToday();
@@ -69,30 +60,12 @@ function uniqueNames(people: any[], expenses: any[]) {
   }
   return [...s];
 }
-function accountOf(e: any) {
-  return formatPayAccount(e?.payBank, e?.payCardNo) || e?.payAccount || "";
-}
 function accountParts(e: any) {
   const name = (e.forWhom || "").trim();
   const bank = (e.payBank || "").trim();
   const card = (e.payCardNo || "").trim();
   if (!name && !bank && !card) return null;
   return { name, bank, card };
-}
-function listPayees(expenses: any[]) {
-  const map = new Map<string, { name: string; bank: string; card: string }>();
-  const rows = (expenses || [])
-    .slice()
-    .sort(
-      (a: any, b: any) =>
-        (a.date || "").localeCompare(b.date || "") || (a.payoutDate || "").localeCompare(b.payoutDate || ""),
-    );
-  for (const e of rows) {
-    const name = (e.forWhom || "").trim();
-    if (!name) continue;
-    map.set(name, { name, bank: (e.payBank || "").trim(), card: (e.payCardNo || "").trim() });
-  }
-  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "zh"));
 }
 function Mini({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
@@ -107,7 +80,6 @@ function ExpensesPage() {
   const { year, expenses, upsertExpense, removeExpenses, people } = useApp();
   const list = expenses || [];
   const names = uniqueNames(people, list);
-  const payees = listPayees(list);
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState("all");
   const [claimant, setClaimant] = React.useState(ALL_BUCKETS);
@@ -115,40 +87,27 @@ function ExpensesPage() {
   const [selected, setSelected] = React.useState<string[]>([]);
   const [editing, setEditing] = React.useState<any | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [view, setView] = React.useState<"details" | "batches">("details");
+  const [editingContext, setEditingContext] = React.useState<string | null>(null);
+  const [editingKey, setEditingKey] = React.useState("");
+  const editingKeyRef = React.useRef("");
+  const clearSelection = React.useCallback(() => setSelected([]), []);
+  const payout = useExpensePayout(clearSelection);
+  React.useEffect(() => {
+    setSelected([]); setEditing(null); setCreating(false); editingKeyRef.current = "";
+  }, [payout.context]);
+  function startEditing(row: any, isNew: boolean) {
+    if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
+    const scope = ledgerContextSnapshot();
+    if (scope === null) { toast.error("台账正在读取，请稍后编辑"); return; }
+    const key = uid(); editingKeyRef.current = key; setEditingKey(key);
+    setEditingContext(scope); setCreating(isNew); setEditing(row);
+  }
   // 只读账号：新增/编辑/保存/删除/批量挂账入口一律拦（A 组报告第 17 项同源）
   const canEditExpense = useCanSave("expenses.edit");
   const [printStatus, setPrintStatus] = React.useState("未报销");
   const [printVoucher, setPrintVoucher] = React.useState(false);
   const [printSingle, setPrintSingle] = React.useState<any | null>(null);
-  const [batch, setBatch] = React.useState<any>({
-    claimant: "",
-    forWhom: "",
-    payAccount: "",
-    payBank: "",
-    payCardNo: "",
-    payoutDate: "",
-    payoutMethod: "转账",
-    payoutId: "",
-    payoutFileName: "",
-  });
-  React.useEffect(() => {
-    const rows = list.filter((e: any) => selected.includes(e.id));
-    if (!rows.length) return;
-    const first = rows[0];
-    const same = (k: keyof typeof batch) => rows.every((e: any) => (e[k] || "") === ((first as any)[k] || ""));
-    setBatch((prev: any) => ({
-      ...prev,
-      claimant: same("claimant") ? first.claimant || prev.claimant : prev.claimant,
-      forWhom: same("forWhom") ? first.forWhom || prev.forWhom : "",
-      payBank: same("payBank") ? first.payBank || prev.payBank : prev.payBank,
-      payCardNo: same("payCardNo") ? first.payCardNo || prev.payCardNo : prev.payCardNo,
-      payAccount: same("payAccount") ? first.payAccount || prev.payAccount : prev.payAccount,
-      payoutDate: same("payoutDate") ? first.payoutDate || prev.payoutDate : prev.payoutDate,
-      payoutMethod: same("payoutMethod") ? first.payoutMethod || prev.payoutMethod : prev.payoutMethod,
-      payoutId: same("payoutId") ? first.payoutId || "" : "",
-      payoutFileName: same("payoutId") && first.payoutId ? first.payoutFileName || "" : "",
-    }));
-  }, [selected.join(","), list.length]);
   const shown = React.useMemo(
     () => filterExpenses(list, { scope: scope as "year" | "all", year, status, claimant, q }),
     [list, year, scope, status, claimant, q],
@@ -171,9 +130,11 @@ function ExpensesPage() {
     [list, selected, shown, printStatus],
   );
   const batchRows = list.filter((e: any) => selected.includes(e.id));
-  const batchTotal = round2(batchRows.reduce((s, e: any) => s + (e.amount || 0), 0));
-  const anyHung = batchRows.some((e: any) => e.payoutId);
-  const anyDone = batchRows.some((e: any) => e.status === "已报销");
+  const batchTotal = expenseTotals(batchRows).amount;
+  const shownIds = new Set(shown.map((row) => row.id));
+  const batches = React.useMemo(() => expensePayoutBatches(list), [list]);
+  const visibleBatches = batches.filter((batch) => batch.rows.some((row) => shownIds.has(row.id)));
+  const pending = shown.filter((row) => row.status === "未报销" && !row.payoutId);
   function del(ids: string[]) {
     if (!ids.length) return;
     if (blockedWrite("expenses.delete", permLabel("expenses.delete"))) return;
@@ -193,127 +154,6 @@ function ExpensesPage() {
     }
     window.print();
   }
-  function saveOne(row: any, extra?: any) {
-    upsertExpense({
-      ...row,
-      ...extra,
-      id: row.id || uid(),
-      amount: round2(row.amount || row.qty * row.price),
-    });
-  }
-  function applyBatch(markDone: boolean) {
-    if (!batchRows.length) {
-      toast.error("先勾选要一起报销的几笔");
-      return;
-    }
-    if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
-    if (!batch.claimant.trim()) {
-      toast.error("报销人必填：这几笔是谁来报的");
-      return;
-    }
-    if (!batch.forWhom.trim()) {
-      toast.error("收款人必填：钱打给谁");
-      return;
-    }
-    if (!(batch.payBank || "").trim() || !(batch.payCardNo || "").trim()) {
-      toast.error("开户行和打款账户都要填");
-      return;
-    }
-    if (
-      markDone &&
-      needsVoucher(batch.payoutMethod) &&
-      !batch.payoutFileName &&
-      !confirm("打款不是现金，还没上传打款凭证。仍要记为已报销？")
-    )
-      return;
-    const pid = batch.payoutId || uid();
-    const acc = formatPayAccount(batch.payBank, batch.payCardNo);
-    const day = markDone ? batch.payoutDate || localToday() : "";
-    for (const e of batchRows) {
-      // 打款凭证按 (payoutId, payout) 存；换新 pid 时旧文件名不能再引用（否则找不到文件）
-      const keepFile = batch.payoutFileName || (batch.payoutId && batch.payoutId === e.payoutId ? e.payoutFileName : "");
-      saveOne(e, {
-        claimant: batch.claimant.trim(),
-        forWhom: (batch.forWhom || e.forWhom).trim(),
-        payBank: batch.payBank.trim(),
-        payCardNo: batch.payCardNo.trim(),
-        payAccount: acc,
-        payoutMethod: batch.payoutMethod || "转账",
-        payoutDate: markDone ? day : e.status === "已报销" ? e.payoutDate : "",
-        payoutId: pid,
-        payoutFileName: keepFile,
-        status: markDone ? "已报销" : e.status,
-        reimbursedAt: markDone ? day : e.reimbursedAt,
-      });
-    }
-    setBatch((b: any) => ({ ...b, payoutId: pid }));
-    toast.success(markDone ? `已把 ${batchRows.length} 笔记为已报销，挂到同一笔打款` : `已把 ${batchRows.length} 笔挂账`);
-  }
-  function unhangBatch() {
-    if (!batchRows.length) {
-      toast.error("先勾选要取消挂账的几笔");
-      return;
-    }
-    if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
-    if (!confirm(`取消这 ${batchRows.length} 笔的挂账？打款凭证不再共用，报销人账户还留着。`)) return;
-    for (const e of batchRows) saveOne(e, { payoutId: "", payoutFileName: "" });
-    setBatch((b: any) => ({ ...b, payoutId: "", payoutFileName: "" }));
-    toast.success(`已取消 ${batchRows.length} 笔挂账`);
-  }
-  function markOpen() {
-    if (!batchRows.length) {
-      toast.error("先勾选要改回未报销的几笔");
-      return;
-    }
-    if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
-    if (!confirm(`把这 ${batchRows.length} 笔标为未报销？\n\n会同时取消打款挂账和打款日期。`)) return;
-    for (const e of batchRows) saveOne(e, { status: "未报销", payoutDate: "", reimbursedAt: "", payoutId: "", payoutFileName: "" });
-    toast.success(`已把 ${batchRows.length} 笔标为未报销`);
-  }
-  async function uploadPayout(file: File) {
-    if (!file) return;
-    if (!batchRows.length) {
-      toast.error("先勾选要一起报销的几笔");
-      return;
-    }
-    if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
-    if (!(batch.claimant || "").trim() || !(batch.forWhom || "").trim() || !(batch.payBank || "").trim() || !(batch.payCardNo || "").trim()) {
-      toast.error("先填报销人、收款人、开户行和打款账户，打款凭证按这个命名");
-      return;
-    }
-    const acc = formatPayAccount(batch.payBank, batch.payCardNo);
-    const group = batchRows.map((e: any) => ({
-      ...e,
-      claimant: batch.claimant,
-      forWhom: batch.forWhom || e.forWhom,
-      payBank: batch.payBank,
-      payCardNo: batch.payCardNo,
-      payAccount: acc,
-    }));
-    const pid = batch.payoutId || uid();
-    const pack = await prepareNamedFile(
-      file,
-      payoutBase(group),
-      list.map((e: any) => e.payoutFileName).filter(Boolean),
-      batch.payoutFileName,
-    );
-    if (!pack) return;
-    const saved = (await setDoc(pid, "payout", pack.file, { replace: pack.replace })) || pack.file.name;
-    setBatch((b: any) => ({ ...b, payoutId: pid, payoutFileName: saved }));
-    for (const e of batchRows)
-      saveOne(e, {
-        claimant: batch.claimant.trim(),
-        forWhom: (batch.forWhom || e.forWhom || batch.claimant).trim(),
-        payBank: batch.payBank.trim(),
-        payCardNo: batch.payCardNo.trim(),
-        payAccount: acc,
-        payoutMethod: batch.payoutMethod || "转账",
-        payoutDate: e.status === "已报销" ? e.payoutDate || batch.payoutDate : "",
-        payoutId: pid,
-        payoutFileName: saved,
-      });
-    toast.success(`已保存打款凭证，挂到勾选的 ${batchRows.length} 笔`);
-  }
   return (
     <Need perm="expenses.view">
       <>
@@ -323,10 +163,11 @@ function ExpensesPage() {
             <div>
               <h1 className="font-display text-2xl font-semibold">报销单</h1>
               <p className="mt-1 max-w-2xl text-sm text-muted">
-                点「编辑」编辑。点一行勾选。勾几笔可一起报销、记打款。
+                费用明细各自保留；多笔一起收款，在“收款批次”统一核对、登记和解除合并。
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" disabled={!canEditExpense || payout.context === null || payout.busy} onClick={() => payout.open([])}>登记收款</Button>
               <TplLink href="/api/file/expense-template" filename="报销单导入模板.xlsx" />
               <ExpenseImport />
               <a className="btn inline-flex items-center rounded-sm border border-line text-xs hover:bg-accent-soft" href="/api/file/expense-export">
@@ -338,25 +179,31 @@ function ExpensesPage() {
                 title={canEditExpense ? undefined : `你是只读账号（缺「${permLabel("expenses.edit")}」权限），改动不会保存。`}
                 onClick={() => {
                   if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
-                  setCreating(true);
-                  setEditing(emptyExpense(year));
+                  startEditing(emptyExpense(year), true);
                 }}
               >
                 <Plus className="size-4" /> 新增报销
               </Button>
             </div>
           </header>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex rounded-lg border border-line bg-bg-elevated p-1" aria-label="报销查看方式">
+              <Button type="button" variant={view === "details" ? "default" : "ghost"} aria-pressed={view === "details"} onClick={() => { setView("details"); setSelected([]); }}>报销明细</Button>
+              <Button type="button" variant={view === "batches" ? "default" : "ghost"} aria-pressed={view === "batches"} onClick={() => { setView("batches"); setSelected([]); }}>收款批次</Button>
+            </div>
+            {payout.undo && canEditExpense ? <Button type="button" variant="outline" size="sm" disabled={payout.busy} onClick={() => void payout.restoreLast()}>撤销上次批次操作</Button> : null}
+          </div>
           <div className="flex flex-wrap items-end gap-2">
-            <select className="field-select w-auto" value={scope} onChange={(e) => setScope(e.target.value)}>
+            <select aria-label="报销年份范围" className="field-select w-auto" value={scope} onChange={(e) => setScope(e.target.value)}>
               <option value="year">{year}年</option>
               <option value="all">全部年份</option>
             </select>
-            <select className="field-select w-auto" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select aria-label="报销状态筛选" className="field-select w-auto" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="all">全部状态</option>
               <option value="未报销">未报销</option>
               <option value="已报销">已报销</option>
             </select>
-            <select className="field-select w-auto" value={claimant} onChange={(e) => setClaimant(e.target.value)}>
+            <select aria-label="报销人筛选" className="field-select w-auto" value={claimant} onChange={(e) => setClaimant(e.target.value)}>
               <option value={ALL_BUCKETS}>全部报销人</option>
               {claimantOpts.map((b) => (
                 <option value={b.value} key={b.value}>
@@ -390,119 +237,37 @@ function ExpensesPage() {
             </label>
             {selected.length ? <span className="text-xs text-muted">已勾选 {selected.length} 笔，打印时只用勾选的</span> : null}
           </div>
-          {selected.length ? (
-            <div className="rounded-xl border border-line bg-surface p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">已勾选 {batchRows.length} 笔 · 合计 ¥{money(batchTotal)}</div>
-                  <p className="text-xs text-muted">同一报销人、打到同一个账户，可共用一张打款凭证。</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" type="button" onClick={() => applyBatch(false)}>
-                    挂账
-                  </Button>
-                  {anyHung ? (
-                    <Button variant="outline" size="sm" type="button" onClick={unhangBatch}>
-                      取消挂账
-                    </Button>
-                  ) : null}
-                  <Button size="sm" type="button" onClick={() => applyBatch(true)}>
-                    记为已报销
-                  </Button>
-                  {anyDone ? (
-                    <Button variant="outline" size="sm" type="button" onClick={markOpen}>
-                      标为未报销
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-4">
-                <Field label="报销人 *">
-                  <NameInput
-                    value={batch.claimant}
-                    names={names}
-                    listId="exp-claimant"
-                    placeholder="选或填"
-                    onChange={(v) => setBatch((b: any) => ({ ...b, claimant: v }))}
-                  />
-                </Field>
-                <Field label="收款人 *">
-                  <NameInput
-                    value={batch.forWhom}
-                    names={payees.map((p) => p.name)}
-                    listId="exp-payee"
-                    placeholder="填过可下拉"
-                    onChange={(v) => setBatch((b: any) => applyPayee(b, payees, v))}
-                  />
-                </Field>
-                <Field label="开户行 *">
-                  <NameInput
-                    value={batch.payBank}
-                    names={[...new Set(payees.map((p) => p.bank).filter(Boolean))]}
-                    listId="exp-bank"
-                    placeholder="如 工商银行XX支行"
-                    onChange={(v) => setBatch((b: any) => ({ ...b, payBank: v, payAccount: formatPayAccount(v, b.payCardNo) }))}
-                  />
-                </Field>
-                <Field label="打款账户 *">
-                  <NameInput
-                    value={batch.payCardNo}
-                    names={[...new Set(payees.map((p) => p.card).filter(Boolean))]}
-                    listId="exp-card"
-                    placeholder="银行卡号"
-                    onChange={(v) => setBatch((b: any) => ({ ...b, payCardNo: v, payAccount: formatPayAccount(b.payBank, v) }))}
-                  />
-                </Field>
-                <Field label="打款日期">
-                  <Input type="date" value={batch.payoutDate} onChange={(e) => setBatch((b: any) => ({ ...b, payoutDate: e.target.value }))} />
-                </Field>
-                <Field label="打款方式">
-                  <select className="field-select w-full" value={batch.payoutMethod} onChange={(e) => setBatch((b: any) => ({ ...b, payoutMethod: e.target.value }))}>
-                    {PAY_METHODS.map((m) => (
-                      <option key={m}>{m}</option>
-                    ))}
-                  </select>
-                </Field>
-                <div className="flex items-end rounded-lg border border-line bg-bg-elevated p-3 text-sm">
-                  <div>
-                    <div className="text-xs text-muted">这批合计</div>
-                    <div className="font-display text-lg font-semibold tabular-nums">¥{money(batchTotal)}</div>
-                  </div>
-                </div>
-              </div>
-              <VoucherSlot
-                title="打款凭证"
-                hint={`文件名「${payoutBase(batchRows.length ? batchRows : [{ amount: batchTotal }])}」。勾选的几笔共用一张。`}
-                id={batch.payoutId || "pending"}
-                kind="payout"
-                fileName={batch.payoutFileName}
-                optional={(batch.payoutMethod || "转账") === "现金"}
-                onFile={uploadPayout}
-                onDeleted={() => {
-                  setBatch((b: any) => ({ ...b, payoutFileName: "" }));
-                  for (const e of batchRows) saveOne(e, { payoutFileName: "" });
-                }}
-              />
-            </div>
-          ) : null}
+          {view === "details" ? <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={!pending.length} onClick={() => setSelected(pending.map((row) => row.id))}>全选待收款（{pending.length}笔）</Button>
+            <span className="text-xs text-muted">选择当前筛选下全部未报销、未分批的费用，可跨页办理。</span>
+          </div> : null}
+          {selected.length && view === "details" ? <section aria-label="报销选择操作" className="fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/40 bg-surface p-3 shadow-panel md:sticky md:inset-x-auto md:bottom-auto md:top-3">
+            <div><p className="text-sm font-semibold">已选 {batchRows.length} 笔 · ¥{money(batchTotal)}</p>{batchRows.some((row) => !shownIds.has(row.id)) ? <p className="mt-1 text-xs text-warn">包含当前筛选外的已选明细，办理前请核对完整清单。</p> : null}</div>
+            <div className="flex flex-wrap gap-2"><Button type="button" variant="ghost" size="sm" disabled={payout.busy} onClick={() => setSelected([])}>清空选择</Button><Button type="button" size="sm" disabled={!canEditExpense || payout.busy || payout.context === null} onClick={() => payout.open(selected)}>办理所选（{batchRows.length}笔）</Button></div>
+          </section> : null}
+          {payout.session ? <ExpensePayoutEditor key={payout.session.key} session={payout.session} canEdit={canEditExpense} busy={payout.busy} onClose={payout.close} onSave={payout.save} onDissolve={payout.dissolve} /> : null}
           {editing ? (
             <ExpenseEditor
+              key={editingKey}
               draft={editing}
+              isCurrent={() => editingKeyRef.current === editingKey && ledgerContextSnapshot() === editingContext}
+              onManagePayout={(id) => { editingKeyRef.current = ""; setEditing(null); setCreating(false); payout.open([id]); }}
               creating={creating}
               all={list}
-              payees={payees}
               selectedIds={selected}
               names={names}
               onCancel={() => {
+                editingKeyRef.current = "";
                 setEditing(null);
                 setCreating(false);
               }}
               onSave={(row: any) => {
                 if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return false;
+                if (editingKeyRef.current !== editingKey || ledgerContextSnapshot() !== editingContext) { toast.error("台账或编辑对象已改变，请重新打开，旧内容没有写入。"); return false; }
                 upsertExpense(row);
-                setEditing(row);
-                setCreating(false);
-                toast.success("报销已保存");
+                if (row.id === editing.id) { setEditing(row); setCreating(false); }
+                toast.success("报销已在本机保存，正在同步");
+                return true;
               }}
               onDelete={() => del([editing.id])}
               onPrintSingle={(row: any) => {
@@ -514,7 +279,7 @@ function ExpensesPage() {
               }}
             />
           ) : null}
-          <WideTable id="expenses" pager={pager as any}>
+          {view === "batches" ? <ExpensePayoutList batches={visibleBatches} shownIds={shownIds} onOpen={(id) => payout.open([], id)} /> : <WideTable id="expenses" pager={pager as any}>
             <table className="wide-table text-sm">
               <thead className="border-b border-line text-xs text-muted">
                 <tr>
@@ -578,8 +343,7 @@ function ExpensesPage() {
                           title={canEditExpense ? undefined : `你是只读账号（缺「${permLabel("expenses.edit")}」权限），改动不会保存。`}
                           onClick={() => {
                             if (blockedWrite("expenses.edit", permLabel("expenses.edit"))) return;
-                            setCreating(false);
-                            setEditing(e);
+                            startEditing(e, false);
                           }}
                         >
                           编辑
@@ -604,7 +368,7 @@ function ExpensesPage() {
                         })()}
                       </td>
                       <td className="py-2 px-3">
-                        <Badge tone={e.status === "已报销" ? "ok" : "warn"}>{e.status}</Badge>
+                        <div className="space-y-1"><Badge tone={e.status === "已报销" ? "ok" : "warn"}>{e.status}</Badge>{e.payoutId ? <button type="button" className="block text-xs text-accent underline underline-offset-2" onClick={(event) => { event.stopPropagation(); payout.open([], e.payoutId); }}>查看同批（{sib}笔）</button> : <span className="block text-xs text-muted">未分批</span>}</div>
                       </td>
                       <td className="py-2 px-3 text-xs" onClick={(ev) => ev.stopPropagation()}>
                         <div className="flex flex-col gap-0.5">
@@ -646,7 +410,8 @@ function ExpensesPage() {
                 </tfoot>
               ) : null}
             </table>
-          </WideTable>
+          </WideTable>}
+          {selected.length ? <div aria-hidden="true" className="h-32 md:hidden" /> : null}
         </div>
         <ExpenseSheets rows={printSingle ? [printSingle] : printRows} showVoucher={printVoucher} />
       </>

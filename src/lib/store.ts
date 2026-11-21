@@ -32,6 +32,7 @@ import type { AttendanceDoc, AttendanceRow, Expense, InsuranceMember, InsuranceP
 import { LEDGER_SCHEMA_VERSION } from "./types";
 import type { Team } from "./types";
 import { mergeTeams, teamNameError } from "./teams";
+import { canApplyExpenseBatch } from "./expense-payout";
 
 /**
  * 外部输入数值（表单 / Excel / 旧版持久化数据）统一入口：
@@ -314,6 +315,8 @@ export interface AppActions {
   removeContractEntries: (ids: string[]) => void;
   replaceContracts: (contracts: ContractRecord[], entries?: ContractEntry[]) => void;
   upsertExpense: (row: Partial<Expense> & { name: string }) => void;
+  /** 收款批次完整快照 CAS；一次更新整批，不改原明细金额。 */
+  applyExpenseBatch: (before: Expense[], after: Expense[], groupId?: string) => boolean;
   removeExpenses: (ids: string[]) => void;
   replaceExpenses: (expenses: Expense[]) => void;
   upsertPolicy: (p: InsurancePolicy) => void;
@@ -702,6 +705,15 @@ export const useApp = create<AppStore>()(
           set({ expenses: [...list, next] });
           logOp("新增报销", next.name, "报销");
         }
+      },
+      applyExpenseBatch: (before, after, groupId) => {
+        const list = get().expenses || [];
+        if (!canApplyExpenseBatch(list, before, after, groupId)) return false;
+        const next = new Map(after.map((row) => [row.id, { ...row }]));
+        const changes = batchChanges(before.map((row) => ({ before: row, after: next.get(row.id)! })), expenseChanges, (row) => row.name || row.id);
+        set({ expenses: list.map((row) => next.get(row.id) || row) });
+        logOp("批量修改报销收款", diffDetail(`${after.length}笔`, changes), "报销");
+        return true;
       },
       removeExpenses: (ids) => {
         const rows = (get().expenses || []).filter((e) => ids.includes(e.id));

@@ -278,9 +278,16 @@ export const EXPENSE_SPEC: readonly FieldSpec[] = [
   { key: "price", label: "单价", fmt: fmtMoney },
   { key: "amount", label: "金额", fmt: fmtMoney },
   { key: "status", label: "状态" },
+  { key: "payoutId", label: "收款批次" },
+  { key: "payoutFileName", label: "收款凭证", fmt: fmtSensitive },
   { key: "claimant", label: "报销人" },
+  { key: "forWhom", label: "收款人" },
   { key: "payoutDate", label: "打款日期", fmt: fmtDateOrEmpty },
+  { key: "reimbursedAt", label: "报销登记日期", fmt: fmtDateOrEmpty },
   { key: "payoutMethod", label: "打款方式" },
+  { key: "payBank", label: "收款开户行", fmt: fmtSensitive },
+  { key: "payCardNo", label: "收款账户", fmt: fmtSensitive },
+  { key: "payAccount", label: "收款账户资料", fmt: fmtSensitive },
 ];
 
 /* ＝＝ 记录级/批量级的快捷入口（store.ts 只调这些，不自己拼字符串） ＝＝ */

@@ -10,17 +10,15 @@ import { DocActions, prepareNamedFile, setDoc } from "~/components/doc-actions";
 import { uid } from "~/lib/utils";
 import { localToday } from "~/lib/dates";
 import { round2 } from "~/lib/wage";
+import { numOr } from "~/lib/num";
 import { expenseFormFromDraft } from "~/lib/expense-rules";
 import { useGuardedClose } from "~/lib/confirm-close";
 import {
-  applyPayee,
   dateFromPeriod,
   Field,
-  formatPayAccount,
   NameInput,
   needsVoucher,
   PAY_METHODS,
-  payoutBase,
   VoucherSlot,
   voucherBase,
 } from "./expense-bits";
@@ -31,25 +29,29 @@ export function ExpenseEditor({
   all,
   selectedIds,
   names,
-  payees,
   onCancel,
   onSave,
   onDelete,
   onPrintSingle,
+  onManagePayout,
+  isCurrent,
 }: {
   draft: any;
   creating: boolean;
   all: any[];
   selectedIds: string[];
   names: string[];
-  payees: any[];
   onCancel: () => void;
   /** 返回 false = 这次没存下去（只读账号被拦下）。此时**不许**复位脏标记 */
   onSave: (row: any) => void | boolean;
   onDelete: () => void;
   onPrintSingle: (row: any) => void;
+  onManagePayout: (id: string) => void;
+  isCurrent: () => boolean;
 }) {
   const [c, setC] = React.useState(() => expenseFormFromDraft(draft));
+  const [uploading, setUploading] = React.useState(false);
+  const uploadingRef = React.useRef(false);
   const { markDirty, resetDirty, requestClose } = useGuardedClose(onCancel);
   // 1.8.8 E11：随 draft 重置本地副本。原来只在挂载时取一次初值，
   // 于是「编辑 A 时点新增报销」会把 A 的项目/金额带进新表单，保存后 A 被同 id 覆盖而消失。
@@ -60,7 +62,7 @@ export function ExpenseEditor({
   }, [draft.id]);
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") requestClose();
+      if (e.key === "Escape" && !uploadingRef.current) requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -70,22 +72,6 @@ export function ExpenseEditor({
       const next = { ...prev, [key]: value };
       if (key === "qty" || key === "price") next.amount = round2((key === "qty" ? value : next.qty) * (key === "price" ? value : next.price));
       if (key === "period") next.date = dateFromPeriod(value, prev.date);
-      if (key === "forWhom") {
-        const filled = applyPayee(next, payees, value);
-        next.payBank = filled.payBank;
-        next.payCardNo = filled.payCardNo;
-        next.payAccount = filled.payAccount;
-      }
-      if (key === "payBank" || key === "payCardNo") next.payAccount = formatPayAccount(next.payBank, next.payCardNo);
-      if (key === "status") {
-        if (value === "已报销") {
-          next.payoutDate = prev.payoutDate || localToday();
-          next.reimbursedAt = prev.reimbursedAt || next.payoutDate;
-        } else {
-          next.payoutDate = "";
-          next.reimbursedAt = "";
-        }
-      }
       return next;
     });
   }
@@ -97,83 +83,64 @@ export function ExpenseEditor({
     seen.add(e.voucherId);
     existingVouchers.push(e);
   }
-  const existingPayouts: any[] = [];
-  const seenP = new Set<string>();
-  for (const e of all) {
-    if (!e.payoutId || !e.payoutFileName || e.payoutId === c.payoutId) continue;
-    if (seenP.has(e.payoutId)) continue;
-    seenP.add(e.payoutId);
-    existingPayouts.push(e);
-  }
   const shareTargets = (all || []).filter((e: any) => selectedIds.includes(e.id) || e.id === c.id);
   const siblings = c.payoutId ? (all || []).filter((e: any) => e.payoutId === c.payoutId) : [];
   async function uploadVoucher(file: File) {
-    if (!file) return;
-    if (!c.name.trim()) {
-      toast.error("先填项目名称，凭证按「项目名称-金额」保存");
-      return;
-    }
-    const group = shareTargets.length > 1 ? shareTargets.map((e: any) => (e.id === c.id ? c : e)) : [c];
-    const vid = c.voucherId || uid();
-    const pack = await prepareNamedFile(
-      file,
-      voucherBase(group),
-      (all || []).map((e: any) => e.voucherFileName).filter(Boolean),
-      c.voucherFileName,
-    );
-    if (!pack) return;
-    const saved = (await setDoc(vid, "expense", pack.file, { replace: pack.replace })) || pack.file.name;
-    const next = { ...c, id: c.id || uid(), voucherId: vid, voucherFileName: saved };
-    setC(next);
-    // 一张凭证可能挂到同批多笔上：整批都存下去了才复位脏标记（B9）
-    let ok = true;
-    if (onSave(next) === false) ok = false;
-    for (const e of group) {
-      if (e.id === next.id) continue;
-      if (onSave({ ...e, voucherId: vid, voucherFileName: saved }) === false) ok = false;
-    }
-    if (ok) resetDirty();
-    toast.success(group.length > 1 ? `已保存购买凭证，并挂到勾选的 ${group.length} 笔` : `已保存 ${saved}`);
+    if (!file || uploadingRef.current || !currentOrWarn()) return;
+    uploadingRef.current = true; setUploading(true);
+    try {
+      if (!c.name.trim()) {
+        toast.error("先填项目名称，凭证按「项目名称-金额」保存");
+        return;
+      }
+      const group = shareTargets.length > 1 ? shareTargets.map((e: any) => (e.id === c.id ? c : e)) : [c];
+      const vid = c.voucherId || uid();
+      const pack = await prepareNamedFile(
+        file,
+        voucherBase(group),
+        (all || []).map((e: any) => e.voucherFileName).filter(Boolean),
+        c.voucherFileName,
+      );
+      if (!pack || !currentOrWarn()) return;
+      const saved = (await setDoc(vid, "expense", pack.file, { replace: pack.replace })) || pack.file.name;
+      if (!currentOrWarn()) return;
+      const next = payload({ ...c, id: c.id || uid(), voucherId: vid, voucherFileName: saved });
+      setC(next);
+      // 一张凭证可能挂到同批多笔上：整批都存下去了才复位脏标记（B9）
+      let ok = true;
+      if (onSave(next) === false) ok = false;
+      for (const e of group) {
+        if (e.id === next.id) continue;
+        if (onSave({ ...e, voucherId: vid, voucherFileName: saved }) === false) ok = false;
+      }
+      if (ok) resetDirty();
+      toast.success(group.length > 1 ? `已保存购买凭证，并挂到勾选的 ${group.length} 笔` : `已保存 ${saved}`);
+    } catch (failure) { toast.error(failure instanceof Error ? failure.message : "购买凭证上传失败，已保留填写内容"); }
+    finally { uploadingRef.current = false; setUploading(false); }
   }
-  async function uploadPayout(file: File) {
-    if (!file) return;
-    if (!c.claimant.trim() || !(c.forWhom || "").trim() || !(c.payBank || "").trim() || !(c.payCardNo || "").trim()) {
-      toast.error("先填报销人、收款人、开户行和打款账户");
-      return;
-    }
-    const group = siblings.length > 1 ? siblings.map((e: any) => (e.id === c.id ? c : e)) : [c];
-    const pid = c.payoutId || uid();
-    const pack = await prepareNamedFile(
-      file,
-      payoutBase(group),
-      (all || []).map((e: any) => e.payoutFileName).filter(Boolean),
-      c.payoutFileName,
-    );
-    if (!pack) return;
-    const savedPay = (await setDoc(pid, "payout", pack.file, { replace: pack.replace })) || pack.file.name;
-    const next = {
-      ...c,
-      id: c.id || uid(),
-      payoutId: pid,
-      payoutFileName: savedPay,
-      payoutDate: c.status === "已报销" ? c.payoutDate || localToday() : "",
-    };
-    setC(next);
-    // 一张打款凭证同批共用：整批都存下去了才复位脏标记（B9）
-    let ok = true;
-    if (onSave(next) === false) ok = false;
-    for (const e of group) {
-      if (e.id === next.id) continue;
-      if (onSave({ ...e, payoutId: pid, payoutFileName: savedPay }) === false) ok = false;
-    }
-    if (ok) resetDirty();
-    toast.success(group.length > 1 ? `已保存打款凭证，同批 ${group.length} 笔共用` : `已保存 ${savedPay}`);
+  function currentOrWarn() {
+    if (isCurrent()) return true;
+    toast.error("台账或编辑对象已改变，请重新打开；本次内容没有写入。"); return false;
+  }
+  function payload(row: any) {
+    const next = { ...row, amount: round2(numOr(row.amount, 0)) };
+    // 收款信息统一在批次窗口办理，编辑费用不重写已有收款关系。
+    for (const key of ["forWhom", "payBank", "payCardNo", "payAccount", "payoutId", "payoutFileName", "payoutDate", "payoutMethod", "reimbursedAt", "status"]) next[key] = draft[key];
+    return next;
+  }
+  function submit() {
+    if (uploadingRef.current || !currentOrWarn()) return null;
+    if (!c.name.trim()) { toast.error("项目名称必填"); return null; }
+    if (needsVoucher(c.payMethod) && !c.voucherFileName && !confirm("购买不是现金，还没上传凭证。仍要保存？")) return null;
+    const next = payload({ ...c, id: c.id || uid() });
+    if (onSave(next) === false) return null;
+    setC(next); resetDirty(); return next;
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6" onClick={requestClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 p-0 print:hidden md:items-center md:p-6" onClick={() => { if (!uploadingRef.current) requestClose(); }}>
       <section
         id="expense-editor"
-        className="max-h-[80vh] w-full max-w-3xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-5 shadow-panel md:rounded-xl"
+        className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-t-xl border border-accent bg-surface p-5 shadow-panel md:rounded-xl"
         onClick={(e) => e.stopPropagation()}
         onChange={markDirty}
       >
@@ -182,41 +149,22 @@ export function ExpenseEditor({
           <div className="btn-row">
             <Badge tone={c.status === "已报销" ? "ok" : "warn"}>{c.status}</Badge>
             {!creating ? (
-              <Button variant="danger" type="button" onClick={onDelete}>
+              <Button variant="danger" type="button" disabled={uploading} onClick={onDelete}>
                 删除
               </Button>
             ) : null}
             {!creating ? (
-              <Button variant="outline" type="button" onClick={() => onPrintSingle(c)}>
+              <Button variant="outline" type="button" disabled={uploading} onClick={() => onPrintSingle(c)}>
                 打印报销单
               </Button>
             ) : null}
-            <Button variant="outline" type="button" onClick={requestClose}>
+            <Button variant="outline" type="button" disabled={uploading} onClick={requestClose}>
               关闭
             </Button>
             <Button
               type="button"
-              onClick={() => {
-                if (!c.name.trim()) {
-                  toast.error("项目名称必填");
-                  return;
-                }
-                if (c.status === "已报销" && (!(c.forWhom || "").trim() || !(c.payBank || "").trim() || !(c.payCardNo || "").trim())) {
-                  toast.error("已报销要填收款人、开户行和打款账户");
-                  return;
-                }
-                if (needsVoucher(c.payMethod) && !c.voucherFileName && !confirm("购买不是现金，还没上传凭证。仍要保存？")) return;
-                if (
-                  onSave({
-                    ...c,
-                    id: c.id || uid(),
-                    payAccount: formatPayAccount(c.payBank, c.payCardNo),
-                    payoutDate: c.status === "已报销" ? c.payoutDate || localToday() : "",
-                    amount: round2(c.amount || c.qty * c.price),
-                  }) !== false
-                )
-                  resetDirty();
-              }}
+              disabled={uploading}
+              onClick={() => { submit(); }}
             >
               保存报销信息
             </Button>
@@ -227,6 +175,8 @@ export function ExpenseEditor({
             同批打款共 {siblings.length} 笔：{siblings.map((e: any) => e.name).join("、")}
           </p>
         ) : null}
+        {uploading ? <p role="status" className="mb-3 rounded-lg bg-accent-soft p-3 text-sm">正在上传购买凭证，请稍候；本次填写已锁定，避免迟到结果覆盖新改动。</p> : null}
+        <fieldset disabled={uploading} className="min-w-0">
         <div className="grid gap-3 md:grid-cols-3">
           <Field label="年份">
             <Input type="number" value={c.year} onChange={(e) => patch("year", Number(e.target.value) || 0)} />
@@ -258,49 +208,6 @@ export function ExpenseEditor({
           </Field>
           <Field label="报销人（谁来报）">
             <NameInput value={c.claimant} names={names} listId="ed-claimant" placeholder="人员名单或手填" onChange={(v) => patch("claimant", v)} />
-          </Field>
-          <Field label="收款人（打到谁的账户）">
-            <NameInput
-              value={c.forWhom}
-              names={(payees || []).map((p) => p.name)}
-              listId="ed-payee"
-              placeholder="填过的可下拉选，不跟人员名单关联"
-              onChange={(v) => patch("forWhom", v)}
-            />
-          </Field>
-          <Field label="开户行">
-            <NameInput
-              value={c.payBank || ""}
-              names={[...new Set((payees || []).map((p) => p.bank).filter(Boolean))]}
-              listId="ed-bank"
-              placeholder="选收款人会带出上次账户，也可手填"
-              onChange={(v) => patch("payBank", v)}
-            />
-          </Field>
-          <Field label="打款账户">
-            <NameInput
-              value={c.payCardNo || ""}
-              names={[...new Set((payees || []).map((p) => p.card).filter(Boolean))]}
-              listId="ed-card"
-              placeholder="银行卡号，填过可下拉选"
-              onChange={(v) => patch("payCardNo", v)}
-            />
-          </Field>
-          <Field label="打款方式">
-            <select className="field-select w-full" value={c.payoutMethod || "转账"} onChange={(e) => patch("payoutMethod", e.target.value)}>
-              {PAY_METHODS.map((m) => (
-                <option key={m}>{m}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label={c.status === "已报销" ? "打款日期" : "打款日期（未报销为空）"}>
-            <Input type="date" value={c.status === "已报销" ? c.payoutDate || "" : ""} disabled={c.status !== "已报销"} onChange={(e) => patch("payoutDate", e.target.value)} />
-          </Field>
-          <Field label="报销状态">
-            <select className="field-select w-full" value={c.status} onChange={(e) => patch("status", e.target.value)}>
-              <option>未报销</option>
-              <option>已报销</option>
-            </select>
           </Field>
           <Field label="备注" className="md:col-span-3">
             <Input value={c.remark} onChange={(e) => patch("remark", e.target.value)} />
@@ -346,55 +253,13 @@ export function ExpenseEditor({
               onSave(next);
             }}
           />
-          <VoucherSlot
-            title="打款凭证"
-            hint={siblings.length > 1 ? `同批 ${siblings.length} 笔共用` : "几笔一起报时共用一张。"}
-            id={c.payoutId || c.id}
-            kind="payout"
-            fileName={c.payoutFileName}
-            optional={(c.payoutMethod || "转账") === "现金"}
-            extra={
-              existingPayouts.length ? (
-                <select
-                  className="h-8 max-w-40 rounded-sm border border-line bg-surface px-2 text-[11px]"
-                  value={c.payoutId || ""}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    if (!id) {
-                      setC((prev: any) => ({ ...prev, payoutId: "", payoutFileName: "" }));
-                      return;
-                    }
-                    const hit = existingPayouts.find((x: any) => x.payoutId === id);
-                    setC((prev: any) => ({
-                      ...prev,
-                      payoutId: id,
-                      payoutFileName: hit?.payoutFileName || prev.payoutFileName,
-                      claimant: prev.claimant || hit?.claimant || "",
-                      forWhom: prev.forWhom || hit?.forWhom || "",
-                      payBank: prev.payBank || hit?.payBank || "",
-                      payCardNo: prev.payCardNo || hit?.payCardNo || "",
-                      payAccount: prev.payAccount || hit?.payAccount || "",
-                      payoutMethod: prev.payoutMethod || hit?.payoutMethod || "转账",
-                      payoutDate: prev.status === "已报销" ? prev.payoutDate || hit?.payoutDate || "" : "",
-                    }));
-                  }}
-                >
-                  <option value="">单独上传</option>
-                  {existingPayouts.map((e: any) => (
-                    <option value={e.payoutId} key={e.payoutId}>
-                      {e.payoutFileName}（{e.claimant || "未填人"}）
-                    </option>
-                  ))}
-                </select>
-              ) : null
-            }
-            onFile={uploadPayout}
-            onDeleted={() => {
-              setC((prev: any) => ({ ...prev, payoutFileName: "" }));
-              onSave({ ...c, payoutFileName: "" });
-            }}
-          />
+          <section className="py-4">
+            <h3 className="text-sm font-medium">收款信息按批次办理</h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted">{siblings.length ? `当前收款批次共 ${siblings.length} 笔。` : "本条费用尚未分批。"}保存费用后进入收款窗口，可核对清单、登记收款或整批解除合并。</p>
+            <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { const next = submit(); if (next) onManagePayout(next.id); }}>保存后办理收款</Button>
+          </section>
         </div>
+        </fieldset>
       </section>
     </div>
   );
